@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 대의원 온라인 투표소</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="loading-screen" style="text-align: center; margin-top: 20vh;">
+        <h2>투표소를 불러오고 있습니다...</h2>
+        <p>잠시만 기다려주세요.</p>
+    </div>
+
+    <div id="vote-container" class="container">
+        <header>
+            <h1 id="election-title">선거 정보 로딩중</h1>
+            <p id="voter-info" style="color: #666; text-align: center;">회원 확인중...</p>
+            <div style="background: #f0fdf4; color: #166534; padding: 0.5rem; text-align: center; border-radius: 4px; margin-top: 0.5rem;">
+                <strong id="district-name">선거구 확인중</strong>
+            </div>
+        </header>
+
+        <form id="vote-form">
+            <div id="ballot-area"></div>
+
+            <div class="action-area">
+                <button type="button" id="btn-vote" class="btn-submit" disabled>투표하기</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="complete-container" class="container" style="text-align: center;">
+        <h1 style="color: var(--primary-color);">투표 완료</h1>
+        <p>소중한 한 표를 행사해 주셔서 감사합니다.</p>
+        <p style="color: #888; font-size: 0.9rem;">투표 결과는 마감 후 공개됩니다.</p>
+        <button onclick="window.close()" class="btn-modal">창 닫기</button>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="modal-title">알림</h3>
+            <p id="modal-msg">내용</p>
+            <div class="modal-buttons">
+                <button id="modal-btn-cancel" class="btn-modal">취소</button>
+                <button id="modal-btn-ok" class="btn-modal btn-confirm">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { ElectionService } from './js/ElectionService.js';
+        
+        // 서비스 인스턴스 생성
+        const service = new ElectionService();
+        
+        // 상태 변수
+        let currentElection = null;
+        let ballotInfo = null;
+        let selectedValue = null; // 선택한 후보ID 또는 찬반값
+
+        // DOM 요소
+        const loadingScreen = document.getElementById('loading-screen');
+        const voteContainer = document.getElementById('vote-container');
+        const completeContainer = document.getElementById('complete-container');
+        const ballotArea = document.getElementById('ballot-area');
+        const voteBtn = document.getElementById('btn-vote');
+
+        // [초기화 로직] 페이지 로드 시 실행
+        async function initPage() {
+            try {
+                // 1. 사용자 정보 로드
+                const user = await service.initialize();
+                if (!user) {
+                    showModal('로그인 필요', '로그인이 필요합니다. 매직링크를 통해 다시 접속해주세요.', () => {
+                        window.location.href = '/login.html'; // 로그인 페이지로 이동
+                    });
+                    return;
+                }
+
+                document.getElementById('voter-info').innerText = `${user.name} 조합원님 (${user.member_id})`;
+
+                // 2. 활성 선거 찾기
+                currentElection = await service.getActiveElection();
+                if (!currentElection) {
+                    alertAndClose('현재 진행 중인 선거가 없습니다.');
+                    return;
+                }
+                document.getElementById('election-title').innerText = currentElection.title;
+
+                // 3. 내 투표용지(선거구) 정보 가져오기
+                ballotInfo = await service.getMyBallotInfo(currentElection.id);
+
+                // 4. 이미 투표했는지 체크
+                if (ballotInfo.hasVoted) {
+                    showCompleteScreen();
+                    return;
+                }
+
+                // 5. 화면 그리기 (투표 타입에 따라 분기)
+                renderBallot(ballotInfo);
+
+                // 화면 전환
+                loadingScreen.style.display = 'none';
+                voteContainer.classList.add('active');
+
+            } catch (error) {
+                console.error(error);
+                alertAndClose('오류 발생: ' + error.message);
+            }
+        }
+
+        // [UI 렌더링] 투표 용지 그리기
+        function renderBallot(info) {
+            document.getElementById('district-name').innerText = info.district.name;
+            ballotArea.innerHTML = ''; // 초기화
+
+            if (info.district.vote_type === 'CANDIDATE') {
+                // A. 후보자 투표 UI
+                const listDiv = document.createElement('div');
+                listDiv.className = 'candidate-list';
+
+                info.candidates.forEach(cand => {
+                    const card = document.createElement('div');
+                    card.className = 'candidate-card';
+                    // 이미지 처리 (없으면 기본 이미지)
+                    const imgUrl = cand.photo_url || 'https://via.placeholder.com/150?text=No+Image';
+                    
+                    card.innerHTML = `
+                        <img src="${imgUrl}" class="candidate-img" alt="${cand.name}">
+                        <h3>${cand.name}</h3>
+                        <p style="font-size:0.9rem; color:#666;">기호 ${cand.id.substring(0,4)}...</p>
+                        <button type="button" onclick="window.open('${cand.manifesto || '#'}')" style="margin-top:0.5rem; padding:0.2rem 0.5rem;">공약 보기</button>
+                    `;
+                    
+                    // 클릭 이벤트
+                    card.addEventListener('click', (e) => {
+                        if(e.target.tagName === 'BUTTON') return; // 공약보기 버튼 클릭 시 선택 방지
+                        
+                        // 기존 선택 해제 및 신규 선택 UI 적용
+                        document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                        
+                        selectedValue = cand.id;
+                        voteBtn.disabled = false;
+                        voteBtn.innerText = `'${cand.name}' 후보 선택완료`;
+                    });
+
+                    listDiv.appendChild(card);
+                });
+                ballotArea.appendChild(listDiv);
+
+            } else {
+                // B. 찬반 투표 UI
+                ballotArea.innerHTML = `
+                    <div class="binary-options">
+                        <button type="button" class="btn-binary btn-yes" data-val="AGREE">찬성 (O)</button>
+                        <button type="button" class="btn-binary btn-no" data-val="DISAGREE">반대 (X)</button>
+                    </div>
+                    <p style="text-align:center; margin-top:1rem; color:#666;">안건에 대한 찬성/반대를 선택해주세요.</p>
+                `;
+
+                // 이벤트 위임
+                ballotArea.querySelectorAll('.btn-binary').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        ballotArea.querySelectorAll('.btn-binary').forEach(b => b.classList.remove('selected'));
+                        btn.classList.add('selected');
+                        
+                        selectedValue = btn.dataset.val;
+                        voteBtn.disabled = false;
+                        voteBtn.innerText = (selectedValue === 'AGREE' ? '찬성' : '반대') + ' 선택완료';
+                    });
+                });
+            }
+        }
+
+        // [이벤트] 투표하기 버튼 클릭
+        voteBtn.addEventListener('click', () => {
+            if (!selectedValue) return;
+
+            const msg = ballotInfo.district.vote_type === 'CANDIDATE' 
+                ? "선택하신 후보에게 투표하시겠습니까?" 
+                : "선택하신 내용으로 투표하시겠습니까?";
+
+            showConfirm(msg, async () => {
+                try {
+                    // 로딩 표시
+                    voteBtn.innerText = '처리중...';
+                    voteBtn.disabled = true;
+
+                    // 제출 데이터 구성
+                    const payload = {
+                        electionId: currentElection.id,
+                        districtId: ballotInfo.district_id,
+                        round: currentElection.current_round,
+                        candidateId: ballotInfo.district.vote_type === 'CANDIDATE' ? selectedValue : null,
+                        choice: ballotInfo.district.vote_type === 'BINARY' ? selectedValue : null
+                    };
+
+                    // 서비스 호출
+                    await service.submitVote(payload);
+
+                    // 성공 화면
+                    showCompleteScreen();
+
+                } catch (e) {
+                    showModal('오류', e.message);
+                    voteBtn.disabled = false;
+                    voteBtn.innerText = '투표하기';
+                }
+            });
+        });
+
+        function showCompleteScreen() {
+            loadingScreen.style.display = 'none';
+            voteContainer.style.display = 'none'; // remove 대신 hide
+            completeContainer.classList.add('active');
+        }
+
+        /* --- 모달 유틸리티 (Alert 금지 정책 준수) --- */
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMsg = document.getElementById('modal-msg');
+        const btnOk = document.getElementById('modal-btn-ok');
+        const btnCancel = document.getElementById('modal-btn-cancel');
+
+        function showModal(title, msg, onOk = null) {
+            modalTitle.innerText = title;
+            modalMsg.innerText = msg;
+            btnCancel.style.display = 'none'; // 알림창은 취소버튼 숨김
+            btnOk.innerText = '확인';
+            
+            modalOverlay.style.display = 'flex';
+            
+            btnOk.onclick = () => {
+                modalOverlay.style.display = 'none';
+                if (onOk) onOk();
+            };
+        }
+
+        function showConfirm(msg, onConfirm) {
+            modalTitle.innerText = '투표 확인';
+            modalMsg.innerText = msg;
+            btnCancel.style.display = 'inline-block';
+            btnOk.innerText = '네, 투표합니다';
+            
+            modalOverlay.style.display = 'flex';
+            
+            btnOk.onclick = () => {
+                modalOverlay.style.display = 'none';
+                onConfirm();
+            };
+            btnCancel.onclick = () => {
+                modalOverlay.style.display = 'none';
+            };
+        }
+
+        function alertAndClose(msg) {
+            loadingScreen.style.display = 'none';
+            showModal('알림', msg, () => {
+                // 창 닫기 시도 (팝업인 경우)
+                window.close(); 
+            });
+        }
+
+        // 실행
+        initPage();
+    </script>
+</body>
+</html>
