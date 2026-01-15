@@ -1,0 +1,122 @@
+/* style.css */
+:root {
+    --primary-color: #2563eb;
+    --danger-color: #dc2626;
+    --bg-color: #f3f4f6;
+}
+
+body {
+    font-family: 'Pretendard', sans-serif;
+    background-color: var(--bg-color);
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+/* 메인 컨테이너: 기본적으로 숨김 (JS 로드 후 표시) */
+.container {
+    width: 100%;
+    max-width: 600px;
+    background: white;
+    padding: 2rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    display: none; /* 방어적 코딩: 데이터 로드 전 숨김 */
+}
+
+.container.active {
+    display: block;
+}
+
+h1, h2 { text-align: center; }
+
+/* 후보자 리스트 (그리드) */
+.candidate-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+/* 후보자 카드 (라디오 버튼 숨기고 카드 전체 선택) */
+.candidate-card {
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.candidate-card:hover { border-color: var(--primary-color); }
+.candidate-card input[type="radio"] { display: none; } /* 라디오 숨김 */
+.candidate-card.selected {
+    border-color: var(--primary-color);
+    background-color: #eff6ff;
+    font-weight: bold;
+}
+
+.candidate-img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    background-color: #ddd;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+/* 찬반 투표용 버튼 */
+.binary-options {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+.btn-binary {
+    flex: 1;
+    padding: 2rem;
+    font-size: 1.5rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    opacity: 0.5;
+}
+.btn-binary.selected { opacity: 1; transform: scale(1.02); }
+.btn-yes { background-color: var(--primary-color); color: white; }
+.btn-no { background-color: var(--danger-color); color: white; }
+
+/* 하단 액션 버튼 */
+.action-area { margin-top: 2rem; text-align: center; }
+.btn-submit {
+    background-color: #111;
+    color: white;
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+}
+.btn-submit:disabled { background-color: #ccc; cursor: not-allowed; }
+
+/* 커스텀 모달 (Alert 대체) */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+}
+.modal-buttons { margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center; }
+.btn-modal { padding: 0.5rem 1.5rem; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
+.btn-confirm { background-color: var(--primary-color); color: white; border: none; }
