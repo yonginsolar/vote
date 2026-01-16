@@ -205,8 +205,13 @@ window.handleLogin = async () => {
             }
         };
 
-        // [Step 3] 엑셀 업로드
+// [Step 3] 엑셀 업로드 (수정본: 저장 로직 제거됨)
         window.uploadVoters = async () => {
+            // 최종 방어 로직
+            if (Object.keys(createdDistricts).length < 3) {
+                return alert('선거구가 최소 3개 이상 등록되어야 명부를 업로드할 수 있습니다.');
+            }
+
             const fileInput = document.getElementById('excel-file');
             if(fileInput.files.length === 0) return alert('엑셀 파일을 선택하세요.');
 
@@ -220,57 +225,57 @@ window.handleLogin = async () => {
                 const rows = XLSX.utils.sheet_to_json(firstSheet);
 
                 log(`엑셀 읽기 성공: 총 ${rows.length}명 데이터`);
-                log('조합원 DB 대조 중...');
+                log('조합원 정보 상세 대조 중...'); 
                 
+                // 확인용으로 name, phone 추가 조회
                 const { data: members, error: memError } = await supabase
                     .from('coop_members')
-                    .select('id, member_id');
+                    .select('id, member_id, name, phone');
                 
                 if(memError) return alert('조합원 DB 로드 실패');
 
                 const memberMap = new Map();
-                members.forEach(m => memberMap.set(m.member_id, m.id));
+                members.forEach(m => memberMap.set(m.member_id, m));
 
-                const payload = [];
+                const tempPayload = [];
                 let failCount = 0;
 
                 for(const row of rows) {
-                    const memUuid = memberMap.get(String(row.member_id));
-                    const distId = createdDistricts[row.district_code];
+                    const memIdStr = String(row.member_id || '').trim();
+                    const distCodeStr = String(row.district_code || '').trim();
 
-                    if(memUuid && distId) {
-                        payload.push({
+                    const memberInfo = memberMap.get(memIdStr);
+                    const distId = createdDistricts[distCodeStr];
+
+                    if(memberInfo && distId) {
+                        tempPayload.push({
                             election_id: newElectionId,
                             district_id: distId,
-                            member_uuid: memUuid,
-                            member_no: String(row.member_id)
+                            member_uuid: memberInfo.id,
+                            member_no: memIdStr,
+                            // 미리보기용 데이터
+                            _view_name: memberInfo.name,
+                            _view_phone: memberInfo.phone,
+                            _view_dist_code: distCodeStr
                         });
                     } else {
-                        console.warn('매칭 실패:', row);
+                        console.warn(`매칭 실패: ID(${memIdStr}) / Code(${distCodeStr})`);
                         failCount++;
                     }
                 }
 
-                log(`매칭 완료: 성공 ${payload.length}건 / 실패 ${failCount}건`);
+                log(`1차 분석 완료: 유효 데이터 ${tempPayload.length}건 / 매칭 실패 ${failCount}건`);
 
-if(payload.length > 0) {
-                    
-                    // [수정] insert -> upsert로 변경
-                    // 이미 명부에 있는 사람이면 '선거구' 정보를 엑셀 내용으로 덮어씁니다. (에러 방지)
-                    const { error: insError } = await supabase
-                        .from('election_voters')
-                        .upsert(payload, { onConflict: 'election_id, member_uuid' });
-                    
-                    if(insError) return alert('DB 저장 실패: ' + insError.message);
-                    
-                    alert('명부 등록 완료! 관리자 페이지로 이동합니다.');
-                    window.location.href = 'admin.html';
+                if(tempPayload.length > 0) {
+                    // 🚨 핵심: 여기서 바로 DB에 넣으면 안 됩니다!
+                    // insert/upsert 코드 없음 -> renderPreview 호출만 함
+                    renderPreview(tempPayload);
                 } else {
-                    alert('등록할 유효한 데이터가 없습니다. 엑셀의 내용과 선거구 코드를 확인하세요.');
+                    alert('등록할 유효한 데이터가 없습니다.');
                 }
-            }; // reader.onload 닫기
+            };
             reader.readAsArrayBuffer(file);
-        }; // uploadVoters 닫기
+        };
 
         // [추가] 엑셀 샘플 다운로드 함수
         window.downloadSample = () => {
