@@ -2,54 +2,92 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>선거 설정 및 명부 업로드</title>
+    <title>선거 설정 및 명부 업로드 (관리자)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
 </head>
-<body>  
+<body>
     <div class="container active" style="max-width:800px;">
-        <h1>⚙️ 선거 초기 설정</h1>
-        <p style="color:red; font-size:0.9rem;">* 주의: 이 작업은 선거당 1회만 수행하세요.</p>
-
-        <div class="admin-panel" style="margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
-            <h3>Step 1. 선거 생성</h3>
-            <input type="text" id="election-title" placeholder="선거명 (예: 2026년 정기 대의원 선거)" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;">
-            <div style="display:flex; gap:1rem;">
-                <input type="datetime-local" id="start-at" style="flex:1; padding:0.5rem;">
-                <input type="datetime-local" id="end-at" style="flex:1; padding:0.5rem;">
-            </div>
-            <button onclick="createElection()" class="btn-submit" style="margin-top:1rem;">선거 생성하기</button>
+        
+        <div id="login-section" style="text-align:center; padding: 2rem;">
+            <h1>🔒 관리자 인증 필요</h1>
+            <p>선거를 생성하려면 관리자 이메일로 로그인이 필요합니다.</p>
+            <input type="email" id="admin-email" placeholder="admin@example.com" 
+                   style="padding:0.5rem; width:250px; margin-right:0.5rem;">
+            <button onclick="handleLogin()" class="btn-submit" style="width:auto; display:inline-block;">매직링크 보내기</button>
+            <p style="font-size:0.8rem; color:#666; margin-top:1rem;">
+                * 이메일을 입력하고 버튼을 누른 뒤, 메일함의 링크를 클릭하고 돌아오세요.
+            </p>
         </div>
 
-        <div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
-            <h3>Step 2. 선거구 등록</h3>
-            <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
-                <input type="text" id="dist-name" placeholder="이름 (예: 서울지구)" style="flex:2;">
-                <input type="text" id="dist-code" placeholder="코드 (예: SEOUL)" style="flex:1;">
-                <select id="dist-type" style="flex:1;">
-                    <option value="CANDIDATE">인물투표</option>
-                    <option value="BINARY">찬반투표</option>
-                </select>
-                <button onclick="addDistrict()" style="padding:0.5rem;">추가</button>
-            </div>
-            <ul id="district-list" style="background:#f9f9f9; padding:1rem; list-style:none;"></ul>
-        </div>
+        <div id="setup-section" style="display:none;">
+            <h1>⚙️ 선거 초기 설정</h1>
+            <p style="color:red; font-size:0.9rem;">* 주의: 이 작업은 선거당 1회만 수행하세요.</p>
+            <p id="login-info" style="text-align:right; font-size:0.9rem; color:blue;"></p>
 
-        <div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
-            <h3>Step 3. 선거인 명부 엑셀 업로드</h3>
-            <p style="font-size:0.8rem;">* 엑셀 칼럼: <code>member_id</code> (필수), <code>district_code</code> (필수)</p>
-            <input type="file" id="excel-file" accept=".xlsx, .xls">
-            <button onclick="uploadVoters()" class="btn-submit" style="margin-top:1rem; background-color:#166534;">명부 등록 및 설정 완료</button>
-            <div id="upload-log" style="margin-top:1rem; font-size:0.8rem; color:blue;"></div>
+            <div class="admin-panel" style="margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
+                <h3>Step 1. 선거 생성</h3>
+                <input type="text" id="election-title" placeholder="선거명 (예: 2026년 정기 대의원 선거)" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;">
+                <div style="display:flex; gap:1rem;">
+                    <input type="datetime-local" id="start-at" style="flex:1; padding:0.5rem;">
+                    <input type="datetime-local" id="end-at" style="flex:1; padding:0.5rem;">
+                </div>
+                <button onclick="createElection()" class="btn-submit" style="margin-top:1rem;">선거 생성하기</button>
+            </div>
+
+            <div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
+                <h3>Step 2. 선거구 등록</h3>
+                <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+                    <input type="text" id="dist-name" placeholder="이름 (예: 서울지구)" style="flex:2;">
+                    <input type="text" id="dist-code" placeholder="코드 (예: SEOUL)" style="flex:1;">
+                    <select id="dist-type" style="flex:1;">
+                        <option value="CANDIDATE">인물투표</option>
+                        <option value="BINARY">찬반투표</option>
+                    </select>
+                    <button onclick="addDistrict()" style="padding:0.5rem;">추가</button>
+                </div>
+                <ul id="district-list" style="background:#f9f9f9; padding:1rem; list-style:none;"></ul>
+            </div>
+
+            <div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
+                <h3>Step 3. 선거인 명부 엑셀 업로드</h3>
+                <input type="file" id="excel-file" accept=".xlsx, .xls">
+                <button onclick="uploadVoters()" class="btn-submit" style="margin-top:1rem; background-color:#166534;">명부 등록 및 설정 완료</button>
+                <div id="upload-log" style="margin-top:1rem; font-size:0.8rem; color:blue;"></div>
+            </div>
         </div>
     </div>
 
     <script type="module">
-        import { supabase } from './ElectionService.js';
+        import { supabase, ElectionService } from './ElectionService.js';
         
         let newElectionId = null;
-        let createdDistricts = {}; // code -> uuid 매핑용
+        let createdDistricts = {};
+
+        // [초기화] 페이지 로드 시 로그인 상태 확인
+        async function init() {
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (session) {
+                // 로그인 되어 있으면 설정 화면 표시
+                document.getElementById('login-section').style.display = 'none';
+                document.getElementById('setup-section').style.display = 'block';
+                document.getElementById('login-info').innerText = `${session.user.email} 님 접속중`;
+            } else {
+                // 안 되어 있으면 로그인 화면 유지
+                console.log("로그인이 필요합니다.");
+            }
+        }
+
+        // [로그인] 매직링크 발송
+        window.handleLogin = async () => {
+            const email = document.getElementById('admin-email').value;
+            if (!email) return alert('이메일을 입력하세요.');
+
+            const { error } = await supabase.auth.signInWithOtp({ email });
+            if (error) alert('전송 실패: ' + error.message);
+            else alert('이메일로 로그인 링크를 보냈습니다.\n메일함을 확인하고 링크를 클릭해주세요.');
+        };
 
         // [Step 1] 선거 생성
         window.createElection = async () => {
@@ -83,21 +121,19 @@
 
             if(error) return alert('추가 실패: ' + error.message);
 
-            createdDistricts[code] = data.id; // 매핑 저장
+            createdDistricts[code] = data.id;
             
-            // UI 업데이트
             const li = document.createElement('li');
             li.innerText = `${name} (${code}) - ${type}`;
             document.getElementById('district-list').appendChild(li);
             
-            // 입력창 초기화
             document.getElementById('dist-name').value = '';
             document.getElementById('dist-code').value = '';
 
             document.getElementById('step-3').style.display = 'block';
         };
 
-        // [Step 3] 엑셀 업로드 및 명부 매칭 (핵심 로직)
+        // [Step 3] 엑셀 업로드
         window.uploadVoters = async () => {
             const fileInput = document.getElementById('excel-file');
             if(fileInput.files.length === 0) return alert('엑셀 파일을 선택하세요.');
@@ -109,28 +145,25 @@
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet); // [{member_id: '...', district_code: '...'}, ...]
+                const rows = XLSX.utils.sheet_to_json(firstSheet);
 
                 log(`엑셀 읽기 성공: 총 ${rows.length}명 데이터`);
-
-                // 1. 조합원 전체 로드 (매칭용) - MVP에선 전체 로드 방식 사용 (인원 많으면 페이지네이션 필요)
                 log('조합원 DB 대조 중...');
+                
                 const { data: members, error: memError } = await supabase
                     .from('coop_members')
                     .select('id, member_id');
                 
                 if(memError) return alert('조합원 DB 로드 실패');
 
-                // Map으로 변환 (검색 속도 향상)
                 const memberMap = new Map();
                 members.forEach(m => memberMap.set(m.member_id, m.id));
 
-                // 2. Insert 데이터 구성
                 const payload = [];
                 let failCount = 0;
 
                 for(const row of rows) {
-                    const memUuid = memberMap.get(String(row.member_id)); // 엑셀은 숫자로 읽힐 수 있으므로 String 변환
+                    const memUuid = memberMap.get(String(row.member_id));
                     const distId = createdDistricts[row.district_code];
 
                     if(memUuid && distId) {
@@ -148,7 +181,6 @@
 
                 log(`매칭 완료: 성공 ${payload.length}건 / 실패 ${failCount}건`);
 
-                // 3. Bulk Insert (500개씩 끊어서 저장 권장하지만 MVP는 한방에)
                 if(payload.length > 0) {
                     const { error: insError } = await supabase
                         .from('election_voters')
@@ -156,19 +188,21 @@
                     
                     if(insError) return alert('DB 저장 실패: ' + insError.message);
                     
-                    alert('명부 등록이 완료되었습니다. 관리자 페이지로 이동합니다.');
+                    alert('명부 등록 완료! 관리자 페이지로 이동합니다.');
                     window.location.href = 'admin.html';
                 } else {
-                    alert('등록할 유효한 데이터가 없습니다. 엑셀의 member_id와 district_code를 확인하세요.');
+                    alert('등록할 데이터가 없습니다.');
                 }
             };
-
             reader.readAsArrayBuffer(file);
         };
- 
+
         function log(msg) {
             document.getElementById('upload-log').innerText += msg + '\n';
         }
+
+        // 실행
+        init();
     </script>
 </body>
 </html>
