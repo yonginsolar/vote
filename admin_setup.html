@@ -35,7 +35,7 @@
                 <button onclick="createElection()" class="btn-submit" style="margin-top:1rem;">선거 생성하기</button>
             </div>
 
-            <div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
+<div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
                 <h3>Step 2. 선거구 등록</h3>
                 <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
                     <input type="text" id="dist-name" placeholder="이름 (예: 서울지구)" style="flex:2;">
@@ -46,11 +46,24 @@
                     </select>
                     <button onclick="addDistrict()" style="padding:0.5rem;">추가</button>
                 </div>
+                
+                <p id="district-warning" style="color:red; font-weight:bold; font-size:0.9rem; margin-bottom:0.5rem;">
+                    ⚠️ 선거구는 최소 3개 이상 등록해야 합니다. (현재 0개)
+                </p>
+
                 <ul id="district-list" style="background:#f9f9f9; padding:1rem; list-style:none;"></ul>
             </div>
 
-            <div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
+<div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
                 <h3>Step 3. 선거인 명부 엑셀 업로드</h3>
+                
+                <div style="margin-bottom: 1rem;">
+                    <button onclick="downloadSample()" style="background-color:#6b7280; color:white; border:none; padding:0.5rem 1rem; border-radius:4px; font-size:0.9rem; cursor:pointer;">
+                        ⬇️ 명부 작성용 샘플 엑셀 다운로드
+                    </button>
+                </div>
+
+                <p style="font-size:0.8rem;">* 엑셀 칼럼: <code>member_id</code> (필수), <code>district_code</code> (필수)</p>
                 <input type="file" id="excel-file" accept=".xlsx, .xls">
                 <button onclick="uploadVoters()" class="btn-submit" style="margin-top:1rem; background-color:#166534;">명부 등록 및 설정 완료</button>
                 <div id="upload-log" style="margin-top:1rem; font-size:0.8rem; color:blue;"></div>
@@ -115,12 +128,22 @@ window.handleLogin = async () => {
             document.getElementById('step-2').style.display = 'block';
         };
 
-        // [Step 2] 선거구 추가
+// [Step 2] 선거구 추가 (수정됨)
         window.addDistrict = async () => {
             if(!newElectionId) return;
-            const name = document.getElementById('dist-name').value;
-            const code = document.getElementById('dist-code').value;
+            const name = document.getElementById('dist-name').value.trim(); // 공백 제거
+            const code = document.getElementById('dist-code').value.trim(); // 공백 제거
             const type = document.getElementById('dist-type').value;
+
+            // [수정] 빈 값 방지 로직 추가
+            if (!name || !code) {
+                return alert('선거구 이름과 코드를 모두 입력해주세요.\n예: 이름(서울지구), 코드(SEOUL)');
+            }
+
+            // [수정] 중복 코드 방지 (UX상 추가)
+            if (createdDistricts[code]) {
+                return alert('이미 등록된 선거구 코드입니다.');
+            }
 
             const { data, error } = await supabase.from('districts').insert({
                 election_id: newElectionId, name, code, vote_type: type
@@ -130,14 +153,28 @@ window.handleLogin = async () => {
 
             createdDistricts[code] = data.id;
             
+            // UI 업데이트
             const li = document.createElement('li');
             li.innerText = `${name} (${code}) - ${type}`;
             document.getElementById('district-list').appendChild(li);
             
+            // 입력창 초기화
             document.getElementById('dist-name').value = '';
             document.getElementById('dist-code').value = '';
 
-            document.getElementById('step-3').style.display = 'block';
+            // [추가] 개수 체크 및 경고 메시지 업데이트
+            const count = Object.keys(createdDistricts).length;
+            const warningEl = document.getElementById('district-warning');
+            
+            if (count < 3) {
+                warningEl.style.color = 'red';
+                warningEl.innerText = `⚠️ 선거구는 최소 3개 이상 등록해야 합니다. (현재 ${count}개)`;
+                document.getElementById('step-3').style.display = 'none'; // 3개 안되면 업로드 못하게 숨김
+            } else {
+                warningEl.style.color = 'green';
+                warningEl.innerText = `✅ 최소 조건 만족 (현재 ${count}개 등록됨)`;
+                document.getElementById('step-3').style.display = 'block'; // 3개 이상일 때만 다음 단계 노출
+            }
         };
 
         // [Step 3] 엑셀 업로드
@@ -204,9 +241,103 @@ window.handleLogin = async () => {
             reader.readAsArrayBuffer(file);
         };
 
+        // [추가] 엑셀 샘플 다운로드 함수
+        window.downloadSample = () => {
+            // 샘플 데이터 생성
+            const ws_data = [
+                ["member_id", "district_code", "비고(입력X)"], // 헤더
+                ["2025-24-0001", "SEOUL", "예시 데이터입니다."],
+                ["2025-24-0002", "BUSAN", "district_code는 위에서 등록한 코드와 같아야 합니다."]
+            ];
+            
+            // 워크북 생성
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+            XLSX.utils.book_append_sheet(wb, ws, "선거인명부_샘플");
+            
+            // 파일 다운로드 트리거
+            XLSX.writeFile(wb, "선거인명부_업로드양식.xlsx");
+        };
+
+        // [Step 3] 엑셀 업로드 (수정됨)
+        window.uploadVoters = async () => {
+            // [추가] 최종 방어 로직: 선거구 3개 미만이면 업로드 차단
+            if (Object.keys(createdDistricts).length < 3) {
+                return alert('선거구가 최소 3개 이상 등록되어야 명부를 업로드할 수 있습니다.');
+            }
+
+            const fileInput = document.getElementById('excel-file');
+            if(fileInput.files.length === 0) return alert('엑셀 파일을 선택하세요.');
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = async (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet);
+
+                log(`엑셀 읽기 성공: 총 ${rows.length}명 데이터`);
+                log('조합원 DB 대조 중...');
+                
+                const { data: members, error: memError } = await supabase
+                    .from('coop_members')
+                    .select('id, member_id');
+                
+                if(memError) return alert('조합원 DB 로드 실패');
+
+                const memberMap = new Map();
+                members.forEach(m => memberMap.set(m.member_id, m.id));
+
+                const payload = [];
+                let failCount = 0;
+
+                for(const row of rows) {
+                    // 엑셀의 member_id를 문자열로 변환하여 안전하게 처리
+                    const memIdStr = String(row.member_id || '').trim();
+                    const distCodeStr = String(row.district_code || '').trim();
+
+                    const memUuid = memberMap.get(memIdStr);
+                    const distId = createdDistricts[distCodeStr];
+
+                    if(memUuid && distId) {
+                        payload.push({
+                            election_id: newElectionId,
+                            district_id: distId,
+                            member_uuid: memUuid,
+                            member_no: memIdStr
+                        });
+                    } else {
+                        // 실패 로그 상세화
+                        console.warn(`매칭 실패: ID(${memIdStr}) / Code(${distCodeStr}) - 해당 데이터가 없거나 코드가 틀림`);
+                        failCount++;
+                    }
+                }
+
+                log(`매칭 완료: 성공 ${payload.length}건 / 실패 ${failCount}건`);
+
+                if(payload.length > 0) {
+                    const { error: insError } = await supabase
+                        .from('election_voters')
+                        .insert(payload);
+                    
+                    if(insError) return alert('DB 저장 실패: ' + insError.message);
+                    
+                    alert('명부 등록 완료! 관리자 페이지로 이동합니다.');
+                    window.location.href = 'admin.html';
+                } else {
+                    alert('등록할 유효한 데이터가 없습니다. 엑셀의 내용과 선거구 코드를 확인하세요.');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
         function log(msg) {
             document.getElementById('upload-log').innerText += msg + '\n';
         }
+
+        
 
         // 실행
         init();
