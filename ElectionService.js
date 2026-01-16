@@ -143,3 +143,40 @@ export class ElectionService {
         return true;
     }
 }
+
+/* ElectionService.js 클래스 내부에 추가 */
+
+// [추가] 후보자 등록 신청
+async applyCandidate(formData) {
+    // 1. 이미지 업로드 처리
+    const file = formData.photoFile;
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${this.memberProfile.id}_${Date.now()}.${fileExt}`; // 파일명 중복 방지
+    const filePath = `${formData.electionId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from('candidates')
+        .upload(filePath, file);
+
+    if (uploadError) throw new Error('사진 업로드 실패: ' + uploadError.message);
+
+    // 2. 공개 URL 가져오기
+    const { data: { publicUrl } } = supabase.storage
+        .from('candidates')
+        .getPublicUrl(filePath);
+
+    // 3. DB Insert (초기 상태는 PENDING)
+    const { error: dbError } = await supabase
+        .from('candidates')
+        .insert({
+            election_id: formData.electionId,
+            district_id: formData.districtId,
+            member_uuid: this.memberProfile.id,
+            name: formData.name,
+            manifesto: formData.manifesto,
+            photo_url: publicUrl,
+            status: 'PENDING'
+        });
+
+    if (dbError) throw new Error('후보 등록 실패: ' + dbError.message);
+}
