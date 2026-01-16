@@ -6,225 +6,241 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
-    <style>
-        /* [1] 헤더 스타일 수정 (나가기 버튼 우측 정렬) */
-        header {
-            display: flex; 
-            justify-content: space-between; /* 양쪽 끝으로 배치 */
-            align-items: center;
-            padding: 1rem 2rem;
-            background: white;
-            border-bottom: 1px solid #ddd;
-        }
-        
-        /* [2] 대시보드 카드 스타일 */
-        .active-election-card {
-            border: 2px solid var(--color-primary); /* 녹색 테두리 */
-            background: #fdfdfd;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        .active-election-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
+<style>
+    /* [기본 변수] */
+    :root {
+        --color-primary: #10b981; /* 녹색 계열 */
+        --color-secondary: #3b82f6; /* 파란색 계열 */
+        --color-danger: #ef4444; /* 붉은색 */
+        --bg-overlay: rgba(0, 0, 0, 0.5);
+    }
 
-        /* [3] 연혁(Timeline) 스타일 */
-        .timeline-container { margin-top: 20px; }
-        .timeline-item {
-            padding: 0 0 20px 20px;
-            border-left: 2px solid #e0e0e0;
-            position: relative;
-            cursor: pointer;
-        }
-        .timeline-item::before {
-            content: "";
-            position: absolute;
-            width: 14px; height: 14px;
-            border-radius: 50px;
-            left: -8px; top: 0;
-            background: #fff;
-            border: 2px solid var(--color-primary);
-        }
-        /* 마우스 올리면 점 색상 변경 */
-        .timeline-item:hover::before {
-            background: var(--color-secondary);
-            border-color: var(--color-secondary);
-        }
-        .timeline-date {
-            font-size: 14px; color: var(--color-secondary); font-weight: 700; margin-bottom: 5px;
-        }
-        .timeline-content h4 {
-            font-size: 16px; font-weight: 600; margin: 0 0 5px 0;
-        }
-        .timeline-content p {
-            font-size: 14px; color: #666; margin: 0;
-        }
+    body { margin: 0; font-family: 'Pretendard', sans-serif; background-color: #f3f4f6; }
 
-        /* [4] 모달 및 테이블 스타일 */
-        .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-        
-        .preview-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.9rem; }
-        .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        .preview-table th { background-color: #f3f4f6; font-weight: bold; }
-        .preview-district-title { font-size: 1.1rem; font-weight: bold; color: var(--primary-color); margin-bottom: 0.5rem; border-left: 4px solid var(--primary-color); padding-left: 10px; }
-        .btn-delete { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
-        .btn-delete:hover { background: #dc2626; color: white; }
-    </style>
+    /* [헤더] 텍스트 축소 및 배치 수정 */
+    header {
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center;
+        padding: 0.8rem 1.5rem;
+        background: white;
+        border-bottom: 1px solid #ddd;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .header-logo {
+        font-size: 1.2rem; 
+        font-weight: 800; 
+        color: var(--color-primary); 
+        text-decoration: none;
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    /* [대시보드 카드] 버튼 영역 추가 */
+    .active-election-card {
+        border: 1px solid #e5e7eb;
+        border-left: 5px solid var(--color-primary);
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative; /* 버튼 배치를 위해 */
+    }
+    .active-election-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    /* 상태 제어 버튼 그룹 */
+    .card-actions {
+        display: flex;
+        gap: 8px;
+        margin-left: 20px;
+    }
+    .btn-control {
+        padding: 6px 12px;
+        border-radius: 4px;
+        border: none;
+        font-size: 0.85rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .btn-pause { background: #f59e0b; color: white; } /* 주황 */
+    .btn-pause:hover { background: #d97706; }
+    .btn-stop { background: #ef4444; color: white; } /* 빨강 */
+    .btn-stop:hover { background: #dc2626; }
+    .btn-resume { background: var(--color-primary); color: white; } /* 녹색 */
+
+    /* [모달 공통] 중앙 정렬 강제 (수정 핵심) */
+    .modal-overlay {
+        position: fixed; /* 화면 고정 */
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background-color: var(--bg-overlay);
+        z-index: 9999; /* 최상단 */
+        display: none; /* JS로 토글 */
+        justify-content: center; /* 가로 중앙 */
+        align-items: center; /* 세로 중앙 */
+        backdrop-filter: blur(2px); /* 배경 블러 효과 */
+    }
+    
+    .modal-content, .modal-contents {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        max-width: 500px;
+        width: 90%;
+        animation: modalFadeIn 0.3s;
+        position: relative; /* 내부 요소 배치 기준 */
+    }
+
+    @keyframes modalFadeIn {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 알럿/컨펌 전용 스타일 */
+    .alert-actions {
+        display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;
+    }
+    .btn-modal { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; }
+    .btn-confirm { background: var(--color-primary); color: white; }
+    .btn-cancel { background: #e5e7eb; color: #333; }
+
+    /* [기타] 연혁 및 테이블 스타일은 기존 유지 */
+    .timeline-container { margin-top: 20px; }
+    .timeline-item { padding: 0 0 20px 20px; border-left: 2px solid #e0e0e0; position: relative; cursor: pointer; }
+    .timeline-item::before { content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%; left: -8px; top: 0; background: #fff; border: 2px solid var(--color-primary); }
+    .timeline-date { font-size: 14px; color: #666; font-weight: 700; margin-bottom: 5px; }
+    .preview-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+</style>
 </head>
 
 <body>
     <header>
-        <h1 style="margin:0; font-family:'GmarketSans'; color:var(--color-primary);">🛡️ 선거 관리자</h1>
+        <div class="header-logo">
+            <span>🛡️ Election Admin</span>
+        </div>
         
         <div id="user-info-area" style="display:none; align-items:center; gap:15px;">
-            <span id="login-info" style="font-weight:bold; color:#333;">관리자님</span>
-            <button onclick="handleLogout()" style="background:#fff; border:1px solid #ddd; padding:5px 10px; border-radius:4px; cursor:pointer;">
-                나가기
+            <span id="login-info" style="font-weight:bold; color:#333; font-size:0.9rem;">관리자님</span>
+            <button onclick="handleLogout()" style="background:#f3f4f6; border:1px solid #ddd; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.8rem;">
+                로그아웃
             </button>
         </div>
     </header>
-<div class="container active" style="max-width:800px; margin-top: 2rem;">
+
+    <div class="container active" style="max-width:800px; margin: 2rem auto; padding: 0 1rem;">
         
-        <div id="login-section" style="text-align:center; padding: 2rem;">
-            <h1>🔒 관리자 인증 필요</h1>
-            <p>선거를 생성하려면 관리자 이메일로 로그인이 필요합니다.</p>
+        <div id="login-section" style="text-align:center; padding: 4rem 1rem;">
+            <h2 style="color:#333;">🔐 관리자 인증</h2>
+            <p style="color:#666; margin-bottom:2rem;">보안을 위해 관리자 이메일 인증이 필요합니다.</p>
             <input type="email" id="admin-email" placeholder="admin@example.com" 
-                   style="padding:0.5rem; width:250px; margin-right:0.5rem;">
-            <button onclick="handleLogin()" class="btn-submit" style="width:auto; display:inline-block;">매직링크 보내기</button>
-            <p style="font-size:0.8rem; color:#666; margin-top:1rem;">
-                * 이메일을 입력하고 버튼을 누른 뒤, 메일함의 링크를 클릭하고 돌아오세요.
-            </p>
+                   style="padding:0.8rem; width:250px; border:1px solid #ddd; border-radius:6px;">
+            <button onclick="handleLogin()" style="padding:0.8rem 1.5rem; background:var(--color-primary); color:white; border:none; border-radius:6px; cursor:pointer;">
+                인증 메일 발송
+            </button>
         </div>
 
-        <div id="dashboard-section" style="display:none; padding: 1rem 0;">
-            
+        <div id="dashboard-section" style="display:none;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h2>📊 선거 현황판</h2>
-                <button onclick="showCreateForm()" style="background:var(--color-primary); color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">
-                    + 새 선거 만들기
+                <h2 style="margin:0;">📊 선거 현황</h2>
+                <button onclick="showCreateForm()" style="background:var(--color-primary); color:white; border:none; padding:10px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">
+                    + 새 선거 생성
                 </button>
             </div>
 
             <div class="admin-panel" style="margin-bottom: 2rem;">
-                <h3 style="border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:15px;">🔥 진행 중인 선거</h3>
+                <h4 style="color:#666; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;">진행 중인 선거</h4>
                 <div id="active-list">
-                    <p style="color:#666; padding:1rem;">데이터 로딩 중...</p>
-                </div>
+                    </div>
             </div>
 
             <div class="admin-panel">
-                <h3 style="border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:15px;">📜 지난 선거 이력</h3>
-                <div id="history-timeline" class="timeline-container">
-                    </div>
+                <h4 style="color:#666; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;">지난 선거 이력</h4>
+                <div id="history-timeline" class="timeline-container"></div>
             </div>
         </div>
 
         <div id="setup-section" style="display:none;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h1 style="margin-bottom:0;">⚙️ 선거 생성 마법사</h1>
-                <button onclick="location.reload()" style="font-size:0.9rem; border:1px solid #ddd; background:#fff; padding:5px 10px; border-radius:4px; cursor:pointer;">← 대시보드로</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                <h2 style="margin:0;">⚙️ 선거 생성</h2>
+                <button onclick="location.reload()" style="border:1px solid #ddd; background:#fff; padding:6px 12px; border-radius:4px; cursor:pointer;">취소</button>
             </div>
-            
-            <p style="color:red; font-size:0.9rem; margin-bottom: 1rem; margin-top:10px;">* 주의: 새로운 선거를 생성하면 기존 선거 설정과 섞이지 않도록 주의하세요.</p>
-
-            <div class="admin-panel" style="margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
-                <h3>Step 1. 선거 생성</h3>
-                <input type="text" id="election-title" placeholder="선거명 (예: 2026년 정기 대의원 선거)" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;">
+            <div class="admin-panel" style="padding:1.5rem; border:1px solid #ccc; border-radius:8px; margin-bottom:10px;">
+                <h3>Step 1. 기본 정보</h3>
+                <input type="text" id="election-title" placeholder="선거명" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;">
                 <div style="display:flex; gap:1rem;">
                     <input type="datetime-local" id="start-at" style="flex:1; padding:0.5rem;">
                     <input type="datetime-local" id="end-at" style="flex:1; padding:0.5rem;">
                 </div>
-                <button onclick="createElection()" class="btn-submit" style="margin-top:1rem;">선거 생성하기</button>
+                <button onclick="createElection()" style="margin-top:1rem; padding:10px; background:var(--color-primary); color:white; border:none; width:100%; cursor:pointer;">생성하기</button>
             </div>
-
+            
             <div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
-                <h3>Step 2. 선거구 등록</h3>
-                <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
-                    <input type="text" id="dist-name" placeholder="이름 (예: 서울지구)" style="flex:2;">
+                 <h3>Step 2. 선거구 설정</h3>
+                 <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
+                    <input type="text" id="dist-name" placeholder="이름 (예: 서울)" style="flex:2;">
                     <input type="text" id="dist-code" placeholder="코드 (예: SEOUL)" style="flex:1;">
                     <select id="dist-type" style="flex:1;">
-                        <option value="CANDIDATE">인물투표</option>
-                        <option value="BINARY">찬반투표</option>
+                        <option value="CANDIDATE">인물</option>
+                        <option value="BINARY">찬반</option>
                     </select>
                     <button onclick="addDistrict()" style="padding:0.5rem;">추가</button>
                 </div>
-                
-                <p id="district-warning" style="color:red; font-weight:bold; font-size:0.9rem; margin-bottom:0.5rem;">
-                    ⚠️ 선거구는 최소 3개 이상 등록해야 합니다. (현재 0개)
-                </p>
-
-                <ul id="district-list" style="background:#f9f9f9; padding:1rem; list-style:none;"></ul>
+                <ul id="district-list"></ul>
             </div>
 
             <div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
-                <h3>Step 3. 선거인 명부 엑셀 업로드</h3>
-                
-                <div style="margin-bottom: 1rem;">
-                    <button onclick="downloadSample()" style="background-color:#6b7280; color:white; border:none; padding:0.5rem 1rem; border-radius:4px; font-size:0.9rem; cursor:pointer;">
-                        ⬇️ 명부 작성용 샘플 엑셀 다운로드
-                    </button>
-                </div>
-
-                <p style="font-size:0.8rem;">* 엑셀 칼럼: <code>member_id</code> (필수), <code>district_code</code> (필수)</p>
+                <h3>Step 3. 명부 업로드</h3>
                 <input type="file" id="excel-file" accept=".xlsx, .xls">
-                <button onclick="uploadVoters()" class="btn-submit" style="margin-top:1rem; background-color:#166534;">명부 등록 및 설정 완료</button>
-                <div id="upload-log" style="margin-top:1rem; font-size:0.8rem; color:blue;"></div>
+                <button onclick="uploadVoters()" style="margin-top:1rem; width:100%; padding:10px; background:#166534; color:white; border:none; cursor:pointer;">명부 등록 완료</button>
             </div>
         </div>
 
-    </div> <div id="preview-modal" class="modal-overlay">
-        <div class="modal-content" style="max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; text-align: left;">
-            <h2 style="text-align: center;">📋 명부 업로드 미리보기</h2>
-            <p style="text-align: center; color: #666; margin-bottom: 1rem;">
-                데이터가 정확한지 확인해주세요.<br>
-                잘못된 데이터는 <strong>[삭제]</strong> 버튼을 눌러 제외할 수 있습니다.
-            </p>
-            
-            <div id="preview-list">
-                </div>
-
-            <div class="modal-buttons" style="margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1rem;">
-                <button onclick="closePreview()" class="btn-modal" style="background-color: #aaa; color: white;">취소 (다시 올리기)</button>
-                <button onclick="confirmUpload()" class="btn-modal btn-confirm" style="font-size: 1.1rem; padding: 0.8rem 2rem;">✅ 이상 없음, 최종 등록</button>
+    </div> 
+    <div id="preview-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+            <h3 style="margin-top:0;">📋 데이터 확인</h3>
+            <div id="preview-list"></div>
+            <div class="alert-actions">
+                <button onclick="closePreview()" class="btn-modal btn-cancel">취소</button>
+                <button onclick="confirmUpload()" class="btn-modal btn-confirm">최종 등록</button>
             </div>
         </div>
     </div>
-    
-    <div id="history-modal" class="center-modal" style="display:none;">
-        <div class="modal-contents" style="max-width:400px; text-align:left;">
+
+    <div id="history-modal" class="modal-overlay">
+        <div class="modal-content">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h3 id="modal-title" style="margin:0; color:var(--color-primary);">선거 제목</h3>
                 <button onclick="closeHistoryModal()" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
-            
-            <div class="detail-row">
-                <span>기간</span>
-                <span id="modal-period" style="font-weight:bold; font-size:0.9rem;">-</span>
-            </div>
-            <div class="detail-row">
-                <span>총 유권자</span>
-                <span><strong id="modal-total">0</strong>명</span>
-            </div>
-            <div class="detail-row">
-                <span>투표 참여</span>
-                <span><strong id="modal-current" style="color:var(--color-primary);">0</strong>명 (<span id="modal-rate">0</span>%)</span>
-            </div>
-
+            <div class="detail-row"><span>기간</span> <span id="modal-period">-</span></div>
+            <div class="detail-row"><span>총 유권자</span> <span><strong id="modal-total">0</strong>명</span></div>
+            <div class="detail-row"><span>투표 참여</span> <span><strong id="modal-current">0</strong>명 (<span id="modal-rate">0</span>%)</span></div>
             <div style="margin-top:20px; text-align:center;">
-                <button id="btn-go-result" style="width:100%; padding:12px; background:var(--color-secondary); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">
-                    상세 결과 보기 >
-                </button>
+                <button id="btn-go-result" class="btn-modal btn-confirm" style="width:100%;">상세 결과 보기 ></button>
             </div>
         </div>
     </div>
+
+    <div id="common-alert-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width:350px; text-align:center;">
+            <p id="common-alert-msg" style="margin: 20px 0; font-size:1.05rem; color:#333; line-height:1.5;"></p>
+            <div id="common-alert-btns" class="alert-actions" style="justify-content:center;">
+                </div>
+        </div>
+    </div>
+
+</body>
 <script type="module">
         import { AdminService } from './AdminService.js';
         import { supabase } from './ElectionService.js';
@@ -257,58 +273,106 @@
             }
         }
 
-        // [대시보드] 데이터 로드 (새로 추가된 함수)
-        async function loadDashboard() {
-            const elections = await adminService.getAllElections();
-            const activeContainer = document.getElementById('active-list');
-            const timelineContainer = document.getElementById('history-timeline');
-            
-            activeContainer.innerHTML = '';
-            timelineContainer.innerHTML = '';
+async function loadDashboard() {
+        const elections = await adminService.getAllElections();
+        const activeContainer = document.getElementById('active-list');
+        const timelineContainer = document.getElementById('history-timeline');
+        
+        activeContainer.innerHTML = '';
+        timelineContainer.innerHTML = '';
 
-            if (elections.length === 0) {
-                activeContainer.innerHTML = '<p>데이터가 없습니다.</p>';
-                return;
-            }
-
-            const activeStatuses = ['PREPARE', 'NOMINATION', 'READY', 'OPEN', 'PAUSED'];
-
-            elections.forEach(el => {
-                if (activeStatuses.includes(el.status)) {
-                    // [진행 중] 카드 렌더링
-                    const card = document.createElement('div');
-                    card.className = 'active-election-card';
-                    card.onclick = () => {
-                        localStorage.setItem('target_election_id', el.id);
-                        window.location.href = `admin.html?id=${el.id}`;
-                    };
-                    card.innerHTML = `
-                        <div>
-                            <span style="background:${el.status === 'OPEN' ? 'var(--color-primary)' : '#999'}; color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem;">
-                                ${el.status}
-                            </span>
-                            <h4 style="margin:5px 0 0 0; font-size:1.1rem;">${el.title}</h4>
-                        </div>
-                        <div style="font-size:1.5rem; color:var(--color-primary);">➜</div>
-                    `;
-                    activeContainer.appendChild(card);
-                } else {
-                    // [지난 선거] 타임라인 렌더링
-                    const item = document.createElement('div');
-                    item.className = 'timeline-item';
-                    item.onclick = () => openHistoryModal(el);
-
-                    item.innerHTML = `
-                        <div class="timeline-date">${new Date(el.end_at).toLocaleDateString()} 종료</div>
-                        <div class="timeline-content">
-                            <h4>${el.title}</h4>
-                            <p>상태: ${el.status}</p>
-                        </div>
-                    `;
-                    timelineContainer.appendChild(item);
-                }
-            });
+        if (elections.length === 0) {
+            activeContainer.innerHTML = '<p style="padding:1rem; color:#666;">데이터가 없습니다.</p>';
+            return;
         }
+
+        const activeStatuses = ['PREPARE', 'NOMINATION', 'READY', 'OPEN', 'PAUSED'];
+
+        elections.forEach(el => {
+            if (activeStatuses.includes(el.status)) {
+                // [진행 중] 카드 렌더링
+                const card = document.createElement('div');
+                card.className = 'active-election-card';
+                
+                // 카드 전체 클릭 시 상세 페이지 이동
+                card.onclick = () => {
+                    localStorage.setItem('target_election_id', el.id);
+                    window.location.href = `admin.html?id=${el.id}`;
+                };
+
+                // 상태에 따른 제어 버튼 결정
+                let controlButtons = '';
+                if (el.status === 'OPEN' || el.status === 'NOMINATION') {
+                    // 진행 중일 때 -> [일시정지] [종료]
+                    controlButtons = `
+                        <button class="btn-control btn-pause" onclick="handleStatusChange(event, '${el.id}', 'PAUSED')">⏸ 일시정지</button>
+                        <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
+                    `;
+                } else if (el.status === 'PAUSED') {
+                    // 일시정지일 때 -> [재개]
+                    controlButtons = `
+                        <button class="btn-control btn-resume" onclick="handleStatusChange(event, '${el.id}', 'OPEN')">▶️ 투표 재개</button>
+                        <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
+                    `;
+                } else if (el.status === 'PREPARE') {
+                    // 준비 중일 때 -> 삭제 등 (여기서는 생략)
+                    controlButtons = `<span style="font-size:0.8rem; color:#999;">준비 중</span>`;
+                }
+
+                card.innerHTML = `
+                    <div style="flex:1;">
+                        <span style="background:${el.status === 'OPEN' ? 'var(--color-primary)' : '#6b7280'}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold;">
+                            ${el.status}
+                        </span>
+                        <h4 style="margin:8px 0 0 0; font-size:1.1rem; color:#1f2937;">${el.title}</h4>
+                    </div>
+                    
+                    <div class="card-actions">
+                        ${controlButtons}
+                    </div>
+                `;
+                activeContainer.appendChild(card);
+
+            } else {
+                // [지난 선거] 타임라인
+                const item = document.createElement('div');
+                item.className = 'timeline-item';
+                item.onclick = () => window.openHistoryModal(el);
+                item.innerHTML = `
+                    <div class="timeline-date">${new Date(el.end_at).toLocaleDateString()} 종료</div>
+                    <div class="timeline-content">
+                        <h4>${el.title}</h4>
+                        <p style="font-size:0.85rem; color:#666;">최종 상태: ${el.status}</p>
+                    </div>
+                `;
+                timelineContainer.appendChild(item);
+            }
+        });
+    }
+
+    // [상태 변경 핸들러]
+    window.handleStatusChange = async (event, electionId, newStatus) => {
+        // 부모(카드) 클릭 이벤트 방지
+        event.stopPropagation();
+
+        let warning = '';
+        if(newStatus === 'ENDED') warning = '정말 선거를 종료하시겠습니까?\n종료 후에는 되돌릴 수 없습니다.';
+        else if(newStatus === 'PAUSED') warning = '선거를 일시정지 하시겠습니까?\n투표가 중단됩니다.';
+        else if(newStatus === 'OPEN') warning = '투표를 재개하시겠습니까?';
+
+        window.showConfirm(warning, async () => {
+            const { error } = await supabase
+                .from('elections')
+                .update({ status: newStatus })
+                .eq('id', electionId);
+
+            if(error) window.showAlert('오류 발생: ' + error.message);
+            else {
+                window.showAlert('상태가 변경되었습니다.');
+                loadDashboard(); // 목록 새로고침
+            }
+        });
+    };
 
         // [기능] 새 선거 만들기 폼 토글
         window.showCreateForm = () => {
