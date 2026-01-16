@@ -20,10 +20,31 @@
             </p>
         </div>
 
-        <div id="setup-section" style="display:none;">
-            <h1>⚙️ 선거 초기 설정</h1>
-            <p style="color:red; font-size:0.9rem;">* 주의: 이 작업은 선거당 1회만 수행하세요.</p>
+<div id="setup-section" style="display:none;">
+            <h1>⚙️ 선거 관리 대시보드</h1>
             <p id="login-info" style="text-align:right; font-size:0.9rem; color:blue;"></p>
+
+            <div id="dashboard-section" style="margin-bottom: 2rem;">
+                
+                <div class="admin-panel" style="border: 2px solid var(--primary-color); background-color: #eff6ff;">
+                    <h3>🔥 현재 진행/준비 중인 선거</h3>
+                    <div id="active-election-list">
+                        <p style="color:#666; padding:1rem;">로딩 중...</p>
+                    </div>
+                </div>
+
+                <div class="admin-panel" style="margin-top: 1rem; background-color: #f9fafb; opacity: 0.9;">
+                    <h3>zzz 종료된 선거 (이력)</h3>
+                    <div id="past-election-list">
+                        <p style="color:#666; padding:1rem;">로딩 중...</p>
+                    </div>
+                </div>
+            </div>
+
+            <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #ddd;">
+            
+            <h2 style="color: #4b5563;">➕ 새로운 선거 만들기</h2>
+            <p style="color:red; font-size:0.9rem; margin-bottom: 1rem;">* 주의: 새로운 선거를 생성하면 기존 선거 설정과 섞이지 않도록 주의하세요.</p>
 
             <div class="admin-panel" style="margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
                 <h3>Step 1. 선거 생성</h3>
@@ -100,12 +121,17 @@
     </style>
 
     <script type="module">
+
+     
+        import { AdminService } from './AdminService.js'; // [필수] AdminService 추가
         import { supabase, ElectionService } from './ElectionService.js';
         
         let newElectionId = null;
         let createdDistricts = {};
 
-        // [초기화] 페이지 로드 시 로그인 상태 확인
+const adminService = new AdminService(); // 서비스 인스턴스 생성
+
+        // [초기화] 페이지 로드 시 로그인 상태 확인 및 대시보드 로드
         async function init() {
             const { data: { session } } = await supabase.auth.getSession();
 
@@ -114,11 +140,107 @@
                 document.getElementById('login-section').style.display = 'none';
                 document.getElementById('setup-section').style.display = 'block';
                 document.getElementById('login-info').innerText = `${session.user.email} 님 접속중`;
+                
+                // [추가] 선거 목록 로드
+                loadDashboard();
+
             } else {
-                // 안 되어 있으면 로그인 화면 유지
                 console.log("로그인이 필요합니다.");
             }
         }
+
+        // [추가] 선거 목록 대시보드 렌더링 함수
+        async function loadDashboard() {
+            const elections = await adminService.getAllElections();
+            
+            const activeContainer = document.getElementById('active-election-list');
+            const pastContainer = document.getElementById('past-election-list');
+            
+            activeContainer.innerHTML = '';
+            pastContainer.innerHTML = '';
+
+            if (elections.length === 0) {
+                activeContainer.innerHTML = '<p style="padding:1rem;">생성된 선거가 없습니다.</p>';
+                pastContainer.innerHTML = '<p style="padding:1rem;">기록이 없습니다.</p>';
+                return;
+            }
+
+            elections.forEach(el => {
+                // 상태에 따른 분류 (PREPARE, READY, OPEN, PAUSED -> 진행중 / CLOSED, PUBLISHED -> 종료)
+                const isActive = ['PREPARE', 'READY', 'OPEN', 'PAUSED'].includes(el.status);
+                
+                // 상태별 뱃지 색상
+                let badgeColor = '#9ca3af'; // gray
+                if (el.status === 'OPEN') badgeColor = '#16a34a'; // green
+                else if (el.status === 'PUBLISHED') badgeColor = '#2563eb'; // blue
+                else if (el.status === 'CLOSED') badgeColor = '#dc2626'; // red
+
+                // 카드 HTML 생성
+                const card = document.createElement('div');
+                card.style.cssText = `
+                    border: 1px solid #ddd; background: white; padding: 1rem; border-radius: 6px; 
+                    margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;
+                `;
+
+                // 왼쪽: 정보
+                const infoDiv = document.createElement('div');
+                infoDiv.innerHTML = `
+                    <div style="font-weight:bold; font-size:1.1rem;">
+                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:12px; font-size:0.8rem; margin-right:5px;">
+                            ${el.status}
+                        </span>
+                        ${el.title}
+                    </div>
+                    <div style="font-size:0.85rem; color:#666; margin-top:4px;">
+                        기간: ${new Date(el.start_at).toLocaleDateString()} ~ ${new Date(el.end_at).toLocaleDateString()}
+                    </div>
+                `;
+
+                // 오른쪽: 액션 버튼
+                const actionDiv = document.createElement('div');
+                
+                if (isActive) {
+                    // 진행 중: 관리 페이지로 이동 (현재는 ID 파라미터가 없으므로 가장 최근 것으로 가정하거나, 추후 admin.html 수정 필요)
+                    // 여기서는 사용자가 클릭 시 localStorage에 ID를 저장하고 이동하는 방식을 쓰거나, 
+                    // admin.html이 쿼리스트링(?id=...)을 받도록 해야 함. 
+                    // MVP에서는 간단히 링크 이동만 처리.
+                    actionDiv.innerHTML = `
+                        <button onclick="goToAdmin('${el.id}')" style="background:#2563eb; color:white; border:none; padding:0.5rem 1rem; border-radius:4px; cursor:pointer;">
+                            관리 / 설정 >
+                        </button>
+                    `;
+                    activeContainer.appendChild(card);
+                } else {
+                    // 종료됨: 결과 보기 (monitor.html)
+                    actionDiv.innerHTML = `
+                        <button onclick="goToResult('${el.id}')" style="background:#4b5563; color:white; border:none; padding:0.5rem 1rem; border-radius:4px; cursor:pointer; margin-right:5px;">
+                            결과 보기
+                        </button>
+                    `;
+                    pastContainer.appendChild(card);
+                }
+
+                card.appendChild(infoDiv);
+                card.appendChild(actionDiv);
+            });
+
+            // 데이터가 없을 경우 처리
+            if (activeContainer.children.length === 0) activeContainer.innerHTML = '<p style="color:#888; padding:1rem;">진행 중인 선거가 없습니다.</p>';
+            if (pastContainer.children.length === 0) pastContainer.innerHTML = '<p style="color:#888; padding:1rem;">종료된 선거가 없습니다.</p>';
+        }
+
+        // [추가] 페이지 이동 헬퍼 함수
+        window.goToAdmin = (electionId) => {
+            // admin.html이 electionId를 인식하도록 쿼리스트링 전달 (admin.html 수정이 필요할 수 있음)
+            // 우선은 localStorage에 저장해두는 방식이 가장 안전 (admin.html 코드 수정 없이 연동 가능성 높음)
+            localStorage.setItem('target_election_id', electionId); 
+            window.open(`admin.html?id=${electionId}`, '_blank');
+        };
+
+        window.goToResult = (electionId) => {
+            localStorage.setItem('target_election_id', electionId);
+            window.open(`monitor.html?id=${electionId}`, '_blank');
+        };
 
         // [로그인] 매직링크 발송
 window.handleLogin = async () => {
