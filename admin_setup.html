@@ -1,6 +1,86 @@
 <!DOCTYPE html>
 <html lang="ko">
-<header>
+<head>
+    <meta charset="UTF-8">
+    <title>선거 관리 대시보드</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        /* [1] 헤더 스타일 수정 (나가기 버튼 우측 정렬) */
+        header {
+            display: flex; 
+            justify-content: space-between; /* 양쪽 끝으로 배치 */
+            align-items: center;
+            padding: 1rem 2rem;
+            background: white;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        /* [2] 대시보드 카드 스타일 */
+        .active-election-card {
+            border: 2px solid var(--color-primary); /* 녹색 테두리 */
+            background: #fdfdfd;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .active-election-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        /* [3] 연혁(Timeline) 스타일 */
+        .timeline-container { margin-top: 20px; }
+        .timeline-item {
+            padding: 0 0 20px 20px;
+            border-left: 2px solid #e0e0e0;
+            position: relative;
+            cursor: pointer;
+        }
+        .timeline-item::before {
+            content: "";
+            position: absolute;
+            width: 14px; height: 14px;
+            border-radius: 50px;
+            left: -8px; top: 0;
+            background: #fff;
+            border: 2px solid var(--color-primary);
+        }
+        /* 마우스 올리면 점 색상 변경 */
+        .timeline-item:hover::before {
+            background: var(--color-secondary);
+            border-color: var(--color-secondary);
+        }
+        .timeline-date {
+            font-size: 14px; color: var(--color-secondary); font-weight: 700; margin-bottom: 5px;
+        }
+        .timeline-content h4 {
+            font-size: 16px; font-weight: 600; margin: 0 0 5px 0;
+        }
+        .timeline-content p {
+            font-size: 14px; color: #666; margin: 0;
+        }
+
+        /* [4] 모달 및 테이블 스타일 */
+        .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        
+        .preview-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.9rem; }
+        .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        .preview-table th { background-color: #f3f4f6; font-weight: bold; }
+        .preview-district-title { font-size: 1.1rem; font-weight: bold; color: var(--primary-color); margin-bottom: 0.5rem; border-left: 4px solid var(--primary-color); padding-left: 10px; }
+        .btn-delete { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+        .btn-delete:hover { background: #dc2626; color: white; }
+    </style>
+</head>
+
+<body>
+    <header>
         <h1 style="margin:0; font-family:'GmarketSans'; color:var(--color-primary);">🛡️ 선거 관리자</h1>
         
         <div id="user-info-area" style="display:none; align-items:center; gap:15px;">
@@ -9,80 +89,8 @@
                 나가기
             </button>
         </div>
-    <style>
-        /* [1] 헤더 스타일 수정 (나가기 버튼 우측 정렬) */
-    header {
-        display: flex; 
-        justify-content: space-between; /* 양쪽 끝으로 배치 */
-        align-items: center;
-        padding: 1rem 2rem;
-        background: white;
-        border-bottom: 1px solid #ddd;
-    }
-    
-    /* [2] 대시보드 카드 스타일 */
-    .active-election-card {
-        border: 2px solid var(--color-primary); /* 녹색 테두리 */
-        background: #fdfdfd;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 10px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        transition: transform 0.2s;
-    }
-    .active-election-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-
-    /* [3] 연혁(Timeline) 스타일 (요청하신 코드 그대로 적용) */
-    .timeline-container { margin-top: 20px; }
-    .timeline-item {
-        padding: 0 0 20px 20px;
-        border-left: 2px solid #e0e0e0;
-        position: relative;
-        cursor: pointer;
-    }
-    .timeline-item::before {
-        content: "";
-        position: absolute;
-        width: 14px; height: 14px;
-        border-radius: 50px;
-        left: -8px; top: 0;
-        background: #fff;
-        border: 2px solid var(--color-primary);
-    }
-    /* 마우스 올리면 점 색상 변경 */
-    .timeline-item:hover::before {
-        background: var(--color-secondary);
-        border-color: var(--color-secondary);
-    }
-    .timeline-date {
-        font-size: 14px; color: var(--color-secondary); font-weight: 700; margin-bottom: 5px;
-    }
-    .timeline-content h4 {
-        font-size: 16px; font-weight: 600; margin: 0 0 5px 0;
-    }
-    .timeline-content p {
-        font-size: 14px; color: #666; margin: 0;
-    }
-
-    /* [4] 모달 내부 스타일 보강 */
-    .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-                /* 미리보기 테이블 스타일 */
-        .preview-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.9rem; }
-        .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        .preview-table th { background-color: #f3f4f6; font-weight: bold; }
-        .preview-district-title { font-size: 1.1rem; font-weight: bold; color: var(--primary-color); margin-bottom: 0.5rem; border-left: 4px solid var(--primary-color); padding-left: 10px; }
-        .btn-delete { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
-        .btn-delete:hover { background: #dc2626; color: white; }
-        </style>
     </header>
-<body>
-    <div class="container active" style="max-width:800px;">
+<div class="container active" style="max-width:800px; margin-top: 2rem;">
         
         <div id="login-section" style="text-align:center; padding: 2rem;">
             <h1>🔒 관리자 인증 필요</h1>
@@ -95,11 +103,7 @@
             </p>
         </div>
 
-<div id="setup-section" style="display:none;">
-            <h1>⚙️ 선거 관리 대시보드</h1>
-            <p id="login-info" style="text-align:right; font-size:0.9rem; color:blue;"></p>
-
-<div id="dashboard-section" style="display:none; padding: 1rem 0;">
+        <div id="dashboard-section" style="display:none; padding: 1rem 0;">
             
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <h2>📊 선거 현황판</h2>
@@ -115,18 +119,20 @@
                 </div>
             </div>
 
-<div class="admin-panel">
+            <div class="admin-panel">
                 <h3 style="border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:15px;">📜 지난 선거 이력</h3>
                 <div id="history-timeline" class="timeline-container">
                     </div>
             </div>
-            
-        </div> <div id="setup-section" style="display:none;">
+        </div>
 
-            <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #ddd;">
+        <div id="setup-section" style="display:none;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h1 style="margin-bottom:0;">⚙️ 선거 생성 마법사</h1>
+                <button onclick="location.reload()" style="font-size:0.9rem; border:1px solid #ddd; background:#fff; padding:5px 10px; border-radius:4px; cursor:pointer;">← 대시보드로</button>
+            </div>
             
-            <h2 style="color: #4b5563;">➕ 새로운 선거 만들기</h2>
-            <p style="color:red; font-size:0.9rem; margin-bottom: 1rem;">* 주의: 새로운 선거를 생성하면 기존 선거 설정과 섞이지 않도록 주의하세요.</p>
+            <p style="color:red; font-size:0.9rem; margin-bottom: 1rem; margin-top:10px;">* 주의: 새로운 선거를 생성하면 기존 선거 설정과 섞이지 않도록 주의하세요.</p>
 
             <div class="admin-panel" style="margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
                 <h3>Step 1. 선거 생성</h3>
@@ -138,7 +144,7 @@
                 <button onclick="createElection()" class="btn-submit" style="margin-top:1rem;">선거 생성하기</button>
             </div>
 
-<div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
+            <div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
                 <h3>Step 2. 선거구 등록</h3>
                 <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
                     <input type="text" id="dist-name" placeholder="이름 (예: 서울지구)" style="flex:2;">
@@ -157,7 +163,7 @@
                 <ul id="district-list" style="background:#f9f9f9; padding:1rem; list-style:none;"></ul>
             </div>
 
-<div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
+            <div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
                 <h3>Step 3. 선거인 명부 엑셀 업로드</h3>
                 
                 <div style="margin-bottom: 1rem;">
@@ -172,9 +178,8 @@
                 <div id="upload-log" style="margin-top:1rem; font-size:0.8rem; color:blue;"></div>
             </div>
         </div>
-    </div>
 
-    <div id="preview-modal" class="modal-overlay">
+    </div> <div id="preview-modal" class="modal-overlay">
         <div class="modal-content" style="max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; text-align: left;">
             <h2 style="text-align: center;">📋 명부 업로드 미리보기</h2>
             <p style="text-align: center; color: #666; margin-bottom: 1rem;">
@@ -192,8 +197,6 @@
         </div>
     </div>
     
-
-
     <div id="history-modal" class="center-modal" style="display:none;">
         <div class="modal-contents" style="max-width:400px; text-align:left;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
