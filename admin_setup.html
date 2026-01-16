@@ -225,21 +225,24 @@ window.handleLogin = async () => {
 
                 log(`매칭 완료: 성공 ${payload.length}건 / 실패 ${failCount}건`);
 
-                if(payload.length > 0) {
+if(payload.length > 0) {
+                    
+                    // [수정] insert -> upsert로 변경
+                    // 이미 명부에 있는 사람이면 '선거구' 정보를 엑셀 내용으로 덮어씁니다. (에러 방지)
                     const { error: insError } = await supabase
                         .from('election_voters')
-                        .insert(payload);
+                        .upsert(payload, { onConflict: 'election_id, member_uuid' });
                     
                     if(insError) return alert('DB 저장 실패: ' + insError.message);
                     
                     alert('명부 등록 완료! 관리자 페이지로 이동합니다.');
                     window.location.href = 'admin.html';
                 } else {
-                    alert('등록할 데이터가 없습니다.');
+                    alert('등록할 유효한 데이터가 없습니다. 엑셀의 내용과 선거구 코드를 확인하세요.');
                 }
-            };
+            }; // reader.onload 닫기
             reader.readAsArrayBuffer(file);
-        };
+        }; // uploadVoters 닫기
 
         // [추가] 엑셀 샘플 다운로드 함수
         window.downloadSample = () => {
