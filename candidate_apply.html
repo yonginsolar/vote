@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <title>후보자 등록 신청</title>
     <link rel="stylesheet" href="style.css">
+        <script src="ElectionService.js"></script>
+    <script src="AdminService.js"></script>
 </head>
 <body>
     <div class="container active">
@@ -60,7 +62,7 @@
     </div>
 
     <script type="module">
-        import { ElectionService, supabase } from './ElectionService.js';
+        import { ElectionService, supabase } from 'ElectionService.js';
         const service = new ElectionService();
         const modalOverlay = document.getElementById('modal-overlay');
         
