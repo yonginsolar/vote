@@ -104,4 +104,17 @@ export class AdminService {
         if (error) throw error;
         return ballots; // 화면에서 가공해서 그림
     }
+    // [추가] 모든 선거 이력 가져오기 (최신순 정렬)
+    async getAllElections() {
+        const { data, error } = await supabase
+            .from('elections')
+            .select('*')
+            .order('created_at', { ascending: false }); // 최신 선거가 위로
+
+        if (error) {
+            console.error('선거 목록 로드 실패:', error);
+            return [];
+        }
+        return data;
+    }
 }
