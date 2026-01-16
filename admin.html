@@ -16,6 +16,8 @@
         .control-btns button { margin-right: 0.5rem; padding: 0.5rem 1rem; cursor: pointer; }
         .candidate-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 1rem 0; }
     </style>
+        <script src="ElectionService.js"></script>
+    <script src="AdminService.js"></script>
 </head>
 <body>
 
@@ -52,7 +54,7 @@
     </div>
 
     <script type="module">
-        import { AdminService } from './js/AdminService.js';
+        import { AdminService } from 'AdminService.js';
         
         const service = new AdminService();
         let currentElectionId = null;
