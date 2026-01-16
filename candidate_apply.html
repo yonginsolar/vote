@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>후보자 등록 신청</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container active">
+        <h1>🙋‍♀️ 후보자 출마 신청</h1>
+        
+        <div id="loading-msg" style="text-align:center;">자격 확인 중...</div>
+
+        <form id="apply-form" style="display:none; margin-top:2rem;">
+            <div style="margin-bottom:1rem;">
+                <label><strong>출마 선거구</strong></label>
+                <input type="text" id="district-name" readonly 
+                       style="width:100%; padding:0.5rem; background:#eee; border:1px solid #ddd; margin-top:0.5rem;">
+                <input type="hidden" id="district-id">
+                <input type="hidden" id="election-id">
+            </div>
+
+            <div style="margin-bottom:1rem;">
+                <label><strong>후보자 명 (표기용)</strong></label>
+                <input type="text" id="cand-name" required placeholder="예: 홍길동"
+                       style="width:100%; padding:0.5rem; margin-top:0.5rem;">
+            </div>
+
+            <div style="margin-bottom:1rem;">
+                <label><strong>프로필 사진</strong></label>
+                <input type="file" id="cand-photo" accept="image/*" required
+                       style="width:100%; margin-top:0.5rem;">
+                <p style="font-size:0.8rem; color:#666;">* 정사각형 비율 권장 (5MB 이하)</p>
+            </div>
+
+            <div style="margin-bottom:1rem;">
+                <label><strong>공약 및 소개</strong></label>
+                <textarea id="cand-manifesto" rows="5" required placeholder="조합원들에게 전할 메시지를 입력하세요."
+                          style="width:100%; padding:0.5rem; margin-top:0.5rem;"></textarea>
+            </div>
+
+            <button type="submit" id="btn-submit" class="btn-submit">신청하기 (승인 후 노출)</button>
+        </form>
+
+        <div id="already-applied" style="display:none; text-align:center; padding:2rem;">
+            <h3>✅ 이미 신청하셨습니다.</h3>
+            <p>관리자 승인을 기다려주세요.</p>
+            <button onclick="window.history.back()" class="btn-modal">돌아가기</button>
+        </div>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="modal-title">알림</h3>
+            <p id="modal-msg"></p>
+            <div class="modal-buttons">
+                <button id="modal-btn-ok" class="btn-modal btn-confirm">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { ElectionService, supabase } from './js/ElectionService.js';
+        const service = new ElectionService();
+        const modalOverlay = document.getElementById('modal-overlay');
+        
+        async function init() {
+            try {
+                // 1. 로그인 체크
+                const user = await service.initialize();
+                if (!user) {
+                    alertModal('로그인이 필요합니다.', () => location.href = '/login.html');
+                    return;
+                }
+
+                // 2. 현재 선거 정보 및 내 선거구 확인
+                const election = await service.getActiveElection();
+                if (!election) {
+                    alertModal('현재 후보 등록 기간인 선거가 없습니다.', () => history.back());
+                    return;
+                }
+
+                // 3. 내 선거구 정보 가져오기 (getMyBallotInfo 재활용)
+                // 주의: getMyBallotInfo는 투표용이라 candidates도 가져오지만 여기선 district 정보만 씀
+                const info = await service.getMyBallotInfo(election.id);
+                
+                // 찬반 투표 선거구는 후보 등록 불가
+                if (info.district.vote_type === 'BINARY') {
+                    alertModal('귀하의 선거구는 찬반 투표 지역이므로 후보 등록이 불필요합니다.', () => history.back());
+                    return;
+                }
+
+                // 4. 이미 신청했는지 DB 체크
+                const { data: existing } = await supabase
+                    .from('candidates')
+                    .select('id')
+                    .eq('election_id', election.id)
+                    .eq('member_uuid', user.id)
+                    .maybeSingle();
+
+                if (existing) {
+                    document.getElementById('loading-msg').style.display = 'none';
+                    document.getElementById('already-applied').style.display = 'block';
+                    return;
+                }
+
+                // 5. 폼 세팅
+                document.getElementById('district-name').value = info.district.name;
+                document.getElementById('district-id').value = info.district_id;
+                document.getElementById('election-id').value = election.id;
+                document.getElementById('cand-name').value = user.name; // 기본값: 본명
+
+                document.getElementById('loading-msg').style.display = 'none';
+                document.getElementById('apply-form').style.display = 'block';
+
+            } catch (e) {
+                alertModal('오류: ' + e.message, () => history.back());
+            }
+        }
+
+        // 제출 처리
+        document.getElementById('apply-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('btn-submit');
+            btn.disabled = true;
+            btn.innerText = '업로드 중...';
+
+            try {
+                await service.applyCandidate({
+                    electionId: document.getElementById('election-id').value,
+                    districtId: document.getElementById('district-id').value,
+                    name: document.getElementById('cand-name').value,
+                    photoFile: document.getElementById('cand-photo').files[0],
+                    manifesto: document.getElementById('cand-manifesto').value
+                });
+
+                alertModal('후보 등록 신청이 완료되었습니다.\n관리자 승인 후 반영됩니다.', () => location.reload());
+
+            } catch (e) {
+                alertModal('신청 실패: ' + e.message);
+                btn.disabled = false;
+                btn.innerText = '신청하기';
+            }
+        });
+
+        // 모달 유틸
+        function alertModal(msg, callback) {
+            document.getElementById('modal-msg').innerText = msg;
+            modalOverlay.style.display = 'flex';
+            document.getElementById('modal-btn-ok').onclick = () => {
+                modalOverlay.style.display = 'none';
+                if (callback) callback();
+            };
+        }
+
+        init();
+    </script>
+</body>
+</html>
