@@ -2,51 +2,167 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>관리자 모드 - 대의원 선거</title>
+    <title>통합 선거 관리 시스템</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* 관리자 전용 스타일 추가 */
-        .admin-panel { border: 1px solid #ccc; padding: 1.5rem; margin-bottom: 2rem; border-radius: 8px; }
-        .status-badge { display: inline-block; padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold; color: white; }
-        .status-PREPARE { background-color: #9ca3af; }
-        .status-OPEN { background-color: #16a34a; } /* 녹색 */
-        .status-CLOSED { background-color: #dc2626; } /* 적색 */
-        .status-PUBLISHED { background-color: #2563eb; } /* 청색 */
-        
-        .control-btns button { margin-right: 0.5rem; padding: 0.5rem 1rem; cursor: pointer; }
-        .candidate-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 1rem 0; }
-    </style>
+        /* [톤앤매너] 색상 변수 설정 */
+        :root {
+            --admin-bg: #f3f4f6;
+            --card-bg: #ffffff;
+            --primary-blue: #2563eb;
+            --success-green: #16a34a;
+            --warning-yellow: #ca8a04;
+            --danger-red: #dc2626;
+            --text-dark: #1f2937;
+            --border-color: #e5e7eb;
+        }
 
+        body { background-color: var(--admin-bg); color: var(--text-dark); }
+        
+        /* 레이아웃 */
+        .admin-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 3fr 1fr; gap: 2rem; }
+        @media (max-width: 768px) { .admin-container { grid-template-columns: 1fr; } }
+
+        /* 카드 스타일 */
+        .card { background: var(--card-bg); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; margin-bottom: 1.5rem; }
+        
+        /* 탭 (위저드) 스타일 */
+        .wizard-steps { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 2rem; }
+        .step-item { flex: 1; text-align: center; padding: 1rem; cursor: pointer; color: #9ca3af; font-weight: bold; border-bottom: 3px solid transparent; }
+        .step-item.active { color: var(--primary-blue); border-bottom-color: var(--primary-blue); }
+        .step-item:hover { background-color: #f9fafb; }
+
+        /* 상태 뱃지 */
+        .status-badge { padding: 4px 12px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.9rem; }
+        
+        /* 로그 창 */
+        .log-window { height: 400px; overflow-y: auto; background: #111827; color: #10b981; padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.85rem; }
+        .log-entry { margin-bottom: 0.5rem; border-bottom: 1px solid #374151; padding-bottom: 0.2rem; }
+        .log-time { color: #6b7280; margin-right: 0.5rem; }
+
+        /* 후보자 테이블 */
+        .cand-table { width: 100%; border-collapse: collapse; }
+        .cand-table th, .cand-table td { padding: 0.8rem; border-bottom: 1px solid var(--border-color); text-align: left; }
+        .input-symbol { width: 50px; text-align: center; padding: 4px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
 </head>
 <body>
 
-    <div class="container active" style="max-width: 800px;">
-        <header style="display:flex; justify-content:space-between; align-items:center;">
-            <h1>🛡️ 선거 관리자 페이지</h1>
-            <a href="monitor.html" target="_blank" style="color:blue;">모니터링 화면 열기 ></a>
-        </header>
+    <header style="background: white; border-bottom: 1px solid #ddd; padding: 1rem 2rem; display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">🛡️ 선거 관리 시스템</h2>
+        <div>
+            <span id="admin-email" style="font-weight:bold; margin-right:10px;">관리자님</span>
+            <button onclick="window.close()" style="cursor:pointer;">나가기</button>
+        </div>
+    </header>
 
-        <div class="admin-panel">
-            <h2>📢 선거 상태 제어</h2>
-            <div style="margin: 1rem 0;">
-                현재 상태: <span id="current-status" class="status-badge status-PREPARE">로딩중...</span>
-                <h3 id="election-title" style="display:inline-block; margin-left:10px;">-</h3>
-            </div>
+    <div class="admin-container">
+        
+        <div class="main-panel">
             
-            <div class="control-btns">
-                <p>상태 변경:</p>
-                <button onclick="changeStatus('OPEN')" style="background:#dcfce7; color:#14532d; border:1px solid #86efac;">▶ 투표 시작 (OPEN)</button>
-                <button onclick="changeStatus('PAUSED')" style="background:#fef9c3; color:#713f12; border:1px solid #fde047;">⏸ 일시 정지 (PAUSED)</button>
-                <button onclick="changeStatus('CLOSED')" style="background:#fee2e2; color:#7f1d1d; border:1px solid #fca5a5;">⏹ 투표 마감 (CLOSED)</button>
-                <button onclick="changeStatus('PUBLISHED')" style="background:#dbeafe; color:#1e3a8a; border:1px solid #93c5fd;">📢 결과 발표 (PUBLISHED)</button>
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 id="election-title" style="margin:0; font-size:1.5rem;">선거 정보를 불러오는 중...</h3>
+                    <span id="election-status" class="status-badge" style="background:#999;">Loading</span>
+                </div>
+                <div style="margin-top:1rem; color:#666;">
+                    📅 기간: <span id="election-period">-</span>
+                </div>
             </div>
-            <p style="font-size:0.8rem; color:red; margin-top:10px;">* 주의: '결과 발표' 상태가 되면 모든 조합원이 결과를 볼 수 있습니다.</p>
+
+            <div class="card">
+                <div class="wizard-steps">
+                    <div class="step-item" onclick="switchTab('tab-nomination')">1. 후보 등록/기호</div>
+                    <div class="step-item" onclick="switchTab('tab-ready')">2. 확정 및 공포</div>
+                    <div class="step-item" onclick="switchTab('tab-vote')">3. 투표 진행</div>
+                    <div class="step-item" onclick="switchTab('tab-result')">4. 개표 및 결과</div>
+                </div>
+
+                <div id="tab-nomination" class="tab-content">
+                    <h4>📝 후보자 관리 & 기호 부여</h4>
+                    <p style="color:#666; font-size:0.9rem;">
+                        상태가 <strong>NOMINATION</strong>일 때만 후보 등록이 가능합니다.<br>
+                        후보를 승인하고 기호를 부여한 뒤 '저장'하세요.
+                    </p>
+                    <div style="margin-bottom:1rem;">
+                        <button onclick="changeStatus('NOMINATION')" class="btn-modal" style="background:var(--primary-blue); color:white;">▶ 후보 등록 시작 (NOMINATION)</button>
+                    </div>
+                    
+                    <table class="cand-table">
+                        <thead>
+                            <tr>
+                                <th>선거구</th>
+                                <th>이름</th>
+                                <th>상태</th>
+                                <th>기호(숫자)</th>
+                                <th>관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="candidate-list-body">
+                            </tbody>
+                    </table>
+                    <button onclick="saveSymbols()" style="margin-top:1rem; width:100%; padding:0.8rem; background:var(--success-green); color:white; border:none; border-radius:4px; cursor:pointer;">💾 기호 일괄 저장</button>
+                </div>
+
+                <div id="tab-ready" class="tab-content" style="display:none;">
+                    <h4>📢 후보자 확정 및 공포</h4>
+                    <p>기호 부여가 끝났으면 선거 준비 완료 상태로 변경합니다.<br>이때부터 유권자들은 후보자 정보를 볼 수 있습니다.</p>
+                    <button onclick="changeStatus('READY')" style="padding:1rem 2rem; font-size:1.1rem; background:var(--warning-yellow); color:white; border:none; border-radius:6px; cursor:pointer;">
+                        🚀 선거 준비 완료 (READY)로 변경
+                    </button>
+                </div>
+
+                <div id="tab-vote" class="tab-content" style="display:none;">
+                    <h4>🗳️ 투표소 운영</h4>
+                    <div style="display:flex; gap:1rem; margin-bottom:2rem;">
+                        <button onclick="changeStatus('OPEN')" style="flex:1; padding:1rem; background:var(--success-green); color:white; border:none; border-radius:6px; cursor:pointer; font-size:1.1rem;">
+                            ▶ 투표 시작 (OPEN)
+                        </button>
+                        <button onclick="changeStatus('PAUSED')" style="flex:1; padding:1rem; background:var(--warning-yellow); color:white; border:none; border-radius:6px; cursor:pointer; font-size:1.1rem;">
+                            ⏸ 일시 정지 (PAUSED)
+                        </button>
+                        <button onclick="changeStatus('CLOSED')" style="flex:1; padding:1rem; background:var(--danger-red); color:white; border:none; border-radius:6px; cursor:pointer; font-size:1.1rem;">
+                            ⏹ 투표 종료 (CLOSED)
+                        </button>
+                    </div>
+                    
+                    <div style="background:#f9f9f9; padding:1rem; border-radius:8px;">
+                        <h5>실시간 투표 현황 (5초마다 갱신)</h5>
+                        <h2 id="live-turnout" style="text-align:center; font-size:2rem; color:var(--primary-blue);">0%</h2>
+                        <p style="text-align:center; color:#666;">참여 <span id="live-votes">0</span> / 총원 <span id="live-total">0</span></p>
+                    </div>
+                </div>
+
+                <div id="tab-result" class="tab-content" style="display:none;">
+                    <h4>🏆 개표 및 결과 발표</h4>
+                    <p style="color:red;">* 투표가 완전히 종료(CLOSED)된 후에만 개표할 수 있습니다.</p>
+                    
+                    <div id="result-control">
+                        <button onclick="openBallotBox()" style="padding:1rem; background:#374151; color:white; border:none; border-radius:6px; cursor:pointer;">
+                            🔐 개표함 열기 (결과 확인)
+                        </button>
+                    </div>
+
+                    <div id="result-display" style="display:none; margin-top:1rem;">
+                        <div id="result-chart"></div>
+                        
+                        <hr style="margin:2rem 0;">
+                        <button onclick="changeStatus('PUBLISHED')" style="width:100%; padding:1rem; background:var(--primary-blue); color:white; border:none; border-radius:6px; cursor:pointer; font-size:1.2rem;">
+                            📢 결과 최종 공포 (PUBLISHED)
+                        </button>
+                    </div>
+                </div>
+
+            </div>
         </div>
 
-        <div class="admin-panel">
-            <h2>승인 대기 후보자 <span id="pending-count" style="color:red;">(0)</span></h2>
-            <div id="candidate-list">
-                <p style="color:#888;">대기 중인 후보자가 없습니다.</p>
+        <div class="side-panel">
+            <div class="card" style="position:sticky; top:20px;">
+                <h3>📜 운영 로그 (Audit)</h3>
+                <div id="audit-log-container" class="log-window">
+                    <div class="log-entry">로그 로딩 중...</div>
+                </div>
+                <button onclick="loadLogs()" style="width:100%; margin-top:0.5rem; padding:0.5rem; cursor:pointer;">새로고침</button>
             </div>
         </div>
 
@@ -58,99 +174,186 @@
         const service = new AdminService();
         let currentElectionId = null;
 
-        // 초기화
+        // [초기화]
         async function init() {
-            // 관리자 체크 (간이)
+            // 1. 관리자 권한 체크
             if (!await service.isAdmin()) {
-                alert('관리자 권한이 없습니다.');
-                window.location.href = '/'; 
+                alert('접근 권한이 없습니다.');
+                window.close();
                 return;
             }
 
+            // 2. 선거 ID 파싱 (URL 파라미터 우선, 없으면 로컬스토리지)
+            const urlParams = new URLSearchParams(window.location.search);
+            currentElectionId = urlParams.get('id') || localStorage.getItem('target_election_id');
+
+            if (!currentElectionId) {
+                alert('선택된 선거가 없습니다.');
+                window.close();
+                return;
+            }
+
+            // 3. 데이터 로드
             loadElectionInfo();
+            loadCandidates(); // 후보 탭용
+            loadLogs(); // 로그
+            
+            // 폴링 (투표율 실시간 갱신)
+            setInterval(updateLiveStats, 5000);
         }
 
-        // 선거 정보 로드
+        // [정보 로드] 선거 개요
         async function loadElectionInfo() {
             try {
-                const election = await service.getElectionInfo();
-                if (!election) {
-                    document.getElementById('election-title').innerText = "생성된 선거가 없습니다.";
-                    return;
-                }
-
-                currentElectionId = election.id;
-                document.getElementById('election-title').innerText = election.title;
+                const data = await service.getElectionInfo(currentElectionId);
+                document.getElementById('election-title').innerText = data.title;
+                document.getElementById('election-period').innerText = 
+                    `${new Date(data.start_at).toLocaleString()} ~ ${new Date(data.end_at).toLocaleString()}`;
                 
-                const statusSpan = document.getElementById('current-status');
-                statusSpan.innerText = election.status;
-                statusSpan.className = `status-badge status-${election.status}`;
-
-                // 대기 후보 로드
-                loadPendingCandidates();
+                // 상태 뱃지 업데이트
+                updateStatusBadge(data.status);
 
             } catch (e) {
                 console.error(e);
-                alert('정보 로드 실패');
             }
         }
 
-        // 후보자 목록 로드
-        async function loadPendingCandidates() {
-            if (!currentElectionId) return;
-            const list = await service.getPendingCandidates(currentElectionId);
+        function updateStatusBadge(status) {
+            const el = document.getElementById('election-status');
+            el.innerText = status;
             
-            document.getElementById('pending-count').innerText = `(${list.length})`;
-            const container = document.getElementById('candidate-list');
+            let color = '#999';
+            if(status === 'OPEN') color = 'var(--success-green)';
+            else if(status === 'CLOSED') color = 'var(--danger-red)';
+            else if(status === 'PUBLISHED') color = 'var(--primary-blue)';
+            else if(status === 'NOMINATION') color = '#ec4899'; // pink
             
-            if (list.length === 0) {
-                container.innerHTML = '<p style="color:#888;">대기 중인 후보자가 없습니다.</p>';
-                return;
-            }
+            el.style.backgroundColor = color;
+        }
 
-            container.innerHTML = '';
-            list.forEach(cand => {
-                const div = document.createElement('div');
-                div.className = 'candidate-row';
-                div.innerHTML = `
-                    <div>
-                        <strong>[${cand.districts.name}]</strong> ${cand.name}
-                        <br><span style="font-size:0.8rem; color:#666;">신청일: ${new Date(cand.created_at).toLocaleString()}</span>
-                    </div>
-                    <div>
-                        <button onclick="approve('${cand.id}', 'APPROVED')" style="background:blue; color:white; border:none; border-radius:4px;">승인</button>
-                        <button onclick="approve('${cand.id}', 'REJECTED')" style="background:red; color:white; border:none; border-radius:4px;">반려</button>
-                    </div>
+        // [탭 전환]
+        window.switchTab = (tabId) => {
+            // 모든 탭 내용 숨김
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active'));
+            
+            // 선택된 탭 보임
+            document.getElementById(tabId).style.display = 'block';
+            
+            // 스텝 하이라이트 (이벤트 타겟 찾기 어려우니 단순 매핑)
+            const map = { 'tab-nomination':0, 'tab-ready':1, 'tab-vote':2, 'tab-result':3 };
+            document.querySelectorAll('.step-item')[map[tabId]].classList.add('active');
+        };
+        // 초기 탭 설정
+        switchTab('tab-nomination');
+
+        // [후보자 로드 & 렌더링]
+        async function loadCandidates() {
+            const list = await service.getCandidates(currentElectionId);
+            const tbody = document.getElementById('candidate-list-body');
+            tbody.innerHTML = '';
+
+            list.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${c.districts.name}</td>
+                    <td>${c.name}</td>
+                    <td>
+                        ${c.status === 'PENDING' ? 
+                          `<button onclick="reviewCand('${c.id}', 'APPROVED', '${c.name}')" style="color:blue;">승인</button> 
+                           <button onclick="reviewCand('${c.id}', 'REJECTED', '${c.name}')" style="color:red;">반려</button>` 
+                          : c.status}
+                    </td>
+                    <td>
+                        <input type="text" class="input-symbol" data-id="${c.id}" value="${c.symbol || ''}" placeholder="1">
+                    </td>
+                    <td>-</td>
                 `;
-                container.appendChild(div);
+                tbody.appendChild(tr);
             });
         }
 
-        // [Action] 상태 변경
-        window.changeStatus = async (status) => {
-            if (!currentElectionId) return;
-            if (!confirm(`정말 선거 상태를 '${status}'로 변경하시겠습니까?`)) return;
+        // [Action] 후보 승인/반려
+        window.reviewCand = async (id, decision, name) => {
+            if(!confirm(`${name} 후보를 ${decision} 하시겠습니까?`)) return;
+            await service.reviewCandidate(id, decision);
+            await service.logAction(currentElectionId, 'CANDIDATE_REVIEW', `${name} 후보 ${decision}`);
+            loadCandidates();
+            loadLogs();
+        };
 
+        // [Action] 기호 저장
+        window.saveSymbols = async () => {
+            const inputs = document.querySelectorAll('.input-symbol');
+            try {
+                for (const input of inputs) {
+                    const id = input.dataset.id;
+                    const val = input.value;
+                    if (val) await service.updateSymbol(id, val);
+                }
+                alert('기호가 저장되었습니다.');
+                await service.logAction(currentElectionId, 'SYMBOL_UPDATE', '후보자 기호 저장 완료');
+                loadLogs();
+            } catch(e) { alert(e.message); }
+        };
+
+        // [Action] 상태 변경 (공통)
+        window.changeStatus = async (status) => {
+            if(!confirm(`정말 선거 상태를 '${status}'(으)로 변경하시겠습니까?`)) return;
             try {
                 await service.updateStatus(currentElectionId, status);
-                alert('상태가 변경되었습니다.');
-                loadElectionInfo(); // 새로고침
-            } catch (e) {
-                alert(e.message);
-            }
+                loadElectionInfo();
+                loadLogs();
+                alert('변경되었습니다.');
+            } catch(e) { alert(e.message); }
         };
 
-        // [Action] 후보 승인/반려
-        window.approve = async (candId, decision) => {
-            if (!confirm(decision === 'APPROVED' ? '승인하시겠습니까?' : '반려하시겠습니까?')) return;
-            try {
-                await service.reviewCandidate(candId, decision);
-                loadPendingCandidates(); // 목록 갱신
-            } catch (e) {
-                alert(e.message);
-            }
+        // [Action] 로그 로드
+        window.loadLogs = async () => {
+            const logs = await service.getLogs(currentElectionId);
+            const container = document.getElementById('audit-log-container');
+            container.innerHTML = '';
+            
+            logs.forEach(log => {
+                const div = document.createElement('div');
+                div.className = 'log-entry';
+                div.innerHTML = `
+                    <span class="log-time">[${new Date(log.created_at).toLocaleTimeString()}]</span>
+                    <strong>${log.action_type}</strong><br>
+                    ${log.details} <span style="font-size:0.7rem; color:#666;">by ${log.admin_email}</span>
+                `;
+                container.appendChild(div);
+            });
         };
 
+        // [Action] 투표율 갱신
+        async function updateLiveStats() {
+            if(!currentElectionId) return;
+            // 서비스에 getTurnoutStats 함수가 있다고 가정 (Monitor.html에서 씀)
+            const stats = await service.getTurnoutStats(currentElectionId);
+            document.getElementById('live-turnout').innerText = `${stats.percent}%`;
+            document.getElementById('live-votes').innerText = stats.current;
+            document.getElementById('live-total').innerText = stats.total;
+        }
+        
+        // [Action] 개표함 열기
+        window.openBallotBox = async () => {
+             // 보안상 비밀번호를 한번 더 묻는 것도 좋음
+             const pwd = prompt("관리자 보안 확인: '개표'라고 입력하세요.");
+             if(pwd !== '개표') return alert('취소되었습니다.');
+             
+             document.getElementById('result-display').style.display = 'block';
+             
+             // 결과를 가져와서 렌더링 (간단 텍스트 버전)
+             const ballots = await service.getResults(currentElectionId);
+             const chart = document.getElementById('result-chart');
+             chart.innerHTML = `<p>총 ${ballots.length}표가 집계되었습니다. (상세 그래프는 Monitor 페이지 권장)</p>`;
+             
+             await service.logAction(currentElectionId, 'OPEN_BALLOT', '개표함 열람 및 결과 확인');
+             loadLogs();
+        };
+
+        // 실행
         init();
     </script>
 </body>
