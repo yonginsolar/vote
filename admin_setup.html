@@ -115,12 +115,13 @@
                 </div>
             </div>
 
-            <div class="admin-panel">
+<div class="admin-panel">
                 <h3 style="border-bottom:2px solid #eee; padding-bottom:10px; margin-bottom:15px;">📜 지난 선거 이력</h3>
                 <div id="history-timeline" class="timeline-container">
                     </div>
             </div>
-        </div>
+            
+        </div> <div id="setup-section" style="display:none;">
 
             <hr style="margin: 2rem 0; border: 0; border-top: 1px solid #ddd;">
             
@@ -254,7 +255,7 @@ const adminService = new AdminService(); // 서비스 인스턴스 생성
             }
         }
 
-const adminService = new AdminService();
+
 
         // [추가] 대시보드 데이터 로드
         async function loadDashboard() {
