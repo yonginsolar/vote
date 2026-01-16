@@ -30,15 +30,18 @@ export class AdminService {
         return data;
     }
 
-    // 2. 선거 상태 변경 (핵심 기능)
-    // status: 'OPEN', 'CLOSED', 'PUBLISHED', 'PAUSED'
+// [수정] 선거 상태 변경 (+ 로그 기록)
     async updateStatus(electionId, newStatus) {
+        // 1. 상태 변경
         const { error } = await supabase
             .from('elections')
             .update({ status: newStatus })
             .eq('id', electionId);
             
         if (error) throw new Error('상태 변경 실패: ' + error.message);
+
+        // 2. 로그 기록
+        await this.logAction(electionId, 'STATUS_CHANGE', `선거 상태를 ${newStatus}로 변경`);
     }
 
     // 3. 승인 대기중인 후보자 목록 가져오기
@@ -116,5 +119,67 @@ export class AdminService {
             return [];
         }
         return data;
+    }
+    // [추가] 로그 기록 함수 (핵심)
+    async logAction(electionId, actionType, details) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        await supabase.from('admin_logs').insert({
+            election_id: electionId,
+            admin_email: user.email,
+            action_type: actionType,
+            details: details
+        });
+    }
+
+    // [추가] 로그 목록 가져오기 (최신순 50개)
+    async getLogs(electionId) {
+        const { data, error } = await supabase
+            .from('admin_logs')
+            .select('*')
+            .eq('election_id', electionId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+        
+        if (error) return [];
+        return data;
+    }
+
+    // [추가] 후보자 목록(기호 포함) 가져오기
+    async getCandidates(electionId) {
+        const { data, error } = await supabase
+            .from('candidates')
+            .select(`*, districts(name)`)
+            .eq('election_id', electionId)
+            .order('district_id', { ascending: true }) // 선거구별 정렬
+            .order('symbol', { ascending: true }); // 기호순 정렬
+
+        if (error) throw error;
+        return data;
+    }
+
+    // [추가] 후보자 승인/반려 (+ 로그)
+    async reviewCandidate(candId, decision, candName) {
+        const { error } = await supabase
+            .from('candidates')
+            .update({ status: decision })
+            .eq('id', candId);
+            
+        if (error) throw error;
+        
+        // 로그 기록 시 electionId가 필요하지만, 
+        // 편의상 화면에서 호출 후 별도로 남기거나 여기서 조회해야 함.
+        // (MVP에서는 화면단에서 로그 함수를 따로 호출하는 게 빠름)
+    }
+
+    // [추가] 후보자 기호 저장
+    async updateSymbol(candId, symbol) {
+        const { error } = await supabase
+            .from('candidates')
+            .update({ symbol: symbol })
+            .eq('id', candId);
+        
+        if (error) throw error;
     }
 }
