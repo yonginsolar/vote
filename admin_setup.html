@@ -80,14 +80,21 @@
         }
 
         // [로그인] 매직링크 발송
-        window.handleLogin = async () => {
-            const email = document.getElementById('admin-email').value;
-            if (!email) return alert('이메일을 입력하세요.');
+window.handleLogin = async () => {
+    const email = document.getElementById('admin-email').value;
+    if (!email) return alert('이메일을 입력하세요.');
 
-            const { error } = await supabase.auth.signInWithOtp({ email });
-            if (error) alert('전송 실패: ' + error.message);
-            else alert('이메일로 로그인 링크를 보냈습니다.\n메일함을 확인하고 링크를 클릭해주세요.');
-        };
+    const { error } = await supabase.auth.signInWithOtp({ 
+        email,
+        options: {
+            // 🚨 핵심: 로그인 링크 클릭 시, 현재 페이지(admin_setup.html)로 다시 돌아오게 함
+            emailRedirectTo: window.location.href 
+        }
+    });
+
+    if (error) alert('전송 실패: ' + error.message);
+    else alert('이메일로 로그인 링크를 보냈습니다.\n메일함을 확인하고 링크를 클릭해주세요.');
+};
 
         // [Step 1] 선거 생성
         window.createElection = async () => {
