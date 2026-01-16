@@ -4,11 +4,16 @@ export class AdminService {
     
     // [보안] 관리자 여부 확인 (화면 진입 시 체크용)
     // 실제 보안은 DB RLS가 막아주지만, UX를 위해 1차 체크
+// [수정] 관리자 여부 확인 (DB의 is_admin 함수를 직접 호출하여 정확도 100% 확보)
     async isAdmin() {
         const { data: { user } } = await supabase.auth.getUser();
-        // 관리자 이메일 목록 하드코딩 (또는 DB 관리자 테이블 조회)
-        const ADMIN_EMAILS = ['admin@coop.com', 'manager@test.com']; 
-        return user && ADMIN_EMAILS.includes(user.email);
+        if (!user) return false;
+
+        // DB에 정의된 is_admin() 함수 실행
+        const { data, error } = await supabase.rpc('is_admin');
+        
+        // 에러 없고, 결과가 true면 관리자임
+        return !error && data; 
     }
 
     // 1. 선거 정보 및 현재 상태 가져오기
