@@ -180,3 +180,4 @@ async applyCandidate(formData) {
 
     if (dbError) throw new Error('후보 등록 실패: ' + dbError.message);
 }
+}
