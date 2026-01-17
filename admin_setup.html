@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>선거 관리 대시보드</title>
-    <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
 <style>
@@ -18,143 +17,82 @@
    /* [기본 리셋] */
     body { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; background-color: #f3f4f6; }
 
-    /* [헤더] 상단 고정 및 좌우 정렬 */
+    /* [헤더] 상단 고정 */
     header {
-        position: fixed; /* 스크롤 해도 위에 붙어있음 */
-        top: 0; 
-        left: 0;
-        width: 100%; /* 화면 전체 너비 */
-        height: 60px; /* 높이 고정 */
-        
-        display: flex; 
-        justify-content: space-between; /* 양쪽 끝으로 밀어내기 */
-        align-items: center; /* 세로 중앙 정렬 */
-        
-        padding: 0 2rem; /* 좌우 여백 */
-        box-sizing: border-box; /* padding 포함 너비 계산 */
-        
-        background: white;
-        border-bottom: 1px solid #ddd;
-        z-index: 1000; /* 모달 다음으로 높은 우선순위 */
-        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 60px;
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0 2rem; box-sizing: border-box;
+        background: white; border-bottom: 1px solid #ddd;
+        z-index: 1000; box-shadow: 0 2px 4px rgba(0,0,0,0.03);
     }
 
-    /* 로고 스타일 */
-    .header-logo span {
-        font-size: 1.3rem; 
-        font-weight: 800; 
-        color: var(--color-primary);
-        letter-spacing: -0.5px;
-    }
+    .header-logo span { font-size: 1.3rem; font-weight: 800; color: var(--color-primary); letter-spacing: -0.5px; }
+    #user-info-area { display: flex; align-items: center; gap: 15px; }
 
-    /* 유저 정보 영역 */
-    #user-info-area {
-        display: flex; 
-        align-items: center; 
-        gap: 15px;
-    }
-
-    /* [본문 컨테이너] 헤더에 가려지지 않도록 위쪽 여백 추가 */
+    /* [본문 컨테이너] */
     .container {
         max-width: 800px;
-        margin: 0 auto; /* 가로 중앙 정렬 */
-        margin-top: 100px !important; /* 헤더 높이(60px) + 여유공간(40px) */
+        margin: 0 auto;
+        margin-top: 100px !important; /* 헤더 공간 확보 */
         padding: 0 1rem;
+        padding-bottom: 50px;
     }
 
-    /* [대시보드 카드] 버튼 영역 추가 */
+    /* [대시보드 카드] */
     .active-election-card {
-        border: 1px solid #e5e7eb;
-        border-left: 5px solid var(--color-primary);
-        background: white;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 15px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        position: relative; /* 버튼 배치를 위해 */
+        border: 1px solid #e5e7eb; border-left: 5px solid var(--color-primary);
+        background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px;
+        display: flex; justify-content: space-between; align-items: center;
+        cursor: pointer; transition: all 0.2s ease;
     }
-    .active-election-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    /* 상태 제어 버튼 그룹 */
-    .card-actions {
-        display: flex;
-        gap: 8px;
-        margin-left: 20px;
-    }
-    .btn-control {
-        padding: 6px 12px;
-        border-radius: 4px;
-        border: none;
-        font-size: 0.85rem;
-        font-weight: bold;
-        cursor: pointer;
-        transition: background 0.2s;
-    }
-    .btn-pause { background: #f59e0b; color: white; } /* 주황 */
-    .btn-pause:hover { background: #d97706; }
-    .btn-stop { background: #ef4444; color: white; } /* 빨강 */
-    .btn-stop:hover { background: #dc2626; }
-    .btn-resume { background: var(--color-primary); color: white; } /* 녹색 */
-
-    /* [모달 공통] 중앙 정렬 강제 (수정 핵심) */
-    .modal-overlay {
-        position: fixed; /* 화면 고정 */
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        background-color: var(--bg-overlay);
-        z-index: 9999; /* 최상단 */
-        display: none; /* JS로 토글 */
-        justify-content: center; /* 가로 중앙 */
-        align-items: center; /* 세로 중앙 */
-        backdrop-filter: blur(2px); /* 배경 블러 효과 */
-    }
+    .active-election-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
     
-    .modal-content, .modal-contents {
-        background: white;
-        padding: 2rem;
-        border-radius: 12px;
+    .card-actions { display: flex; gap: 8px; margin-left: 20px; }
+    .btn-control { padding: 6px 12px; border-radius: 4px; border: none; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+    .btn-pause { background: #f59e0b; color: white; }
+    .btn-pause:hover { background: #d97706; }
+    .btn-stop { background: #ef4444; color: white; }
+    .btn-stop:hover { background: #dc2626; }
+    .btn-resume { background: var(--color-primary); color: white; }
+
+    /* [모달 공통] */
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: var(--bg-overlay); z-index: 9999;
+        display: none; justify-content: center; align-items: center;
+        backdrop-filter: blur(2px);
+    }
+    .modal-content {
+        background: white; padding: 2rem; border-radius: 12px;
         box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-        max-width: 500px;
-        width: 90%;
-        animation: modalFadeIn 0.3s;
-        position: relative; /* 내부 요소 배치 기준 */
+        max-width: 500px; width: 90%; animation: modalFadeIn 0.3s;
+        position: relative;
     }
+    @keyframes modalFadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
 
-    @keyframes modalFadeIn {
-        from { opacity: 0; transform: translateY(-20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* 알럿/컨펌 전용 스타일 */
-    .alert-actions {
-        display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;
-    }
+    .alert-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
     .btn-modal { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; }
     .btn-confirm { background: var(--color-primary); color: white; }
     .btn-cancel { background: #e5e7eb; color: #333; }
 
-    /* [기타] 연혁 및 테이블 스타일은 기존 유지 */
-    .timeline-container { margin-top: 20px; }
+    /* [기타 스타일] */
+    .admin-panel h4 { margin: 0 0 15px 0; }
     .timeline-item { padding: 0 0 20px 20px; border-left: 2px solid #e0e0e0; position: relative; cursor: pointer; }
     .timeline-item::before { content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%; left: -8px; top: 0; background: #fff; border: 2px solid var(--color-primary); }
     .timeline-date { font-size: 14px; color: #666; font-weight: 700; margin-bottom: 5px; }
     .preview-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.9rem; }
     .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    .btn-delete { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
 </style>
 </head>
 
 <body>
-<header>
+    <header>
         <div class="header-logo">
             <span>🛡️ Election Admin</span>
         </div>
-        
         <div id="user-info-area" style="display:none;">
             <span id="login-info" style="font-weight:bold; color:#555; font-size:0.9rem;">관리자님</span>
             <button onclick="handleLogout()" style="background:#fff; border:1px solid #ddd; padding:6px 14px; border-radius:20px; cursor:pointer; font-size:0.8rem; font-weight:bold; color:#444;">
@@ -163,16 +101,8 @@
         </div>
     </header>
 
-<div class="container active">
-        <div id="login-section" style="text-align:center; padding: 4rem 1rem;">
-             </div>
-
-        <div id="dashboard-section" style="display:none;">
-             </div>
-
-        <div id="setup-section" style="display:none;">
-             </div>
-    </div>  
+    <div class="container active">
+        
         <div id="login-section" style="text-align:center; padding: 4rem 1rem;">
             <h2 style="color:#333;">🔐 관리자 인증</h2>
             <p style="color:#666; margin-bottom:2rem;">보안을 위해 관리자 이메일 인증이 필요합니다.</p>
@@ -192,13 +122,12 @@
             </div>
 
             <div class="admin-panel" style="margin-bottom: 2rem;">
-                <h4 style="color:#666; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;">진행 중인 선거</h4>
-                <div id="active-list">
-                    </div>
+                <h4 style="color:#666; border-bottom:1px solid #eee; padding-bottom:10px;">진행 중인 선거</h4>
+                <div id="active-list"></div>
             </div>
 
             <div class="admin-panel">
-                <h4 style="color:#666; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;">지난 선거 이력</h4>
+                <h4 style="color:#666; border-bottom:1px solid #eee; padding-bottom:10px;">지난 선거 이력</h4>
                 <div id="history-timeline" class="timeline-container"></div>
             </div>
         </div>
@@ -208,9 +137,10 @@
                 <h2 style="margin:0;">⚙️ 선거 생성</h2>
                 <button onclick="location.reload()" style="border:1px solid #ddd; background:#fff; padding:6px 12px; border-radius:4px; cursor:pointer;">취소</button>
             </div>
+            
             <div class="admin-panel" style="padding:1.5rem; border:1px solid #ccc; border-radius:8px; margin-bottom:10px;">
                 <h3>Step 1. 기본 정보</h3>
-                <input type="text" id="election-title" placeholder="선거명" style="width:100%; padding:0.5rem; margin-bottom:0.5rem;">
+                <input type="text" id="election-title" placeholder="선거명" style="width:100%; padding:0.5rem; margin-bottom:0.5rem; box-sizing:border-box;">
                 <div style="display:flex; gap:1rem;">
                     <input type="datetime-local" id="start-at" style="flex:1; padding:0.5rem;">
                     <input type="datetime-local" id="end-at" style="flex:1; padding:0.5rem;">
@@ -229,18 +159,21 @@
                     </select>
                     <button onclick="addDistrict()" style="padding:0.5rem;">추가</button>
                 </div>
-                <ul id="district-list"></ul>
+                <p id="district-warning" style="font-size:0.9rem; color:red;">⚠️ 선거구는 최소 3개 이상 등록해야 합니다.</p>
+                <ul id="district-list" style="background:#f9f9f9; padding:1rem;"></ul>
             </div>
 
             <div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
                 <h3>Step 3. 명부 업로드</h3>
+                <div style="margin-bottom:10px;">
+                     <button onclick="downloadSample()" style="background:#6b7280; color:white; border:none; padding:5px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">⬇️ 샘플 다운로드</button>
+                </div>
                 <input type="file" id="excel-file" accept=".xlsx, .xls">
                 <button onclick="uploadVoters()" style="margin-top:1rem; width:100%; padding:10px; background:#166534; color:white; border:none; cursor:pointer;">명부 등록 완료</button>
             </div>
         </div>
 
-    </div> 
-    <div id="preview-modal" class="modal-overlay">
+    </div> <div id="preview-modal" class="modal-overlay">
         <div class="modal-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
             <h3 style="margin-top:0;">📋 데이터 확인</h3>
             <div id="preview-list"></div>
@@ -258,9 +191,9 @@
                 <button onclick="closeHistoryModal()" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
-            <div class="detail-row"><span>기간</span> <span id="modal-period">-</span></div>
-            <div class="detail-row"><span>총 유권자</span> <span><strong id="modal-total">0</strong>명</span></div>
-            <div class="detail-row"><span>투표 참여</span> <span><strong id="modal-current">0</strong>명 (<span id="modal-rate">0</span>%)</span></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>기간</span> <span id="modal-period">-</span></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>총 유권자</span> <span><strong id="modal-total">0</strong>명</span></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>투표 참여</span> <span><strong id="modal-current">0</strong>명 (<span id="modal-rate">0</span>%)</span></div>
             <div style="margin-top:20px; text-align:center;">
                 <button id="btn-go-result" class="btn-modal btn-confirm" style="width:100%;">상세 결과 보기 ></button>
             </div>
@@ -270,45 +203,77 @@
     <div id="common-alert-modal" class="modal-overlay">
         <div class="modal-content" style="max-width:350px; text-align:center;">
             <p id="common-alert-msg" style="margin: 20px 0; font-size:1.05rem; color:#333; line-height:1.5;"></p>
-            <div id="common-alert-btns" class="alert-actions" style="justify-content:center;">
-                </div>
+            <div id="common-alert-btns" class="alert-actions" style="justify-content:center;"></div>
         </div>
     </div>
 
-</body>
 <script type="module">
-        import { AdminService } from './AdminService.js';
-        import { supabase } from './ElectionService.js';
+    import { AdminService } from './AdminService.js';
+    import { supabase } from './ElectionService.js';
+    
+    let newElectionId = null;
+    let createdDistricts = {};
+    const adminService = new AdminService();
+
+    // ----------------------------------------------------------------
+    // [1] 필수 유틸리티: 모달 함수 정의 (이게 없어서 에러가 났었습니다)
+    // ----------------------------------------------------------------
+    window.showAlert = (msg) => {
+        const modal = document.getElementById('common-alert-modal');
+        const msgBox = document.getElementById('common-alert-msg');
+        const btnBox = document.getElementById('common-alert-btns');
+
+        msgBox.innerHTML = msg.replace(/\n/g, '<br>');
+        btnBox.innerHTML = `<button onclick="document.getElementById('common-alert-modal').style.display='none'" class="btn-modal btn-confirm">확인</button>`;
+        modal.style.display = 'flex';
+    };
+
+    window.showConfirm = (msg, yesCallback) => {
+        const modal = document.getElementById('common-alert-modal');
+        const msgBox = document.getElementById('common-alert-msg');
+        const btnBox = document.getElementById('common-alert-btns');
+
+        msgBox.innerHTML = msg.replace(/\n/g, '<br>');
         
-        let newElectionId = null;
-        let createdDistricts = {};
+        // 버튼 재생성 (이벤트 바인딩 초기화)
+        btnBox.innerHTML = '';
+        
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn-modal btn-cancel';
+        cancelBtn.innerText = '취소';
+        cancelBtn.onclick = () => { modal.style.display = 'none'; };
 
-        // [중요] 서비스 인스턴스는 한 번만 선언합니다.
-        const adminService = new AdminService();
+        const okBtn = document.createElement('button');
+        okBtn.className = 'btn-modal btn-confirm';
+        okBtn.innerText = '확인';
+        okBtn.onclick = () => {
+            modal.style.display = 'none';
+            if(yesCallback) yesCallback();
+        };
 
-        // [초기화]
-        async function init() {
-            const { data: { session } } = await supabase.auth.getSession();
+        btnBox.appendChild(cancelBtn);
+        btnBox.appendChild(okBtn);
+        modal.style.display = 'flex';
+    };
 
-            if (session) {
-                // 로그인 UI 처리
-                document.getElementById('login-section').style.display = 'none';
-                document.getElementById('user-info-area').style.display = 'flex';
-                document.getElementById('login-info').innerText = session.user.email;
-                
-                // [변경] 바로 설정화면(setup-section)이 아니라 대시보드(dashboard-section)를 띄움
-                document.getElementById('dashboard-section').style.display = 'block';
-                document.getElementById('setup-section').style.display = 'none'; 
-                
-                // 데이터 로드
-                loadDashboard(); 
-
-            } else {
-                console.log("로그인이 필요합니다.");
-            }
+    // ----------------------------------------------------------------
+    // [2] 초기화 및 대시보드
+    // ----------------------------------------------------------------
+    async function init() {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('user-info-area').style.display = 'flex';
+            document.getElementById('login-info').innerText = session.user.email;
+            document.getElementById('dashboard-section').style.display = 'block';
+            document.getElementById('setup-section').style.display = 'none';
+            loadDashboard(); 
+        } else {
+            document.getElementById('login-section').style.display = 'block';
         }
+    }
 
-async function loadDashboard() {
+    async function loadDashboard() {
         const elections = await adminService.getAllElections();
         const activeContainer = document.getElementById('active-list');
         const timelineContainer = document.getElementById('history-timeline');
@@ -316,7 +281,7 @@ async function loadDashboard() {
         activeContainer.innerHTML = '';
         timelineContainer.innerHTML = '';
 
-        if (elections.length === 0) {
+        if (!elections || elections.length === 0) {
             activeContainer.innerHTML = '<p style="padding:1rem; color:#666;">데이터가 없습니다.</p>';
             return;
         }
@@ -325,32 +290,27 @@ async function loadDashboard() {
 
         elections.forEach(el => {
             if (activeStatuses.includes(el.status)) {
-                // [진행 중] 카드 렌더링
+                // 진행 중 카드
                 const card = document.createElement('div');
                 card.className = 'active-election-card';
-                
-                // 카드 전체 클릭 시 상세 페이지 이동
                 card.onclick = () => {
                     localStorage.setItem('target_election_id', el.id);
                     window.location.href = `admin.html?id=${el.id}`;
                 };
 
-                // 상태에 따른 제어 버튼 결정
+                // 상태별 버튼 로직
                 let controlButtons = '';
                 if (el.status === 'OPEN' || el.status === 'NOMINATION') {
-                    // 진행 중일 때 -> [일시정지] [종료]
                     controlButtons = `
                         <button class="btn-control btn-pause" onclick="handleStatusChange(event, '${el.id}', 'PAUSED')">⏸ 일시정지</button>
                         <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
                     `;
                 } else if (el.status === 'PAUSED') {
-                    // 일시정지일 때 -> [재개]
                     controlButtons = `
                         <button class="btn-control btn-resume" onclick="handleStatusChange(event, '${el.id}', 'OPEN')">▶️ 투표 재개</button>
                         <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
                     `;
                 } else if (el.status === 'PREPARE') {
-                    // 준비 중일 때 -> 삭제 등 (여기서는 생략)
                     controlButtons = `<span style="font-size:0.8rem; color:#999;">준비 중</span>`;
                 }
 
@@ -361,15 +321,13 @@ async function loadDashboard() {
                         </span>
                         <h4 style="margin:8px 0 0 0; font-size:1.1rem; color:#1f2937;">${el.title}</h4>
                     </div>
-                    
                     <div class="card-actions">
                         ${controlButtons}
                     </div>
                 `;
                 activeContainer.appendChild(card);
-
             } else {
-                // [지난 선거] 타임라인
+                // 지난 선거
                 const item = document.createElement('div');
                 item.className = 'timeline-item';
                 item.onclick = () => window.openHistoryModal(el);
@@ -385,311 +343,269 @@ async function loadDashboard() {
         });
     }
 
-    // [상태 변경 핸들러]
+    // 상태 변경 (모달 사용)
     window.handleStatusChange = async (event, electionId, newStatus) => {
-        // 부모(카드) 클릭 이벤트 방지
         event.stopPropagation();
-
         let warning = '';
         if(newStatus === 'ENDED') warning = '정말 선거를 종료하시겠습니까?\n종료 후에는 되돌릴 수 없습니다.';
         else if(newStatus === 'PAUSED') warning = '선거를 일시정지 하시겠습니까?\n투표가 중단됩니다.';
         else if(newStatus === 'OPEN') warning = '투표를 재개하시겠습니까?';
 
         window.showConfirm(warning, async () => {
-            const { error } = await supabase
-                .from('elections')
-                .update({ status: newStatus })
-                .eq('id', electionId);
-
+            const { error } = await supabase.from('elections').update({ status: newStatus }).eq('id', electionId);
             if(error) window.showAlert('오류 발생: ' + error.message);
             else {
                 window.showAlert('상태가 변경되었습니다.');
-                loadDashboard(); // 목록 새로고침
+                loadDashboard();
             }
         });
     };
 
-        // [기능] 새 선거 만들기 폼 토글
-        window.showCreateForm = () => {
-            document.getElementById('dashboard-section').style.display = 'none';
-            document.getElementById('setup-section').style.display = 'block';
-        };
+    // ----------------------------------------------------------------
+    // [3] 이벤트 핸들러 (모든 alert -> showAlert 교체 완료)
+    // ----------------------------------------------------------------
+    window.handleLogout = async () => {
+        await supabase.auth.signOut();
+        window.location.reload();
+    };
 
-        // [모달] 지난 선거 상세 열기
-        window.openHistoryModal = async (el) => {
-            const modal = document.getElementById('history-modal');
-            document.getElementById('modal-title').innerText = el.title;
-            document.getElementById('modal-period').innerText = `${new Date(el.start_at).toLocaleDateString()} ~ ${new Date(el.end_at).toLocaleDateString()}`;
-            
-            // 투표율 로드 (에러 예외처리 포함)
-            try {
-                const stats = await adminService.getTurnoutStats(el.id);
-                document.getElementById('modal-total').innerText = stats.total;
-                document.getElementById('modal-current').innerText = stats.current;
-                document.getElementById('modal-rate').innerText = stats.percent;
-            } catch(e) { console.error(e); }
+    window.handleLogin = async () => {
+        const email = document.getElementById('admin-email').value;
+        if (!email) return window.showAlert('이메일을 입력하세요.');
 
-            // 결과 페이지 이동
-            document.getElementById('btn-go-result').onclick = () => {
-                window.open(`monitor.html?id=${el.id}`, '_blank');
-            };
+        const { error } = await supabase.auth.signInWithOtp({ 
+            email, options: { emailRedirectTo: window.location.href }
+        });
 
-            modal.style.display = 'flex';
-        };
+        if (error) window.showAlert('전송 실패: ' + error.message);
+        else window.showAlert('이메일로 로그인 링크를 보냈습니다.\n메일함을 확인하고 링크를 클릭해주세요.');
+    };
 
-        window.closeHistoryModal = () => {
-            document.getElementById('history-modal').style.display = 'none';
-        };
+    window.showCreateForm = () => {
+        document.getElementById('dashboard-section').style.display = 'none';
+        document.getElementById('setup-section').style.display = 'block';
+    };
 
-        // [로그아웃]
-        window.handleLogout = async () => {
-            await supabase.auth.signOut();
-            window.location.reload();
-        };
+    window.createElection = async () => {
+        const title = document.getElementById('election-title').value;
+        const start = document.getElementById('start-at').value;
+        const end = document.getElementById('end-at').value;
 
-        // [로그인]
-        window.handleLogin = async () => {
-            const email = document.getElementById('admin-email').value;
-            if (!email) return alert('이메일을 입력하세요.');
+        if(!title || !start || !end) return window.showAlert('모든 정보를 입력하세요.');
 
-            const { error } = await supabase.auth.signInWithOtp({ 
-                email,
-                options: { emailRedirectTo: window.location.href }
-            });
+        const { data, error } = await supabase.from('elections').insert({
+            title, start_at: start, end_at: end, status: 'PREPARE'
+        }).select().single();
 
-            if (error) alert('전송 실패: ' + error.message);
-            else alert('이메일로 로그인 링크를 보냈습니다.\n메일함을 확인하고 링크를 클릭해주세요.');
-        };
+        if(error) return window.showAlert('생성 실패: ' + error.message);
 
-        // [Step 1] 선거 생성 (기존 로직 유지)
-        window.createElection = async () => {
-            const title = document.getElementById('election-title').value;
-            const start = document.getElementById('start-at').value;
-            const end = document.getElementById('end-at').value;
+        newElectionId = data.id;
+        window.showAlert('선거가 생성되었습니다.\n다음으로 선거구를 등록하세요.');
+        document.getElementById('step-2').style.display = 'block';
+    };
 
-            if(!title || !start || !end) return alert('모든 정보를 입력하세요.');
+    window.addDistrict = async () => {
+        if(!newElectionId) return;
+        const name = document.getElementById('dist-name').value.trim();
+        const code = document.getElementById('dist-code').value.trim();
+        const type = document.getElementById('dist-type').value;
 
-            const { data, error } = await supabase.from('elections').insert({
-                title, start_at: start, end_at: end, status: 'PREPARE'
-            }).select().single();
+        if (!name || !code) return window.showAlert('선거구 이름과 코드를 모두 입력해주세요.');
+        if (createdDistricts[code]) return window.showAlert('이미 등록된 선거구 코드입니다.');
 
-            if(error) return alert('생성 실패: ' + error.message);
+        const { data, error } = await supabase.from('districts').insert({
+            election_id: newElectionId, name, code, vote_type: type
+        }).select().single();
 
-            newElectionId = data.id;
-            alert('선거가 생성되었습니다. 다음으로 선거구를 등록하세요.');
-            document.getElementById('step-2').style.display = 'block';
-        };
+        if(error) return window.showAlert('추가 실패: ' + error.message);
 
-        // [Step 2] 선거구 추가 (기존 로직 유지)
-        window.addDistrict = async () => {
-            if(!newElectionId) return;
-            const name = document.getElementById('dist-name').value.trim();
-            const code = document.getElementById('dist-code').value.trim();
-            const type = document.getElementById('dist-type').value;
+        createdDistricts[code] = data.id;
+        
+        const li = document.createElement('li');
+        li.innerText = `${name} (${code}) - ${type}`;
+        document.getElementById('district-list').appendChild(li);
+        
+        document.getElementById('dist-name').value = '';
+        document.getElementById('dist-code').value = '';
 
-            if (!name || !code) {
-                return alert('선거구 이름과 코드를 모두 입력해주세요.\n예: 이름(서울지구), 코드(SEOUL)');
-            }
-            if (createdDistricts[code]) {
-                return alert('이미 등록된 선거구 코드입니다.');
-            }
-
-            const { data, error } = await supabase.from('districts').insert({
-                election_id: newElectionId, name, code, vote_type: type
-            }).select().single();
-
-            if(error) return alert('추가 실패: ' + error.message);
-
-            createdDistricts[code] = data.id;
-            
-            const li = document.createElement('li');
-            li.innerText = `${name} (${code}) - ${type}`;
-            document.getElementById('district-list').appendChild(li);
-            
-            document.getElementById('dist-name').value = '';
-            document.getElementById('dist-code').value = '';
-
-            const count = Object.keys(createdDistricts).length;
-            const warningEl = document.getElementById('district-warning');
-            
-            if (count < 3) {
-                warningEl.style.color = 'red';
-                warningEl.innerText = `⚠️ 선거구는 최소 3개 이상 등록해야 합니다. (현재 ${count}개)`;
-                document.getElementById('step-3').style.display = 'none';
-            } else {
-                warningEl.style.color = 'green';
-                warningEl.innerText = `✅ 최소 조건 만족 (현재 ${count}개 등록됨)`;
-                document.getElementById('step-3').style.display = 'block';
-            }
-        };
-
-        // [Step 3] 엑셀 업로드 및 미리보기 (기존 로직 유지)
-        window.uploadVoters = async () => {
-            if (Object.keys(createdDistricts).length < 3) {
-                return alert('선거구가 최소 3개 이상 등록되어야 명부를 업로드할 수 있습니다.');
-            }
-
-            const fileInput = document.getElementById('excel-file');
-            if(fileInput.files.length === 0) return alert('엑셀 파일을 선택하세요.');
-
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = async (e) => {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(firstSheet);
-
-                // 확인용으로 name, phone 추가 조회
-                const { data: members, error: memError } = await supabase
-                    .from('coop_members')
-                    .select('id, member_id, name, phone');
-                
-                if(memError) return alert('조합원 DB 로드 실패');
-
-                const memberMap = new Map();
-                members.forEach(m => memberMap.set(m.member_id, m));
-
-                const tempPayload = [];
-                let failCount = 0;
-
-                for(const row of rows) {
-                    const memIdStr = String(row.member_id || '').trim();
-                    const distCodeStr = String(row.district_code || '').trim();
-
-                    const memberInfo = memberMap.get(memIdStr);
-                    const distId = createdDistricts[distCodeStr];
-
-                    if(memberInfo && distId) {
-                        tempPayload.push({
-                            election_id: newElectionId,
-                            district_id: distId,
-                            member_uuid: memberInfo.id,
-                            member_no: memIdStr,
-                            _view_name: memberInfo.name,
-                            _view_phone: memberInfo.phone,
-                            _view_dist_code: distCodeStr
-                        });
-                    } else {
-                        console.warn(`매칭 실패: ID(${memIdStr}) / Code(${distCodeStr})`);
-                        failCount++;
-                    }
-                }
-
-                if(tempPayload.length > 0) {
-                    renderPreview(tempPayload);
-                } else {
-                    alert('등록할 유효한 데이터가 없습니다.');
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        };
-
-        // [기능] 엑셀 샘플 다운로드 (기존 로직 유지)
-        window.downloadSample = () => {
-            const ws_data = [
-                ["member_id", "district_code", "비고(입력X)"],
-                ["2025-24-0001", "SEOUL", "예시 데이터입니다."],
-                ["2025-24-0002", "BUSAN", "district_code는 위에서 등록한 코드와 같아야 합니다."]
-            ];
-            
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.aoa_to_sheet(ws_data);
-            XLSX.utils.book_append_sheet(wb, ws, "선거인명부_샘플");
-            
-            XLSX.writeFile(wb, "선거인명부_업로드양식.xlsx");
-        };
-
-        // [미리보기 관련 함수들] (기존 로직 유지)
-        let pendingVoters = [];
-
-        window.renderPreview = (dataList) => {
-            pendingVoters = [...dataList];
-            updatePreviewTable_Safe();
-            document.getElementById('preview-modal').style.display = 'flex';
-        };
-
-        window.closePreview = () => {
-            if(confirm('업로드를 취소하시겠습니까?')) {
-                document.getElementById('preview-modal').style.display = 'none';
-                pendingVoters = [];
-            }
-        };
-
-        // 안전한 테이블 다시 그리기
-        function updatePreviewTable_Safe() {
-            const container = document.getElementById('preview-list');
-            container.innerHTML = '';
-            
-            if (pendingVoters.length === 0) {
-                container.innerHTML = '<p>데이터가 없습니다.</p>';
-                return;
-            }
-
-            const grouped = {};
-            pendingVoters.forEach((item, index) => {
-                const code = item._view_dist_code;
-                if (!grouped[code]) grouped[code] = [];
-                grouped[code].push({ ...item, realIndex: index }); 
-            });
-
-            for (const [code, items] of Object.entries(grouped)) {
-                const distDiv = document.createElement('div');
-                distDiv.innerHTML = `<div class="preview-district-title">📍 선거구: ${code} (${items.length}명)</div>`;
-
-                const table = document.createElement('table');
-                table.className = 'preview-table';
-                table.innerHTML = `
-                    <thead><tr><th>번호</th><th>이름</th><th>전화번호</th><th>관리</th></tr></thead>
-                    <tbody>
-                        ${items.map(p => `
-                            <tr>
-                                <td>${p.member_no}</td>
-                                <td>${p._view_name}</td>
-                                <td>${p._view_phone}</td>
-                                <td>
-                                    <button onclick="removeRow(${p.realIndex})" class="btn-delete">삭제</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                `;
-                distDiv.appendChild(table);
-                container.appendChild(distDiv);
-            }
+        const count = Object.keys(createdDistricts).length;
+        const warningEl = document.getElementById('district-warning');
+        
+        if (count < 3) {
+            warningEl.style.color = 'red';
+            warningEl.innerText = `⚠️ 선거구는 최소 3개 이상 등록해야 합니다. (현재 ${count}개)`;
+            document.getElementById('step-3').style.display = 'none';
+        } else {
+            warningEl.style.color = 'green';
+            warningEl.innerText = `✅ 최소 조건 만족 (현재 ${count}개 등록됨)`;
+            document.getElementById('step-3').style.display = 'block';
         }
+    };
 
-        // 개별 행 삭제
-        window.removeRow = (idxToDel) => {
-            pendingVoters.splice(idxToDel, 1);
-            updatePreviewTable_Safe(); 
+    window.uploadVoters = async () => {
+        if (Object.keys(createdDistricts).length < 3) {
+            return window.showAlert('선거구가 최소 3개 이상 등록되어야 명부를 업로드할 수 있습니다.');
+        }
+        const fileInput = document.getElementById('excel-file');
+        if(fileInput.files.length === 0) return window.showAlert('엑셀 파일을 선택하세요.');
+
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = async (e) => {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet);
+
+            const { data: members, error: memError } = await supabase
+                .from('coop_members').select('id, member_id, name, phone');
+            
+            if(memError) return window.showAlert('조합원 DB 로드 실패');
+
+            const memberMap = new Map();
+            members.forEach(m => memberMap.set(m.member_id, m));
+
+            const tempPayload = [];
+            for(const row of rows) {
+                const memIdStr = String(row.member_id || '').trim();
+                const distCodeStr = String(row.district_code || '').trim();
+                const memberInfo = memberMap.get(memIdStr);
+                const distId = createdDistricts[distCodeStr];
+
+                if(memberInfo && distId) {
+                    tempPayload.push({
+                        election_id: newElectionId,
+                        district_id: distId,
+                        member_uuid: memberInfo.id,
+                        member_no: memIdStr,
+                        _view_name: memberInfo.name,
+                        _view_phone: memberInfo.phone,
+                        _view_dist_code: distCodeStr
+                    });
+                }
+            }
+
+            if(tempPayload.length > 0) {
+                renderPreview(tempPayload);
+            } else {
+                window.showAlert('등록할 유효한 데이터가 없습니다.');
+            }
         };
+        reader.readAsArrayBuffer(file);
+    };
 
-        // [최종 DB 저장] (기존 로직 유지)
-        window.confirmUpload = async () => {
-            if (pendingVoters.length === 0) return alert('저장할 데이터가 없습니다.');
-            if(!confirm(`총 ${pendingVoters.length}명의 명부를 등록하시겠습니까?`)) return;
+    window.downloadSample = () => {
+        const ws_data = [
+            ["member_id", "district_code", "비고(입력X)"],
+            ["2025-24-0001", "SEOUL", "예시"],
+            ["2025-24-0002", "BUSAN", "코드일치필수"]
+        ];
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        XLSX.utils.book_append_sheet(wb, ws, "선거인명부_샘플");
+        XLSX.writeFile(wb, "선거인명부_업로드양식.xlsx");
+    };
 
-            const finalPayload = pendingVoters.map(item => ({
+    // [미리보기 및 모달 제어]
+    let pendingVoters = [];
+
+    window.renderPreview = (dataList) => {
+        pendingVoters = [...dataList];
+        updatePreviewTable_Safe();
+        document.getElementById('preview-modal').style.display = 'flex';
+    };
+
+    window.closePreview = () => {
+        window.showConfirm('업로드를 취소하시겠습니까?', () => {
+             document.getElementById('preview-modal').style.display = 'none';
+             pendingVoters = [];
+        });
+    };
+
+    function updatePreviewTable_Safe() {
+        const container = document.getElementById('preview-list');
+        container.innerHTML = '';
+        if (pendingVoters.length === 0) {
+            container.innerHTML = '<p>데이터가 없습니다.</p>';
+            return;
+        }
+        // (기존 테이블 생성 로직과 동일, 생략 없이 유지됨)
+        const grouped = {};
+        pendingVoters.forEach((item, index) => {
+            const code = item._view_dist_code;
+            if (!grouped[code]) grouped[code] = [];
+            grouped[code].push({ ...item, realIndex: index }); 
+        });
+
+        for (const [code, items] of Object.entries(grouped)) {
+            const distDiv = document.createElement('div');
+            distDiv.innerHTML = `<div style="font-size:1rem; font-weight:bold; color:var(--color-primary); margin:10px 0;">📍 선거구: ${code} (${items.length}명)</div>`;
+            const table = document.createElement('table');
+            table.className = 'preview-table';
+            table.innerHTML = `
+                <thead><tr><th>번호</th><th>이름</th><th>전화번호</th><th>관리</th></tr></thead>
+                <tbody>
+                    ${items.map(p => `
+                        <tr>
+                            <td>${p.member_no}</td><td>${p._view_name}</td><td>${p._view_phone}</td>
+                            <td><button onclick="removeRow(${p.realIndex})" class="btn-delete">삭제</button></td>
+                        </tr>`).join('')}
+                </tbody>`;
+            distDiv.appendChild(table);
+            container.appendChild(distDiv);
+        }
+    }
+
+    window.removeRow = (idxToDel) => {
+        pendingVoters.splice(idxToDel, 1);
+        updatePreviewTable_Safe(); 
+    };
+
+    window.confirmUpload = async () => {
+        if (pendingVoters.length === 0) return window.showAlert('저장할 데이터가 없습니다.');
+        
+        window.showConfirm(`총 ${pendingVoters.length}명의 명부를 등록하시겠습니까?`, async () => {
+             const finalPayload = pendingVoters.map(item => ({
                 election_id: item.election_id,
                 district_id: item.district_id,
                 member_uuid: item.member_uuid,
                 member_no: item.member_no
             }));
 
-            const { error: insError } = await supabase
-                .from('election_voters')
+            const { error: insError } = await supabase.from('election_voters')
                 .upsert(finalPayload, { onConflict: 'election_id, member_uuid' });
             
-            if(insError) return alert('DB 저장 실패: ' + insError.message);
+            if(insError) return window.showAlert('DB 저장 실패: ' + insError.message);
             
-            alert('✅ 명부 등록이 완료되었습니다!\n관리자 페이지로 이동합니다.');
-            window.location.href = 'admin.html';
-        };
+            window.showAlert('✅ 명부 등록이 완료되었습니다!\n관리자 페이지로 이동합니다.');
+            setTimeout(() => window.location.href = 'admin.html', 1000); // 1초 뒤 이동
+        });
+    };
 
-        // 실행
-        init();
-    </script>
+    window.openHistoryModal = async (el) => {
+        const modal = document.getElementById('history-modal');
+        document.getElementById('modal-title').innerText = el.title;
+        document.getElementById('modal-period').innerText = `${new Date(el.start_at).toLocaleDateString()} ~ ${new Date(el.end_at).toLocaleDateString()}`;
+        
+        try {
+            const stats = await adminService.getTurnoutStats(el.id);
+            document.getElementById('modal-total').innerText = stats.total;
+            document.getElementById('modal-current').innerText = stats.current;
+            document.getElementById('modal-rate').innerText = stats.percent;
+        } catch(e) { console.error(e); }
+
+        document.getElementById('btn-go-result').onclick = () => {
+            window.open(`monitor.html?id=${el.id}`, '_blank');
+        };
+        modal.style.display = 'flex';
+    };
+
+    window.closeHistoryModal = () => {
+        document.getElementById('history-modal').style.display = 'none';
+    };
+
+    init();
+</script>
 </body>
 </html>
