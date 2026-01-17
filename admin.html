@@ -3,56 +3,152 @@
 <head>
     <meta charset="UTF-8">
     <title>통합 선거 관리 시스템</title>
-    <link rel="stylesheet" href="style.css">
     <style>
-        /* [톤앤매너] 색상 변수 설정 */
+        /* [톤앤매너] 색상 변수 */
         :root {
-            --admin-bg: #f3f4f6;
+            --admin-bg: #f8f9fa;
             --card-bg: #ffffff;
             --primary-blue: #2563eb;
+            --primary-light: #eff6ff;
             --success-green: #16a34a;
             --warning-yellow: #ca8a04;
             --danger-red: #dc2626;
             --text-dark: #1f2937;
+            --text-gray: #6b7280;
             --border-color: #e5e7eb;
         }
 
-        body { background-color: var(--admin-bg); color: var(--text-dark); }
+        body { 
+            background-color: var(--admin-bg); 
+            color: var(--text-dark); 
+            margin: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
         
+        /* 1. 개선된 헤더 스타일 */
+        header {
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between; /* 3분할을 위해 space-between 유지하되 가운데 정렬 기법 사용 */
+            padding: 0 2rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-left { width: 200px; } /* 균형을 위한 빈 공간 */
+        .header-center { 
+            flex-grow: 1; 
+            text-align: center; 
+        }
+        .header-center h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--primary-blue);
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+        .header-right { 
+            width: 200px; 
+            text-align: right; 
+            display: flex; 
+            justify-content: flex-end; 
+            align-items: center; 
+            gap: 10px;
+        }
+
         /* 레이아웃 */
-        .admin-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 3fr 1fr; gap: 2rem; }
+        .admin-container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 2rem; 
+            display: grid; 
+            grid-template-columns: 3fr 1fr; 
+            gap: 2rem; 
+        }
         @media (max-width: 768px) { .admin-container { grid-template-columns: 1fr; } }
 
         /* 카드 스타일 */
-        .card { background: var(--card-bg); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; margin-bottom: 1.5rem; }
+        .card { background: var(--card-bg); border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color); }
         
-        /* 탭 (위저드) 스타일 */
-        .wizard-steps { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 2rem; }
-        .step-item { flex: 1; text-align: center; padding: 1rem; cursor: pointer; color: #9ca3af; font-weight: bold; border-bottom: 3px solid transparent; }
-        .step-item.active { color: var(--primary-blue); border-bottom-color: var(--primary-blue); }
+        /* 탭 스타일 */
+        .wizard-steps { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 2rem; }
+        .step-item { 
+            flex: 1; text-align: center; padding: 1rem; cursor: pointer; 
+            color: var(--text-gray); font-weight: 600; 
+            border-bottom: 3px solid transparent; 
+            transition: all 0.2s;
+        }
+        .step-item.active { color: var(--primary-blue); border-bottom-color: var(--primary-blue); background: var(--primary-light); }
         .step-item:hover { background-color: #f9fafb; }
 
         /* 상태 뱃지 */
-        .status-badge { padding: 4px 12px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.9rem; }
+        .status-badge { padding: 6px 14px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.85rem; letter-spacing: 0.5px; }
         
         /* 로그 창 */
-        .log-window { height: 400px; overflow-y: auto; background: #111827; color: #10b981; padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 0.85rem; }
-        .log-entry { margin-bottom: 0.5rem; border-bottom: 1px solid #374151; padding-bottom: 0.2rem; }
-        .log-time { color: #6b7280; margin-right: 0.5rem; }
+        .log-window { height: 400px; overflow-y: auto; background: #1e293b; color: #10b981; padding: 1rem; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 0.85rem; }
+        .log-entry { margin-bottom: 0.5rem; border-bottom: 1px solid #334155; padding-bottom: 0.2rem; }
+        .log-time { color: #94a3b8; margin-right: 0.5rem; }
 
-        /* 후보자 테이블 */
-        .cand-table { width: 100%; border-collapse: collapse; }
-        .cand-table th, .cand-table td { padding: 0.8rem; border-bottom: 1px solid var(--border-color); text-align: left; }
-        .input-symbol { width: 50px; text-align: center; padding: 4px; border: 1px solid #ccc; border-radius: 4px; }
+        /* 테이블 */
+        .cand-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        .cand-table th { background: #f3f4f6; color: var(--text-dark); font-weight: 600; text-align: left; padding: 1rem; border-bottom: 2px solid var(--border-color); }
+        .cand-table td { padding: 1rem; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+        .input-symbol { width: 60px; text-align: center; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-weight: bold; font-size: 1rem; }
+        
+        /* 버튼 공통 */
+        .btn { padding: 0.8rem 1.5rem; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; font-size: 1rem; }
+        .btn:hover { opacity: 0.9; }
+        .btn-primary { background: var(--primary-blue); color: white; }
+        .btn-success { background: var(--success-green); color: white; }
+        .btn-warning { background: var(--warning-yellow); color: white; }
+        .btn-danger { background: var(--danger-red); color: white; }
+        .btn-outline { background: white; border: 1px solid var(--border-color); color: var(--text-dark); }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.85rem; border-radius: 4px; }
+
+        /* 통계 대시보드 박스 */
+        .stats-box {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;
+            background: var(--primary-light); padding: 1.5rem; border-radius: 8px; border: 1px solid #bfdbfe;
+        }
+        .stat-item { text-align: center; }
+        .stat-value { font-size: 1.8rem; font-weight: 800; color: var(--primary-blue); }
+        .stat-label { font-size: 0.9rem; color: var(--text-gray); }
+
+        /* 커스텀 모달 (Alert 대체용) */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-content {
+            background: white; padding: 2rem; border-radius: 12px; width: 90%; max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        .modal-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 1rem; display: block;}
+        .modal-body { margin-bottom: 2rem; color: #4b5563; line-height: 1.5;}
+        .modal-actions { display: flex; justify-content: center; gap: 1rem; }
+        
+        /* 유권자 미리보기 카드 (Mockup) */
+        .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; text-align: left; max-height: 400px; overflow-y: auto; padding: 10px;}
+        .voter-card-mock { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; display: flex; align-items: center; gap: 1rem; }
+        .mock-symbol { width: 40px; height: 40px; background: #2563eb; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; flex-shrink: 0;}
     </style>
 </head>
 <body>
 
-    <header style="background: white; border-bottom: 1px solid #ddd; padding: 1rem 2rem; display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="margin:0;">🛡️ 선거 관리 시스템</h2>
-        <div>
-            <span id="admin-email" style="font-weight:bold; margin-right:10px;">관리자님</span>
-            <button onclick="window.close()" style="cursor:pointer;">나가기</button>
+    <header>
+        <div class="header-left">
+            </div>
+        <div class="header-center">
+            <h2>🛡️ 통합 선거 관리 시스템</h2>
+        </div>
+        <div class="header-right">
+            <span id="admin-email" style="font-weight:600; color:#374151;">관리자님</span>
+            <button class="btn btn-outline btn-sm" onclick="window.close()">나가기</button>
         </div>
     </header>
 
@@ -61,12 +157,15 @@
         <div class="main-panel">
             
             <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h3 id="election-title" style="margin:0; font-size:1.5rem;">선거 정보를 불러오는 중...</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+                    <div style="display:flex; flex-direction:column;">
+                        <span style="font-size:0.85rem; color:var(--text-gray); margin-bottom:4px;">현재 관리 중인 선거</span>
+                        <h3 id="election-title" style="margin:0; font-size:1.8rem;">선거 정보를 불러오는 중...</h3>
+                    </div>
                     <span id="election-status" class="status-badge" style="background:#999;">Loading</span>
                 </div>
-                <div style="margin-top:1rem; color:#666;">
-                    📅 기간: <span id="election-period">-</span>
+                <div style="color:var(--text-gray); font-size: 0.95rem;">
+                    📅 투표 기간: <strong id="election-period">-</strong>
                 </div>
             </div>
 
@@ -79,13 +178,35 @@
                 </div>
 
                 <div id="tab-nomination" class="tab-content">
-                    <h4>📝 후보자 관리 & 기호 부여</h4>
-                    <p style="color:#666; font-size:0.9rem;">
-                        상태가 <strong>NOMINATION</strong>일 때만 후보 등록이 가능합니다.<br>
+                    <h4>📝 후보자 등록 현황</h4>
+                    <p style="color:#666; font-size:0.9rem; margin-bottom: 1.5rem;">
+                        후보 등록 상태(NOMINATION)일 때 후보들이 지원서를 제출합니다.<br>
                         후보를 승인하고 기호를 부여한 뒤 '저장'하세요.
                     </p>
-                    <div style="margin-bottom:1rem;">
-                        <button onclick="changeStatus('NOMINATION')" class="btn-modal" style="background:var(--primary-blue); color:white;">▶ 후보 등록 시작 (NOMINATION)</button>
+
+                    <div class="stats-box">
+                        <div class="stat-item">
+                            <div class="stat-value" id="stat-total">0</div>
+                            <div class="stat-label">전체 지원자</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" style="color:var(--warning-yellow)" id="stat-pending">0</div>
+                            <div class="stat-label">승인 대기</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" style="color:var(--success-green)" id="stat-approved">0</div>
+                            <div class="stat-label">승인 완료</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" style="color:var(--danger-red)" id="stat-rejected">0</div>
+                            <div class="stat-label">반려됨</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom:1rem; display: flex; gap: 10px;">
+                        <button onclick="confirmAction('NOMINATION', '후보 등록을 시작하시겠습니까?\n이제부터 입후보 신청이 가능해집니다.')" class="btn btn-primary">
+                            ▶ 후보 등록 시작 (NOMINATION)
+                        </button>
                     </div>
                     
                     <table class="cand-table">
@@ -98,56 +219,68 @@
                                 <th>관리</th>
                             </tr>
                         </thead>
-                        <tbody id="candidate-list-body">
-                            </tbody>
+                        <tbody id="candidate-list-body"></tbody>
                     </table>
-                    <button onclick="saveSymbols()" style="margin-top:1rem; width:100%; padding:0.8rem; background:var(--success-green); color:white; border:none; border-radius:4px; cursor:pointer;">💾 기호 일괄 저장</button>
+                    <button onclick="saveSymbols()" class="btn btn-success" style="width:100%; margin-top:1.5rem;">💾 기호 일괄 저장</button>
                 </div>
 
                 <div id="tab-ready" class="tab-content" style="display:none;">
                     <h4>📢 후보자 확정 및 공포</h4>
-                    <p>기호 부여가 끝났으면 선거 준비 완료 상태로 변경합니다.<br>이때부터 유권자들은 후보자 정보를 볼 수 있습니다.</p>
-                    <button onclick="changeStatus('READY')" style="padding:1rem 2rem; font-size:1.1rem; background:var(--warning-yellow); color:white; border:none; border-radius:6px; cursor:pointer;">
-                        🚀 선거 준비 완료 (READY)로 변경
-                    </button>
+                    <p style="color:var(--text-gray); line-height: 1.6;">
+                        모든 후보의 기호 부여가 끝났습니까?<br>
+                        '준비 완료' 상태가 되면 유권자들에게 후보자 명부가 공개됩니다.<br>
+                        <strong>반드시 '미리보기'를 통해 유권자에게 어떻게 보일지 먼저 확인하세요.</strong>
+                    </p>
+                    
+                    <div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 1.5rem; border-radius: 8px; text-align: center;">
+                        <button onclick="openVoterPreview()" class="btn btn-outline" style="margin-bottom: 1rem; border-color: #aaa;">
+                            👁️ 유권자 화면 미리보기 (필수)
+                        </button>
+                        <br>
+                        <button onclick="confirmAction('READY', '선거 준비 완료 상태로 변경하시겠습니까?\n이제 유권자들이 후보자 정보를 볼 수 있습니다.')" class="btn btn-warning" style="padding: 1rem 2rem; font-size: 1.1rem;">
+                            🚀 선거 준비 완료 (READY)로 변경
+                        </button>
+                    </div>
                 </div>
 
                 <div id="tab-vote" class="tab-content" style="display:none;">
                     <h4>🗳️ 투표소 운영</h4>
+                    <p style="color:var(--text-gray);">실제 투표를 시작하거나 종료합니다.</p>
                     <div style="display:flex; gap:1rem; margin-bottom:2rem;">
-                        <button onclick="changeStatus('OPEN')" style="flex:1; padding:1rem; background:var(--success-green); color:white; border:none; border-radius:6px; cursor:pointer; font-size:1.1rem;">
+                        <button onclick="confirmAction('OPEN', '투표를 시작합니다. 되돌릴 수 없습니다.')" class="btn btn-success" style="flex:1;">
                             ▶ 투표 시작 (OPEN)
                         </button>
-                        <button onclick="changeStatus('PAUSED')" style="flex:1; padding:1rem; background:var(--warning-yellow); color:white; border:none; border-radius:6px; cursor:pointer; font-size:1.1rem;">
+                        <button onclick="confirmAction('PAUSED', '투표를 일시 정지합니다.')" class="btn btn-warning" style="flex:1;">
                             ⏸ 일시 정지 (PAUSED)
                         </button>
-                        <button onclick="changeStatus('CLOSED')" style="flex:1; padding:1rem; background:var(--danger-red); color:white; border:none; border-radius:6px; cursor:pointer; font-size:1.1rem;">
+                        <button onclick="confirmAction('CLOSED', '투표를 완전히 종료합니다.\n종료 후에는 더 이상 투표할 수 없습니다.')" class="btn btn-danger" style="flex:1;">
                             ⏹ 투표 종료 (CLOSED)
                         </button>
                     </div>
                     
-                    <div style="background:#f9f9f9; padding:1rem; border-radius:8px;">
-                        <h5>실시간 투표 현황 (5초마다 갱신)</h5>
-                        <h2 id="live-turnout" style="text-align:center; font-size:2rem; color:var(--primary-blue);">0%</h2>
-                        <p style="text-align:center; color:#666;">참여 <span id="live-votes">0</span> / 총원 <span id="live-total">0</span></p>
+                    <div style="background:#f9fafb; padding:2rem; border-radius:12px; border:1px solid #eee; text-align: center;">
+                        <h5 style="margin:0; color:#6b7280;">실시간 투표율 (5초 주기)</h5>
+                        <h2 id="live-turnout" style="margin: 10px 0; font-size:3.5rem; color:var(--primary-blue); font-weight: 800;">0%</h2>
+                        <div style="font-size: 1.1rem; color: #374151;">
+                            참여 <strong id="live-votes">0</strong>명 / 총원 <span id="live-total">0</span>명
+                        </div>
                     </div>
                 </div>
 
                 <div id="tab-result" class="tab-content" style="display:none;">
                     <h4>🏆 개표 및 결과 발표</h4>
-                    <p style="color:red;">* 투표가 완전히 종료(CLOSED)된 후에만 개표할 수 있습니다.</p>
+                    <p style="color:var(--danger-red);">* 투표가 완전히 종료(CLOSED)된 후에만 개표할 수 있습니다.</p>
                     
                     <div id="result-control">
-                        <button onclick="openBallotBox()" style="padding:1rem; background:#374151; color:white; border:none; border-radius:6px; cursor:pointer;">
-                            🔐 개표함 열기 (결과 확인)
+                        <button onclick="openBallotBox()" class="btn" style="padding:1rem; background:#374151; color:white; width: 100%;">
+                            🔐 개표함 열기 (보안 확인 필요)
                         </button>
                     </div>
 
-                    <div id="result-display" style="display:none; margin-top:1rem;">
-                        <div id="result-chart"></div>
-                        
-                        <hr style="margin:2rem 0;">
-                        <button onclick="changeStatus('PUBLISHED')" style="width:100%; padding:1rem; background:var(--primary-blue); color:white; border:none; border-radius:6px; cursor:pointer; font-size:1.2rem;">
+                    <div id="result-display" style="display:none; margin-top:2rem;">
+                        <div id="result-chart" style="padding: 1rem; background: #f3f4f6; border-radius: 8px;"></div>
+                        <hr style="margin:2rem 0; border:0; border-top:1px solid #ddd;">
+                        <button onclick="confirmAction('PUBLISHED', '최종 결과를 공포하시겠습니까?\n모든 유권자가 결과를 확인할 수 있게 됩니다.')" class="btn btn-primary" style="width:100%; padding:1rem; font-size:1.2rem;">
                             📢 결과 최종 공포 (PUBLISHED)
                         </button>
                     </div>
@@ -157,15 +290,24 @@
         </div>
 
         <div class="side-panel">
-            <div class="card" style="position:sticky; top:20px;">
-                <h3>📜 운영 로그 (Audit)</h3>
+            <div class="card" style="position:sticky; top:90px;">
+                <h3 style="margin-top:0;">📜 운영 로그 (Audit)</h3>
                 <div id="audit-log-container" class="log-window">
                     <div class="log-entry">로그 로딩 중...</div>
                 </div>
-                <button onclick="loadLogs()" style="width:100%; margin-top:0.5rem; padding:0.5rem; cursor:pointer;">새로고침</button>
+                <button onclick="loadLogs()" class="btn btn-outline btn-sm" style="width:100%; margin-top:0.5rem;">새로고침</button>
             </div>
         </div>
+    </div>
 
+    <div id="common-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span id="modal-title" class="modal-title">알림</span>
+            <div id="modal-body" class="modal-body"></div>
+            <div id="modal-actions" class="modal-actions">
+                <button onclick="closeModal()" class="btn btn-outline">닫기</button>
+            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -173,86 +315,113 @@
         
         const service = new AdminService();
         let currentElectionId = null;
+        let cachedCandidates = []; // 미리보기 및 통계용 캐시
+
+        // [모달 유틸리티]
+        window.showModal = (title, contentHtml, onConfirm = null) => {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerHTML = contentHtml;
+            const actionDiv = document.getElementById('modal-actions');
+            actionDiv.innerHTML = ''; // 초기화
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'btn btn-outline';
+            closeBtn.innerText = onConfirm ? '취소' : '확인';
+            closeBtn.onclick = window.closeModal;
+            actionDiv.appendChild(closeBtn);
+
+            if (onConfirm) {
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = 'btn btn-primary';
+                confirmBtn.innerText = '확인';
+                confirmBtn.onclick = () => { onConfirm(); window.closeModal(); };
+                actionDiv.appendChild(confirmBtn);
+            }
+            
+            document.getElementById('common-modal').style.display = 'flex';
+        };
+
+        window.closeModal = () => {
+            document.getElementById('common-modal').style.display = 'none';
+        };
 
         // [초기화]
         async function init() {
-            // 1. 관리자 권한 체크
             if (!await service.isAdmin()) {
-                alert('접근 권한이 없습니다.');
-                window.close();
+                window.showModal('오류', '접근 권한이 없습니다.', () => window.close());
                 return;
             }
 
-            // 2. 선거 ID 파싱 (URL 파라미터 우선, 없으면 로컬스토리지)
             const urlParams = new URLSearchParams(window.location.search);
             currentElectionId = urlParams.get('id') || localStorage.getItem('target_election_id');
 
             if (!currentElectionId) {
-                alert('선택된 선거가 없습니다.');
-                window.close();
+                window.showModal('오류', '선택된 선거가 없습니다.', () => window.close());
                 return;
             }
 
-            // 3. 데이터 로드
             loadElectionInfo();
-            loadCandidates(); // 후보 탭용
-            loadLogs(); // 로그
+            loadCandidates();
+            loadLogs();
             
-            // 폴링 (투표율 실시간 갱신)
             setInterval(updateLiveStats, 5000);
         }
 
-        // [정보 로드] 선거 개요
+        // [정보 로드]
         async function loadElectionInfo() {
             try {
                 const data = await service.getElectionInfo(currentElectionId);
                 document.getElementById('election-title').innerText = data.title;
                 document.getElementById('election-period').innerText = 
                     `${new Date(data.start_at).toLocaleString()} ~ ${new Date(data.end_at).toLocaleString()}`;
-                
-                // 상태 뱃지 업데이트
                 updateStatusBadge(data.status);
-
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) { console.error(e); }
         }
 
         function updateStatusBadge(status) {
             const el = document.getElementById('election-status');
             el.innerText = status;
-            
             let color = '#999';
             if(status === 'OPEN') color = 'var(--success-green)';
             else if(status === 'CLOSED') color = 'var(--danger-red)';
             else if(status === 'PUBLISHED') color = 'var(--primary-blue)';
-            else if(status === 'NOMINATION') color = '#ec4899'; // pink
-            
+            else if(status === 'NOMINATION') color = '#ec4899';
             el.style.backgroundColor = color;
         }
 
         // [탭 전환]
         window.switchTab = (tabId) => {
-            // 모든 탭 내용 숨김
             document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
             document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active'));
-            
-            // 선택된 탭 보임
             document.getElementById(tabId).style.display = 'block';
             
-            // 스텝 하이라이트 (이벤트 타겟 찾기 어려우니 단순 매핑)
             const map = { 'tab-nomination':0, 'tab-ready':1, 'tab-vote':2, 'tab-result':3 };
-            document.querySelectorAll('.step-item')[map[tabId]].classList.add('active');
+            if(map[tabId] !== undefined) document.querySelectorAll('.step-item')[map[tabId]].classList.add('active');
         };
-        // 초기 탭 설정
         switchTab('tab-nomination');
 
-        // [후보자 로드 & 렌더링]
+        // [후보자 로드 & 통계 & 렌더링]
         async function loadCandidates() {
             const list = await service.getCandidates(currentElectionId);
+            cachedCandidates = list; // 캐싱 (미리보기용)
+            
+            // 통계 계산
+            const stats = { total: list.length, pending: 0, approved: 0, rejected: 0 };
+            list.forEach(c => {
+                if (c.status === 'PENDING') stats.pending++;
+                else if (c.status === 'APPROVED') stats.approved++;
+                else if (c.status === 'REJECTED') stats.rejected++;
+            });
+
+            // 통계 UI 업데이트
+            document.getElementById('stat-total').innerText = stats.total;
+            document.getElementById('stat-pending').innerText = stats.pending;
+            document.getElementById('stat-approved').innerText = stats.approved;
+            document.getElementById('stat-rejected').innerText = stats.rejected;
+
+            // 리스트 렌더링
             const tbody = document.getElementById('candidate-list-body');
             tbody.innerHTML = '';
-
             list.forEach(c => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -260,12 +429,14 @@
                     <td>${c.name}</td>
                     <td>
                         ${c.status === 'PENDING' ? 
-                          `<button onclick="reviewCand('${c.id}', 'APPROVED', '${c.name}')" style="color:blue;">승인</button> 
-                           <button onclick="reviewCand('${c.id}', 'REJECTED', '${c.name}')" style="color:red;">반려</button>` 
-                          : c.status}
+                          `<button onclick="reviewCand('${c.id}', 'APPROVED', '${c.name}')" class="btn btn-sm btn-outline" style="color:blue; border-color:blue;">승인</button> 
+                           <button onclick="reviewCand('${c.id}', 'REJECTED', '${c.name}')" class="btn btn-sm btn-outline" style="color:red; border-color:red;">반려</button>` 
+                          : `<span class="status-badge" style="background:${c.status === 'APPROVED' ? 'green' : 'gray'}">${c.status}</span>`}
                     </td>
                     <td>
-                        <input type="text" class="input-symbol" data-id="${c.id}" value="${c.symbol || ''}" placeholder="1">
+                        ${c.status === 'APPROVED' ? 
+                            `<input type="text" class="input-symbol" data-id="${c.id}" value="${c.symbol || ''}" placeholder="번호">` : 
+                            '-'}
                     </td>
                     <td>-</td>
                 `;
@@ -273,39 +444,76 @@
             });
         }
 
-        // [Action] 후보 승인/반려
-        window.reviewCand = async (id, decision, name) => {
-            if(!confirm(`${name} 후보를 ${decision} 하시겠습니까?`)) return;
-            await service.reviewCandidate(id, decision);
-            await service.logAction(currentElectionId, 'CANDIDATE_REVIEW', `${name} 후보 ${decision}`);
-            loadCandidates();
-            loadLogs();
+        // [유권자 화면 미리보기] - 핵심 추가 기능
+        window.openVoterPreview = () => {
+            const approvedCands = cachedCandidates.filter(c => c.status === 'APPROVED');
+            if(approvedCands.length === 0) {
+                window.showModal('알림', '승인된 후보자가 없습니다. 후보를 먼저 승인해주세요.');
+                return;
+            }
+
+            // 기호 순 정렬
+            approvedCands.sort((a, b) => (parseInt(a.symbol)||999) - (parseInt(b.symbol)||999));
+
+            let html = '<div class="preview-grid">';
+            approvedCands.forEach(c => {
+                const symbol = c.symbol ? c.symbol : '?';
+                html += `
+                    <div class="voter-card-mock">
+                        <div class="mock-symbol">${symbol}</div>
+                        <div>
+                            <div style="font-size:0.8rem; color:#666;">${c.districts.name}</div>
+                            <div style="font-weight:bold; font-size:1.1rem;">${c.name}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div><p style="margin-top:1rem; font-size:0.8rem; color:red;">* 실제 유권자 화면과 디자인은 다를 수 있으나 데이터는 위와 같이 표시됩니다.</p>';
+            
+            window.showModal('📱 유권자 투표 화면 미리보기', html);
         };
 
-        // [Action] 기호 저장
+        // [Action] 후보 승인/반려 (With Modal)
+        window.reviewCand = (id, decision, name) => {
+            window.showModal(
+                '심사 확인', 
+                `${name} 후보를 <strong>${decision}</strong> 처리하시겠습니까?`,
+                async () => {
+                    await service.reviewCandidate(id, decision);
+                    await service.logAction(currentElectionId, 'CANDIDATE_REVIEW', `${name} 후보 ${decision}`);
+                    loadCandidates();
+                    loadLogs();
+                }
+            );
+        };
+
+        // [Action] 기호 저장 (With Modal)
         window.saveSymbols = async () => {
             const inputs = document.querySelectorAll('.input-symbol');
-            try {
-                for (const input of inputs) {
-                    const id = input.dataset.id;
-                    const val = input.value;
-                    if (val) await service.updateSymbol(id, val);
-                }
-                alert('기호가 저장되었습니다.');
-                await service.logAction(currentElectionId, 'SYMBOL_UPDATE', '후보자 기호 저장 완료');
-                loadLogs();
-            } catch(e) { alert(e.message); }
+            window.showModal('저장 확인', `총 ${inputs.length}명의 기호를 저장하시겠습니까?`, async () => {
+                try {
+                    for (const input of inputs) {
+                        const id = input.dataset.id;
+                        const val = input.value;
+                        if (val) await service.updateSymbol(id, val);
+                    }
+                    window.showModal('완료', '기호가 저장되었습니다.');
+                    await service.logAction(currentElectionId, 'SYMBOL_UPDATE', '후보자 기호 저장 완료');
+                    loadLogs();
+                    loadCandidates(); // 재로딩하여 정렬 등 반영
+                } catch(e) { window.showModal('에러', e.message); }
+            });
         };
 
-        // [Action] 상태 변경 (공통)
-        window.changeStatus = async (status) => {
-            if(!confirm(`정말 선거 상태를 '${status}'(으)로 변경하시겠습니까?`)) return;
-            try {
-                await service.updateStatus(currentElectionId, status);
-                loadElectionInfo();
-                loadLogs();
-                alert('변경되었습니다.');
-            } catch(e) { alert(e.message); }
+        // [Action] 상태 변경 공통 (confirmAction 래퍼)
+        window.confirmAction = (status, message) => {
+            window.showModal('상태 변경 확인', message, async () => {
+                try {
+                    await service.updateStatus(currentElectionId, status);
+                    loadElectionInfo();
+                    loadLogs();
+                } catch(e) { window.showModal('에러', e.message); }
+            });
         };
 
         // [Action] 로그 로드
@@ -313,7 +521,6 @@
             const logs = await service.getLogs(currentElectionId);
             const container = document.getElementById('audit-log-container');
             container.innerHTML = '';
-            
             logs.forEach(log => {
                 const div = document.createElement('div');
                 div.className = 'log-entry';
@@ -329,31 +536,30 @@
         // [Action] 투표율 갱신
         async function updateLiveStats() {
             if(!currentElectionId) return;
-            // 서비스에 getTurnoutStats 함수가 있다고 가정 (Monitor.html에서 씀)
             const stats = await service.getTurnoutStats(currentElectionId);
             document.getElementById('live-turnout').innerText = `${stats.percent}%`;
             document.getElementById('live-votes').innerText = stats.current;
             document.getElementById('live-total').innerText = stats.total;
         }
         
-        // [Action] 개표함 열기
-        window.openBallotBox = async () => {
-             // 보안상 비밀번호를 한번 더 묻는 것도 좋음
-             const pwd = prompt("관리자 보안 확인: '개표'라고 입력하세요.");
-             if(pwd !== '개표') return alert('취소되었습니다.');
+        // [Action] 개표
+        window.openBallotBox = () => {
+             // prompt는 Modal 시스템상 구현이 복잡하므로 간단히 window.prompt 사용하거나, 추후 비밀번호 입력 전용 모달 개발 필요.
+             // 여기서는 간략히 prompt 유지하되, UX 흐름상 설명 추가.
+             const pwd = prompt("🔐 보안 확인: 개표함 열람을 위해 '개표'라고 입력하세요.");
+             if(pwd !== '개표') return alert('취소되었습니다.'); // 모달로 대체하면 좋으나 코드 복잡도상 유지
              
-             document.getElementById('result-display').style.display = 'block';
-             
-             // 결과를 가져와서 렌더링 (간단 텍스트 버전)
-             const ballots = await service.getResults(currentElectionId);
-             const chart = document.getElementById('result-chart');
-             chart.innerHTML = `<p>총 ${ballots.length}표가 집계되었습니다. (상세 그래프는 Monitor 페이지 권장)</p>`;
-             
-             await service.logAction(currentElectionId, 'OPEN_BALLOT', '개표함 열람 및 결과 확인');
-             loadLogs();
+             (async () => {
+                document.getElementById('result-display').style.display = 'block';
+                const ballots = await service.getResults(currentElectionId);
+                const chart = document.getElementById('result-chart');
+                chart.innerHTML = `<p><strong>총 ${ballots.length}표</strong>가 성공적으로 암호화 해제 및 집계되었습니다.</p>`;
+                
+                await service.logAction(currentElectionId, 'OPEN_BALLOT', '개표함 열람 및 결과 확인');
+                loadLogs();
+             })();
         };
 
-        // 실행
         init();
     </script>
 </body>
