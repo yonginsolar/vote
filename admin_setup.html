@@ -15,24 +15,51 @@
         --bg-overlay: rgba(0, 0, 0, 0.5);
     }
 
-    body { margin: 0; font-family: 'Pretendard', sans-serif; background-color: #f3f4f6; }
+   /* [기본 리셋] */
+    body { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; background-color: #f3f4f6; }
 
-    /* [헤더] 텍스트 축소 및 배치 수정 */
+    /* [헤더] 상단 고정 및 좌우 정렬 */
     header {
+        position: fixed; /* 스크롤 해도 위에 붙어있음 */
+        top: 0; 
+        left: 0;
+        width: 100%; /* 화면 전체 너비 */
+        height: 60px; /* 높이 고정 */
+        
         display: flex; 
-        justify-content: space-between; 
-        align-items: center;
-        padding: 0.8rem 1.5rem;
+        justify-content: space-between; /* 양쪽 끝으로 밀어내기 */
+        align-items: center; /* 세로 중앙 정렬 */
+        
+        padding: 0 2rem; /* 좌우 여백 */
+        box-sizing: border-box; /* padding 포함 너비 계산 */
+        
         background: white;
         border-bottom: 1px solid #ddd;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        z-index: 1000; /* 모달 다음으로 높은 우선순위 */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
     }
-    .header-logo {
-        font-size: 1.2rem; 
+
+    /* 로고 스타일 */
+    .header-logo span {
+        font-size: 1.3rem; 
         font-weight: 800; 
-        color: var(--color-primary); 
-        text-decoration: none;
-        display: flex; align-items: center; gap: 8px;
+        color: var(--color-primary);
+        letter-spacing: -0.5px;
+    }
+
+    /* 유저 정보 영역 */
+    #user-info-area {
+        display: flex; 
+        align-items: center; 
+        gap: 15px;
+    }
+
+    /* [본문 컨테이너] 헤더에 가려지지 않도록 위쪽 여백 추가 */
+    .container {
+        max-width: 800px;
+        margin: 0 auto; /* 가로 중앙 정렬 */
+        margin-top: 100px !important; /* 헤더 높이(60px) + 여유공간(40px) */
+        padding: 0 1rem;
     }
 
     /* [대시보드 카드] 버튼 영역 추가 */
@@ -123,21 +150,29 @@
 </head>
 
 <body>
-    <header>
+<header>
         <div class="header-logo">
             <span>🛡️ Election Admin</span>
         </div>
         
-        <div id="user-info-area" style="display:none; align-items:center; gap:15px;">
-            <span id="login-info" style="font-weight:bold; color:#333; font-size:0.9rem;">관리자님</span>
-            <button onclick="handleLogout()" style="background:#f3f4f6; border:1px solid #ddd; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.8rem;">
+        <div id="user-info-area" style="display:none;">
+            <span id="login-info" style="font-weight:bold; color:#555; font-size:0.9rem;">관리자님</span>
+            <button onclick="handleLogout()" style="background:#fff; border:1px solid #ddd; padding:6px 14px; border-radius:20px; cursor:pointer; font-size:0.8rem; font-weight:bold; color:#444;">
                 로그아웃
             </button>
         </div>
     </header>
 
-    <div class="container active" style="max-width:800px; margin: 2rem auto; padding: 0 1rem;">
-        
+<div class="container active">
+        <div id="login-section" style="text-align:center; padding: 4rem 1rem;">
+             </div>
+
+        <div id="dashboard-section" style="display:none;">
+             </div>
+
+        <div id="setup-section" style="display:none;">
+             </div>
+    </div>  
         <div id="login-section" style="text-align:center; padding: 4rem 1rem;">
             <h2 style="color:#333;">🔐 관리자 인증</h2>
             <p style="color:#666; margin-bottom:2rem;">보안을 위해 관리자 이메일 인증이 필요합니다.</p>
