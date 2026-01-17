@@ -85,6 +85,13 @@
     .preview-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; font-size: 0.9rem; }
     .preview-table th, .preview-table td { border: 1px solid #ddd; padding: 8px; text-align: center; }
     .btn-delete { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; padding: 2px 8px; border-radius: 4px; cursor: pointer; }
+    
+    /* [Step 폼 스타일] */
+    .form-group { margin-bottom: 1rem; }
+    .form-label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 0.9rem; color: #374151; }
+    .form-row { display: flex; gap: 10px; align-items: center; }
+    .form-input { flex: 1; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 6px; }
+    .form-helper { font-size: 0.8rem; color: #6b7280; margin-top: 4px; }
 </style>
 </head>
 
@@ -139,28 +146,64 @@
             </div>
             
             <div class="admin-panel" style="padding:1.5rem; border:1px solid #ccc; border-radius:8px; margin-bottom:10px;">
-                <h3>Step 1. 기본 정보</h3>
-                <input type="text" id="election-title" placeholder="선거명" style="width:100%; padding:0.5rem; margin-bottom:0.5rem; box-sizing:border-box;">
-                <div style="display:flex; gap:1rem;">
-                    <input type="datetime-local" id="start-at" style="flex:1; padding:0.5rem;">
-                    <input type="datetime-local" id="end-at" style="flex:1; padding:0.5rem;">
+                <h3>Step 1. 기본 정보 및 일정</h3>
+                
+                <div class="form-group">
+                    <label class="form-label">선거명</label>
+                    <input type="text" id="election-title" placeholder="예: 2026년 임원 선출의 건" class="form-input" style="width:100%; box-sizing:border-box;">
                 </div>
-                <button onclick="createElection()" style="margin-top:1rem; padding:10px; background:var(--color-primary); color:white; border:none; width:100%; cursor:pointer;">생성하기</button>
+
+                <div class="form-group">
+                    <label class="form-label">📝 후보 등록 기간</label>
+                    <div class="form-row">
+                        <input type="datetime-local" id="candidacy-start" class="form-input">
+                        <span>~</span>
+                        <input type="datetime-local" id="candidacy-end" class="form-input">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">🗳️ 투표 기간</label>
+                    <div class="form-row">
+                        <input type="datetime-local" id="vote-start" class="form-input">
+                        <span>~</span>
+                        <input type="datetime-local" id="vote-end" class="form-input">
+                    </div>
+                    <div class="form-helper">* 후보 등록 마감 이후로 설정하는 것을 권장합니다.</div>
+                </div>
+
+                <button onclick="createElection()" style="margin-top:1rem; padding:10px; background:var(--color-primary); color:white; border:none; width:100%; cursor:pointer; border-radius:6px; font-weight:bold;">설정 저장 후 다음</button>
             </div>
             
             <div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
-                 <h3>Step 2. 선거구 설정</h3>
-                 <div style="display:flex; gap:0.5rem; margin-bottom:1rem;">
-                    <input type="text" id="dist-name" placeholder="이름 (예: 서울)" style="flex:2;">
-                    <input type="text" id="dist-code" placeholder="코드 (예: SEOUL)" style="flex:1;">
-                    <select id="dist-type" style="flex:1;">
-                        <option value="CANDIDATE">인물</option>
-                        <option value="BINARY">찬반</option>
-                    </select>
-                    <button onclick="addDistrict()" style="padding:0.5rem;">추가</button>
+                 <h3>Step 2. 선거구 및 선출 인원</h3>
+                 <p style="font-size:0.9rem; color:#666; margin-bottom:1rem;">각 선거구의 이름, 코드, 그리고 선출해야 할 인원(정수)을 설정하세요.</p>
+                 
+                 <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem; align-items: flex-end;">
+                    <div style="flex:2;">
+                        <label class="form-helper">선거구명</label>
+                        <input type="text" id="dist-name" placeholder="예: 서울지구" class="form-input" style="width:100%;">
+                    </div>
+                    <div style="flex:1;">
+                        <label class="form-helper">코드</label>
+                        <input type="text" id="dist-code" placeholder="SEOUL" class="form-input" style="width:100%;">
+                    </div>
+                    <div style="flex:1;">
+                         <label class="form-helper">선출(명)</label>
+                         <input type="number" id="dist-quota" value="1" min="1" class="form-input" style="width:100%;">
+                    </div>
+                    <div style="flex:1;">
+                         <label class="form-helper">유형</label>
+                         <select id="dist-type" class="form-input" style="width:100%;">
+                            <option value="CANDIDATE">인물</option>
+                            <option value="BINARY">찬반</option>
+                        </select>
+                    </div>
                 </div>
-                <p id="district-warning" style="font-size:0.9rem; color:red;">⚠️ 선거구는 최소 3개 이상 등록해야 합니다.</p>
-                <ul id="district-list" style="background:#f9f9f9; padding:1rem;"></ul>
+                <button onclick="addDistrict()" style="width:100%; padding:8px; background:#4b5563; color:white; border:none; border-radius:4px; cursor:pointer; margin-bottom:1rem;">+ 선거구 추가</button>
+
+                <p id="district-warning" style="font-size:0.9rem; color:red;">⚠️ 선거구는 최소 1개 이상 등록해야 합니다.</p>
+                <ul id="district-list" style="background:#f9f9f9; padding:1rem; list-style:none; margin:0; border-radius:6px;"></ul>
             </div>
 
             <div id="step-3" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
@@ -169,7 +212,7 @@
                      <button onclick="downloadSample()" style="background:#6b7280; color:white; border:none; padding:5px 10px; border-radius:4px; font-size:0.8rem; cursor:pointer;">⬇️ 샘플 다운로드</button>
                 </div>
                 <input type="file" id="excel-file" accept=".xlsx, .xls">
-                <button onclick="uploadVoters()" style="margin-top:1rem; width:100%; padding:10px; background:#166534; color:white; border:none; cursor:pointer;">명부 등록 완료</button>
+                <button onclick="uploadVoters()" style="margin-top:1rem; width:100%; padding:10px; background:#166534; color:white; border:none; cursor:pointer; border-radius:6px; font-weight:bold;">명부 등록 완료</button>
             </div>
         </div>
 
@@ -191,7 +234,7 @@
                 <button onclick="closeHistoryModal()" style="border:none; background:none; font-size:1.5rem; cursor:pointer;">&times;</button>
             </div>
             <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>기간</span> <span id="modal-period">-</span></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>투표 기간</span> <span id="modal-period">-</span></div>
             <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>총 유권자</span> <span><strong id="modal-total">0</strong>명</span></div>
             <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span>투표 참여</span> <span><strong id="modal-current">0</strong>명 (<span id="modal-rate">0</span>%)</span></div>
             <div style="margin-top:20px; text-align:center;">
@@ -216,7 +259,7 @@
     const adminService = new AdminService();
 
     // ----------------------------------------------------------------
-    // [1] 필수 유틸리티: 모달 함수 정의 (이게 없어서 에러가 났었습니다)
+    // [1] 필수 유틸리티: 모달 함수 정의
     // ----------------------------------------------------------------
     window.showAlert = (msg) => {
         const modal = document.getElementById('common-alert-modal');
@@ -235,7 +278,6 @@
 
         msgBox.innerHTML = msg.replace(/\n/g, '<br>');
         
-        // 버튼 재생성 (이벤트 바인딩 초기화)
         btnBox.innerHTML = '';
         
         const cancelBtn = document.createElement('button');
@@ -298,7 +340,6 @@
                     window.location.href = `admin.html?id=${el.id}`;
                 };
 
-                // 상태별 버튼 로직
                 let controlButtons = '';
                 if (el.status === 'OPEN' || el.status === 'NOMINATION') {
                     controlButtons = `
@@ -314,12 +355,17 @@
                     controlButtons = `<span style="font-size:0.8rem; color:#999;">준비 중</span>`;
                 }
 
+                // 날짜 표시 로직 수정 (투표 기간 기준)
+                const startStr = el.vote_start_at ? new Date(el.vote_start_at).toLocaleDateString() : '미정';
+                const endStr = el.vote_end_at ? new Date(el.vote_end_at).toLocaleDateString() : '미정';
+
                 card.innerHTML = `
                     <div style="flex:1;">
                         <span style="background:${el.status === 'OPEN' ? 'var(--color-primary)' : '#6b7280'}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold;">
                             ${el.status}
                         </span>
-                        <h4 style="margin:8px 0 0 0; font-size:1.1rem; color:#1f2937;">${el.title}</h4>
+                        <h4 style="margin:8px 0 5px 0; font-size:1.1rem; color:#1f2937;">${el.title}</h4>
+                        <span style="font-size:0.85rem; color:#666;">투표: ${startStr} ~ ${endStr}</span>
                     </div>
                     <div class="card-actions">
                         ${controlButtons}
@@ -331,8 +377,12 @@
                 const item = document.createElement('div');
                 item.className = 'timeline-item';
                 item.onclick = () => window.openHistoryModal(el);
+                
+                // 종료일 기준 표시
+                const endDate = el.vote_end_at ? new Date(el.vote_end_at).toLocaleDateString() : '종료';
+                
                 item.innerHTML = `
-                    <div class="timeline-date">${new Date(el.end_at).toLocaleDateString()} 종료</div>
+                    <div class="timeline-date">${endDate} 종료</div>
                     <div class="timeline-content">
                         <h4>${el.title}</h4>
                         <p style="font-size:0.85rem; color:#666;">최종 상태: ${el.status}</p>
@@ -343,7 +393,7 @@
         });
     }
 
-    // 상태 변경 (모달 사용)
+    // 상태 변경
     window.handleStatusChange = async (event, electionId, newStatus) => {
         event.stopPropagation();
         let warning = '';
@@ -362,7 +412,7 @@
     };
 
     // ----------------------------------------------------------------
-    // [3] 이벤트 핸들러 (모든 alert -> showAlert 교체 완료)
+    // [3] 이벤트 핸들러
     // ----------------------------------------------------------------
     window.handleLogout = async () => {
         await supabase.auth.signOut();
@@ -386,35 +436,56 @@
         document.getElementById('setup-section').style.display = 'block';
     };
 
+    // [Step 1 수정: 기간 4개 입력]
     window.createElection = async () => {
         const title = document.getElementById('election-title').value;
-        const start = document.getElementById('start-at').value;
-        const end = document.getElementById('end-at').value;
+        const candStart = document.getElementById('candidacy-start').value;
+        const candEnd = document.getElementById('candidacy-end').value;
+        const voteStart = document.getElementById('vote-start').value;
+        const voteEnd = document.getElementById('vote-end').value;
 
-        if(!title || !start || !end) return window.showAlert('모든 정보를 입력하세요.');
+        if(!title || !candStart || !candEnd || !voteStart || !voteEnd) {
+            return window.showAlert('모든 기간 정보를 입력하세요.');
+        }
+
+        // 간단한 날짜 유효성 검사
+        if(candStart >= candEnd) return window.showAlert('후보 등록 종료일은 시작일보다 뒤여야 합니다.');
+        if(voteStart >= voteEnd) return window.showAlert('투표 종료일은 시작일보다 뒤여야 합니다.');
 
         const { data, error } = await supabase.from('elections').insert({
-            title, start_at: start, end_at: end, status: 'PREPARE'
+            title, 
+            candidacy_start_at: candStart,
+            candidacy_end_at: candEnd,
+            vote_start_at: voteStart,
+            vote_end_at: voteEnd,
+            status: 'PREPARE'
         }).select().single();
 
         if(error) return window.showAlert('생성 실패: ' + error.message);
 
         newElectionId = data.id;
-        window.showAlert('선거가 생성되었습니다.\n다음으로 선거구를 등록하세요.');
+        window.showAlert('선거 정보가 저장되었습니다.\n이어서 선거구 및 선출 인원을 등록하세요.');
         document.getElementById('step-2').style.display = 'block';
     };
 
+    // [Step 2 수정: 정수(Quota) 포함]
     window.addDistrict = async () => {
         if(!newElectionId) return;
         const name = document.getElementById('dist-name').value.trim();
         const code = document.getElementById('dist-code').value.trim();
         const type = document.getElementById('dist-type').value;
+        const quota = document.getElementById('dist-quota').value;
 
         if (!name || !code) return window.showAlert('선거구 이름과 코드를 모두 입력해주세요.');
         if (createdDistricts[code]) return window.showAlert('이미 등록된 선거구 코드입니다.');
+        if (!quota || quota < 1) return window.showAlert('선출 인원은 최소 1명 이상이어야 합니다.');
 
         const { data, error } = await supabase.from('districts').insert({
-            election_id: newElectionId, name, code, vote_type: type
+            election_id: newElectionId, 
+            name, 
+            code, 
+            vote_type: type,
+            quota: parseInt(quota) // 정수 저장
         }).select().single();
 
         if(error) return window.showAlert('추가 실패: ' + error.message);
@@ -422,29 +493,33 @@
         createdDistricts[code] = data.id;
         
         const li = document.createElement('li');
-        li.innerText = `${name} (${code}) - ${type}`;
+        li.style.marginBottom = '5px';
+        li.innerHTML = `<strong>${name}</strong> (${code}) : ${quota}명 선출 [${type === 'CANDIDATE' ? '인물' : '찬반'}]`;
         document.getElementById('district-list').appendChild(li);
         
+        // 입력창 초기화
         document.getElementById('dist-name').value = '';
         document.getElementById('dist-code').value = '';
+        document.getElementById('dist-quota').value = '1';
 
         const count = Object.keys(createdDistricts).length;
         const warningEl = document.getElementById('district-warning');
         
-        if (count < 3) {
+        // 임원 선거(1개 선거구)도 가능하므로 최소 조건 1개로 완화 또는 정책에 맞게 수정
+        if (count < 1) {
             warningEl.style.color = 'red';
-            warningEl.innerText = `⚠️ 선거구는 최소 3개 이상 등록해야 합니다. (현재 ${count}개)`;
+            warningEl.innerText = `⚠️ 선거구는 최소 1개 이상 등록해야 합니다.`;
             document.getElementById('step-3').style.display = 'none';
         } else {
             warningEl.style.color = 'green';
-            warningEl.innerText = `✅ 최소 조건 만족 (현재 ${count}개 등록됨)`;
+            warningEl.innerText = `✅ 선거구 등록됨 (현재 ${count}개)`;
             document.getElementById('step-3').style.display = 'block';
         }
     };
 
     window.uploadVoters = async () => {
-        if (Object.keys(createdDistricts).length < 3) {
-            return window.showAlert('선거구가 최소 3개 이상 등록되어야 명부를 업로드할 수 있습니다.');
+        if (Object.keys(createdDistricts).length < 1) {
+            return window.showAlert('선거구가 등록되지 않았습니다.');
         }
         const fileInput = document.getElementById('excel-file');
         if(fileInput.files.length === 0) return window.showAlert('엑셀 파일을 선택하세요.');
@@ -530,7 +605,7 @@
             container.innerHTML = '<p>데이터가 없습니다.</p>';
             return;
         }
-        // (기존 테이블 생성 로직과 동일, 생략 없이 유지됨)
+        
         const grouped = {};
         pendingVoters.forEach((item, index) => {
             const code = item._view_dist_code;
@@ -579,14 +654,17 @@
             if(insError) return window.showAlert('DB 저장 실패: ' + insError.message);
             
             window.showAlert('✅ 명부 등록이 완료되었습니다!\n관리자 페이지로 이동합니다.');
-            setTimeout(() => window.location.href = 'admin.html', 1000); // 1초 뒤 이동
+            setTimeout(() => window.location.href = 'admin.html', 1000); 
         });
     };
 
     window.openHistoryModal = async (el) => {
         const modal = document.getElementById('history-modal');
         document.getElementById('modal-title').innerText = el.title;
-        document.getElementById('modal-period').innerText = `${new Date(el.start_at).toLocaleDateString()} ~ ${new Date(el.end_at).toLocaleDateString()}`;
+        // 날짜 표기 변경 (투표 기간)
+        const vStart = el.vote_start_at ? new Date(el.vote_start_at).toLocaleDateString() : '-';
+        const vEnd = el.vote_end_at ? new Date(el.vote_end_at).toLocaleDateString() : '-';
+        document.getElementById('modal-period').innerText = `${vStart} ~ ${vEnd}`;
         
         try {
             const stats = await adminService.getTurnoutStats(el.id);
