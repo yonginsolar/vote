@@ -46,17 +46,23 @@ export class ElectionService {
         return this.memberProfile;
     }
 
-    /**
-     * [2] 현재 진행 중인 선거 정보 가져오기
+/**
+     * [2] 현재 활성화된 선거 정보 가져오기 (수정됨)
+     * - 수정 사유: 후보 등록 기간(NOMINATION)인 선거도 조회되어야 함
      */
     async getActiveElection() {
         const { data, error } = await supabase
             .from('elections')
             .select('*')
-            .eq('status', 'OPEN')
-            .single();
+            // 기존: .eq('status', 'OPEN') 
+            // 변경: 'OPEN' 이거나 'NOMINATION' 상태인 선거 조회
+            .in('status', ['OPEN', 'NOMINATION']) 
+            .maybeSingle(); // 결과가 없으면 에러 대신 null 반환 (안전장치)
 
-        if (error) return null;
+        if (error) {
+            console.error('선거 정보 조회 실패:', error);
+            return null;
+        }
         return data;
     }
 
