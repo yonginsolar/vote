@@ -4,22 +4,66 @@
     <meta charset="UTF-8">
     <title>후보자 등록 신청</title>
     <link rel="stylesheet" href="style.css">
-
+    <style>
+        /* 추가 스타일: 선거 선택 섹션 */
+        .selection-box {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .selection-box select {
+            width: 100%;
+            padding: 10px;
+            margin: 15px 0;
+            font-size: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn-check {
+            background-color: var(--primary-color, #10b981);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn-check:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
     <div class="container active">
         <h1>🙋‍♀️ 후보자 출마 신청</h1>
         
-        <div id="loading-msg" style="text-align:center;">자격 확인 중...</div>
+        <div id="selection-section" class="selection-box">
+            <h3 style="margin-top:0;">출마할 선거를 선택하세요</h3>
+            <div id="loading-msg">데이터 불러오는 중...</div>
+            
+            <div id="select-area" style="display:none;">
+                <select id="election-select">
+                    <option value="">선거를 선택해주세요</option>
+                </select>
+                <button id="btn-check-qual" class="btn-check">내 선거구 확인하기</button>
+            </div>
+            <p id="no-election-msg" style="display:none; color:#666;">현재 후보 등록 기간인 선거가 없습니다.</p>
+        </div>
 
         <form id="apply-form" style="display:none; margin-top:2rem;">
-            <div style="margin-bottom:1rem;">
-                <label><strong>출마 선거구</strong></label>
-                <input type="text" id="district-name" readonly 
-                       style="width:100%; padding:0.5rem; background:#eee; border:1px solid #ddd; margin-top:0.5rem;">
-                <input type="hidden" id="district-id">
-                <input type="hidden" id="election-id">
+            <div style="background:#f0f9ff; padding:1rem; border-radius:6px; margin-bottom:1.5rem; border:1px solid #bae6fd;">
+                <h3 style="margin:0 0 0.5rem 0; color:#0369a1;">📍 소속 선거구 확인</h3>
+                <p style="margin:0; color:#0c4a6e;">
+                    귀하는 <strong><span id="display-district-name" style="font-size:1.1rem; text-decoration:underline;"></span></strong> 선거구에 출마합니다.
+                </p>
             </div>
+
+            <input type="hidden" id="district-id">
+            <input type="hidden" id="election-id">
 
             <div style="margin-bottom:1rem;">
                 <label><strong>후보자 명 (표기용)</strong></label>
@@ -40,7 +84,10 @@
                           style="width:100%; padding:0.5rem; margin-top:0.5rem;"></textarea>
             </div>
 
-            <button type="submit" id="btn-submit" class="btn-submit">신청하기 (승인 후 노출)</button>
+            <div style="display:flex; gap:10px;">
+                <button type="button" onclick="location.reload()" class="btn-modal" style="flex:1; background:#999; color:white;">처음으로</button>
+                <button type="submit" id="btn-submit" class="btn-submit" style="flex:2;">신청서 제출</button>
+            </div>
         </form>
 
         <div id="already-applied" style="display:none; text-align:center; padding:2rem;">
@@ -53,8 +100,8 @@
     <div id="modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <h3 id="modal-title">알림</h3>
-            <p id="modal-msg"></p>
-            <div class="modal-buttons">
+            <p id="modal-msg" style="white-space: pre-wrap; line-height:1.5;"></p>
+            <div class="modal-buttons" id="modal-btn-area">
                 <button id="modal-btn-ok" class="btn-modal btn-confirm">확인</button>
             </div>
         </div>
@@ -63,109 +110,216 @@
     <script type="module">
         import { ElectionService, supabase } from './ElectionService.js';
         const service = new ElectionService();
-        const modalOverlay = document.getElementById('modal-overlay');
         
-async function init() {
-            console.log("🚀 [Debug] init 함수 시작");
+        // DOM 요소 캐싱
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMsg = document.getElementById('modal-msg');
+        const modalBtnArea = document.getElementById('modal-btn-area');
+
+        let currentUser = null;
+
+        async function init() {
             try {
-                // 1. 로그인 체크
-                const user = await service.initialize();
-                console.log("✅ [Debug] 로그인 유저:", user);
-                
-                if (!user) {
-                    alertModal('로그인이 필요합니다.', () => location.href = '/login.html');
+                // 1. 로그인 체크 (Service 활용)
+                currentUser = await service.initialize();
+                if (!currentUser) {
+                    showModal('알림', '로그인이 필요합니다.', () => location.href = '/login.html');
                     return;
                 }
 
-                // 2. 현재 선거 정보 확인
-                const election = await service.getActiveElection();
-                console.log("✅ [Debug] 활성 선거 정보:", election);
+                // 2. NOMINATION 상태인 선거 목록 가져오기
+                const { data: elections, error } = await supabase
+                    .from('elections')
+                    .select('id, title')
+                    .eq('status', 'NOMINATION')
+                    .order('created_at', { ascending: false });
 
-                if (!election) {
-                    alertModal('현재 후보 등록 기간인 선거가 없습니다.', () => history.back());
+                document.getElementById('loading-msg').style.display = 'none';
+
+                if (error) throw error;
+
+                if (!elections || elections.length === 0) {
+                    document.getElementById('no-election-msg').style.display = 'block';
                     return;
                 }
 
-                // 3. 내 선거구 정보 가져오기 (여기서 에러 발생 추정)
-                console.log(`🔎 [Debug] 선거구 조회 시도 - Election ID: ${election.id}, User ID: ${user.id}`);
-                
-                const info = await service.getMyBallotInfo(election.id);
-                console.log("✅ [Debug] 선거구 정보 조회 결과:", info);
-                
-                // 찬반 투표 선거구는 후보 등록 불가
-                if (info.district.vote_type === 'BINARY') {
-                    alertModal('귀하의 선거구는 찬반 투표 지역이므로 후보 등록이 불필요합니다.', () => history.back());
-                    return;
-                }
+                // 3. 드롭다운 렌더링
+                const selectEl = document.getElementById('election-select');
+                elections.forEach(el => {
+                    const option = document.createElement('option');
+                    option.value = el.id;
+                    option.innerText = el.title;
+                    selectEl.appendChild(option);
+                });
 
-                // 4. 이미 신청했는지 DB 체크
-                const { data: existing, error: dupError } = await supabase
+                document.getElementById('select-area').style.display = 'block';
+
+            } catch (e) {
+                showModal('오류', '초기화 중 오류 발생: ' + e.message);
+            }
+        }
+
+        // [이벤트] 자격 확인 버튼 클릭
+        document.getElementById('btn-check-qual').addEventListener('click', async () => {
+            const electionId = document.getElementById('election-select').value;
+            if (!electionId) {
+                showModal('알림', '출마할 선거를 선택해주세요.');
+                return;
+            }
+
+            const btn = document.getElementById('btn-check-qual');
+            btn.disabled = true;
+            btn.innerText = '확인 중...';
+
+            try {
+                // 1. 이미 후보 등록 했는지 체크
+                const { data: existing } = await supabase
                     .from('candidates')
                     .select('id')
-                    .eq('election_id', election.id)
-                    .eq('member_uuid', user.id)
+                    .eq('election_id', electionId)
+                    .eq('member_uuid', currentUser.id)
                     .maybeSingle();
 
-                if (dupError) {
-                    throw new Error('중복 확인 중 DB 오류: ' + dupError.message);
-                }
-
                 if (existing) {
-                    document.getElementById('loading-msg').style.display = 'none';
+                    document.getElementById('selection-section').style.display = 'none';
                     document.getElementById('already-applied').style.display = 'block';
                     return;
                 }
 
-                // 5. 폼 세팅
-                document.getElementById('district-name').value = info.district.name;
-                document.getElementById('district-id').value = info.district_id;
-                document.getElementById('election-id').value = election.id;
-                document.getElementById('cand-name').value = user.name || ''; // 이름 없을 경우 대비
+                // 2. 선거인 명부(election_voters)에서 내 선거구 조회
+                // (추측 금지: election_id, member_uuid 사용)
+                const { data: voterData, error: voterError } = await supabase
+                    .from('election_voters')
+                    .select('district_id')
+                    .eq('election_id', electionId)
+                    .eq('member_uuid', currentUser.id)
+                    .maybeSingle();
 
-                document.getElementById('loading-msg').style.display = 'none';
-                document.getElementById('apply-form').style.display = 'block';
+                if (voterError) throw voterError;
+
+                if (!voterData) {
+                    showModal('자격 없음', '귀하는 선택하신 선거의 선거인 명부에 포함되어 있지 않습니다.\n(관리자에게 문의하세요)');
+                    btn.disabled = false;
+                    btn.innerText = '내 선거구 확인하기';
+                    return;
+                }
+
+                // 3. 선거구 이름 조회 (districts 테이블)
+                // (안전하게 별도 쿼리로 조회)
+                const { data: districtData, error: distError } = await supabase
+                    .from('districts')
+                    .select('name, vote_type')
+                    .eq('id', voterData.district_id)
+                    .single();
+
+                if (distError) throw new Error('선거구 정보를 불러올 수 없습니다.');
+
+                // 4. 찬반 투표 지역인지 체크 (찬반은 후보 등록 불가)
+                if (districtData.vote_type === 'BINARY') {
+                    showModal('알림', `귀하의 선거구[${districtData.name}]는 찬반 투표 대상 지역이므로\n후보자 등록이 필요하지 않습니다.`);
+                    btn.disabled = false;
+                    btn.innerText = '내 선거구 확인하기';
+                    return;
+                }
+
+                // 5. 최종 확인 모달 띄우기
+                showConfirmModal(
+                    '선거구 확인', 
+                    `귀하의 소속 선거구는\n[ ${districtData.name} ] 입니다.\n\n해당 선거구로 후보 등록을 진행하시겠습니까?`,
+                    () => {
+                        // [YES] 폼 보여주기
+                        document.getElementById('selection-section').style.display = 'none';
+                        document.getElementById('apply-form').style.display = 'block';
+                        
+                        // 데이터 세팅
+                        document.getElementById('display-district-name').innerText = districtData.name;
+                        document.getElementById('district-id').value = voterData.district_id;
+                        document.getElementById('election-id').value = electionId;
+                        document.getElementById('cand-name').value = currentUser.name || '';
+                    }
+                );
+                
+                // 버튼 상태 복구 (모달 취소 시 대비)
+                btn.disabled = false;
+                btn.innerText = '내 선거구 확인하기';
 
             } catch (e) {
-                console.error("❌ [Debug] 에러 발생 상세:", e);
-                // 에러 메시지 상세 표시
-                alertModal('오류 발생: ' + e.message + '\n(콘솔 로그를 확인해주세요)', () => history.back());
+                showModal('오류', '확인 중 문제가 발생했습니다: ' + e.message);
+                btn.disabled = false;
+                btn.innerText = '내 선거구 확인하기';
             }
-        }
+        });
 
-        // 제출 처리
+        // [이벤트] 폼 제출
         document.getElementById('apply-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
             const btn = document.getElementById('btn-submit');
             btn.disabled = true;
-            btn.innerText = '업로드 중...';
+            btn.innerText = '제출 중...';
 
             try {
-                await service.applyCandidate({
+                const formObj = {
                     electionId: document.getElementById('election-id').value,
                     districtId: document.getElementById('district-id').value,
                     name: document.getElementById('cand-name').value,
                     photoFile: document.getElementById('cand-photo').files[0],
                     manifesto: document.getElementById('cand-manifesto').value
-                });
+                };
 
-                alertModal('후보 등록 신청이 완료되었습니다.\n관리자 승인 후 반영됩니다.', () => location.reload());
+                // Service의 applyCandidate 함수 재활용
+                await service.applyCandidate(formObj);
+
+                showModal('완료', '후보 등록 신청이 완료되었습니다.\n관리자 승인 후 반영됩니다.', () => location.reload());
 
             } catch (e) {
-                alertModal('신청 실패: ' + e.message);
+                showModal('실패', '신청 실패: ' + e.message);
                 btn.disabled = false;
-                btn.innerText = '신청하기';
+                btn.innerText = '신청서 제출';
             }
         });
 
-        // 모달 유틸
-        function alertModal(msg, callback) {
-            document.getElementById('modal-msg').innerText = msg;
-            modalOverlay.style.display = 'flex';
-            document.getElementById('modal-btn-ok').onclick = () => {
+        // --- 모달 유틸리티 ---
+
+        function showModal(title, msg, onOk = null) {
+            modalTitle.innerText = title;
+            modalMsg.innerText = msg;
+            modalBtnArea.innerHTML = '';
+            
+            const okBtn = document.createElement('button');
+            okBtn.className = 'btn-modal btn-confirm';
+            okBtn.innerText = '확인';
+            okBtn.onclick = () => {
                 modalOverlay.style.display = 'none';
-                if (callback) callback();
+                if (onOk) onOk();
             };
+            modalBtnArea.appendChild(okBtn);
+            modalOverlay.style.display = 'flex';
+        }
+
+        function showConfirmModal(title, msg, onYes) {
+            modalTitle.innerText = title;
+            modalMsg.innerText = msg;
+            modalBtnArea.innerHTML = '';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn-modal';
+            cancelBtn.style.background = '#ccc';
+            cancelBtn.style.marginRight = '10px';
+            cancelBtn.innerText = '취소';
+            cancelBtn.onclick = () => modalOverlay.style.display = 'none';
+
+            const okBtn = document.createElement('button');
+            okBtn.className = 'btn-modal btn-confirm';
+            okBtn.innerText = '등록 진행';
+            okBtn.onclick = () => {
+                modalOverlay.style.display = 'none';
+                if (onYes) onYes();
+            };
+
+            modalBtnArea.appendChild(cancelBtn);
+            modalBtnArea.appendChild(okBtn);
+            modalOverlay.style.display = 'flex';
         }
 
         init();
