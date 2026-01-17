@@ -65,25 +65,32 @@
         const service = new ElectionService();
         const modalOverlay = document.getElementById('modal-overlay');
         
-        async function init() {
+async function init() {
+            console.log("🚀 [Debug] init 함수 시작");
             try {
                 // 1. 로그인 체크
                 const user = await service.initialize();
+                console.log("✅ [Debug] 로그인 유저:", user);
+                
                 if (!user) {
                     alertModal('로그인이 필요합니다.', () => location.href = '/login.html');
                     return;
                 }
 
-                // 2. 현재 선거 정보 및 내 선거구 확인
+                // 2. 현재 선거 정보 확인
                 const election = await service.getActiveElection();
+                console.log("✅ [Debug] 활성 선거 정보:", election);
+
                 if (!election) {
                     alertModal('현재 후보 등록 기간인 선거가 없습니다.', () => history.back());
                     return;
                 }
 
-                // 3. 내 선거구 정보 가져오기 (getMyBallotInfo 재활용)
-                // 주의: getMyBallotInfo는 투표용이라 candidates도 가져오지만 여기선 district 정보만 씀
+                // 3. 내 선거구 정보 가져오기 (여기서 에러 발생 추정)
+                console.log(`🔎 [Debug] 선거구 조회 시도 - Election ID: ${election.id}, User ID: ${user.id}`);
+                
                 const info = await service.getMyBallotInfo(election.id);
+                console.log("✅ [Debug] 선거구 정보 조회 결과:", info);
                 
                 // 찬반 투표 선거구는 후보 등록 불가
                 if (info.district.vote_type === 'BINARY') {
@@ -92,12 +99,16 @@
                 }
 
                 // 4. 이미 신청했는지 DB 체크
-                const { data: existing } = await supabase
+                const { data: existing, error: dupError } = await supabase
                     .from('candidates')
                     .select('id')
                     .eq('election_id', election.id)
                     .eq('member_uuid', user.id)
                     .maybeSingle();
+
+                if (dupError) {
+                    throw new Error('중복 확인 중 DB 오류: ' + dupError.message);
+                }
 
                 if (existing) {
                     document.getElementById('loading-msg').style.display = 'none';
@@ -109,13 +120,15 @@
                 document.getElementById('district-name').value = info.district.name;
                 document.getElementById('district-id').value = info.district_id;
                 document.getElementById('election-id').value = election.id;
-                document.getElementById('cand-name').value = user.name; // 기본값: 본명
+                document.getElementById('cand-name').value = user.name || ''; // 이름 없을 경우 대비
 
                 document.getElementById('loading-msg').style.display = 'none';
                 document.getElementById('apply-form').style.display = 'block';
 
             } catch (e) {
-                alertModal('오류: ' + e.message, () => history.back());
+                console.error("❌ [Debug] 에러 발생 상세:", e);
+                // 에러 메시지 상세 표시
+                alertModal('오류 발생: ' + e.message + '\n(콘솔 로그를 확인해주세요)', () => history.back());
             }
         }
 
