@@ -404,7 +404,9 @@ async function loadElectionSelector() {
     }
 }
 
-// [수정된 init 함수 전체]
+// [admin.html] <script type="module"> 내부
+
+    // [수정된 init 함수 전체]
     async function init() {
         // 1. 관리자 권한 확인
         if (!await service.isAdmin()) {
@@ -412,13 +414,19 @@ async function loadElectionSelector() {
             return;
         }
 
-        // 2. [요청사항 반영] 헤더에 이메일 표시
+        // 2. [요청사항 적용] 헤더에 '관리자님' 대신 이메일 표시
         try {
-            // import { supabase } ... 가 상단에 있어야 함
+            // supabase.auth.getUser()로 현재 접속자 정보 가져오기
             const { data: { user } } = await supabase.auth.getUser();
+            
             if (user && user.email) {
                 const emailEl = document.getElementById('admin-email');
-                if(emailEl) emailEl.innerText = user.email; // "관리자님" 대신 이메일 표시
+                if (emailEl) {
+                    // 이메일 주소로 텍스트 변경
+                    emailEl.innerText = user.email; 
+                    // (옵션) 이메일이 너무 길 경우를 대비해 스타일 조정 가능
+                    // emailEl.style.fontSize = '0.9rem'; 
+                }
             }
         } catch (e) {
             console.warn("사용자 정보 로드 실패:", e);
@@ -433,7 +441,7 @@ async function loadElectionSelector() {
             try {
                 const elections = await service.getAllElections();
                 if (elections && elections.length > 0) {
-                    targetId = elections[0].id; // 가장 최신 선거
+                    targetId = elections[0].id; // 가장 최신 선거 자동 선택
                     console.log(`✅ 최신 선거 자동 선택: ${targetId}`);
                 }
             } catch (e) {
@@ -441,7 +449,7 @@ async function loadElectionSelector() {
             }
         }
 
-        // 4. 최종 검증
+        // 4. 최종 검증 (그래도 선거가 없으면 에러)
         if (!targetId) {
             window.showModal(
                 '데이터 없음', 
@@ -455,15 +463,16 @@ async function loadElectionSelector() {
         currentElectionId = targetId;
         localStorage.setItem('target_election_id', targetId);
 
-        // 6. 데이터 병렬 로드 (드롭다운 -> 정보 -> 후보 -> 로그)
-        await loadElectionSelector(); // 드롭다운 먼저 구성
+        // 6. 데이터 병렬 로드 
+        // (드롭다운 목록 -> 선거 상세 정보 -> 후보자 목록 -> 로그)
+        await loadElectionSelector(); // 상단 드롭다운 구성
         await Promise.all([
             loadElectionInfo(),
             loadCandidates(),
             loadLogs()
         ]);
         
-        // 7. 실시간 통계 시작
+        // 7. 실시간 통계 시작 (5초 주기)
         setInterval(updateLiveStats, 5000);
     }
 
