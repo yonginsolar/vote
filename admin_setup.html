@@ -325,21 +325,68 @@
         }
     }
 
+// [진단용] 초기화 코드
     async function init() {
-        // 1. 현재 세션 확인 (이미 로그인된 경우를 위해)
-        const { data: { session } } = await supabase.auth.getSession();
-        renderUI(session);
+        console.log("🚀 [1] 앱 초기화 시작");
 
-        // 2. 인증 상태 변화 감지 (매직링크 클릭 시 여기서 처리됨)
-        supabase.auth.onAuthStateChange((event, session) => {
-            console.log("Auth Event:", event); // 디버깅용
+        // 1. URL 해시 확인 (매직링크 토큰이 잘 왔는지)
+        const hash = window.location.hash;
+        console.log("🔎 [2] URL 해시 감지:", hash ? "있음 (토큰 포함 가능성)" : "없음");
+
+        // 2. 현재 세션 상태 조회
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+            console.error("❌ [3] 세션 조회 에러:", error);
+            window.showAlert("인증 에러 발생: " + error.message);
+            return;
+        }
+
+        console.log("👤 [3] 세션 상태:", session ? "로그인됨 (" + session.user.email + ")" : "비로그인 상태");
+
+        // 3. 상태 변화 리스너 등록
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log("🔄 [4] 인증 상태 변화 감지:", event);
             
             if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                renderUI(session);
+                console.log("✅ [5] 로그인 성공! UI 전환 시도");
+                await checkAdminAndRender(session);
             } else if (event === 'SIGNED_OUT') {
-                renderUI(null);
+                console.log("👋 [5] 로그아웃됨");
+                renderLoginScreen();
             }
         });
+
+        // 초기 상태에 따른 렌더링
+        if (session) {
+            await checkAdminAndRender(session);
+        } else {
+            renderLoginScreen();
+        }
+    }
+
+    // 로그인 화면 렌더링
+    function renderLoginScreen() {
+        document.getElementById('login-section').style.display = 'block';
+        document.getElementById('user-info-area').style.display = 'none';
+        document.getElementById('dashboard-section').style.display = 'none';
+        document.getElementById('setup-section').style.display = 'none';
+    }
+
+    // 관리자 여부 확인 후 대시보드 렌더링 (이 부분이 핵심)
+    async function checkAdminAndRender(session) {
+        // 일단 UI부터 전환해서 로그인이 됐는지 시각적으로 확인
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('user-info-area').style.display = 'flex';
+        document.getElementById('login-info').innerText = session.user.email;
+
+        // [중요] 여기서 DB 체크를 수행함
+        // 만약 '관리자 DB 하드코딩'이 문제라면 여기서 걸릴 것임.
+        // 현재는 별도 체크 없이 바로 대시보드를 보여줌.
+        
+        console.log("📊 [6] 대시보드 로드");
+        document.getElementById('dashboard-section').style.display = 'block';
+        loadDashboard();
     }
 
     // (참고: 기존 loadDashboard, handleStatusChange 등은 그대로 유지)
