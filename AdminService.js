@@ -170,16 +170,27 @@ export class AdminService {
         
         if (error) throw error;
     }
-async getElections() {
-    const { data, error } = await supabase
-        .from('elections')
-        .select('*')
-        .order('created_at', { ascending: false }); // 최신순
+    // [AdminService.js 내부]
 
-    if (error) {
-        console.error('선거 목록 로드 실패:', error);
-        return [];
+    // [통합] 모든 선거 이력 가져오기 (HTML에서 이 이름을 호출함)
+    async getAllElections() {
+        const { data, error } = await supabase
+            .from('elections')
+            .select('*')
+            .order('created_at', { ascending: false }); // 최신 선거 우선
+
+        if (error) {
+            console.error('선거 목록 로드 실패:', error);
+            // 에러 발생 시 빈 배열 반환하여 화면 멈춤 방지
+            return [];
+        }
+        return data || [];
     }
-    return data;
-}
+
+    // (참고) 만약 getElections() 라는 이름의 함수가 또 있다면 삭제하거나, 
+    // 아래와 같이 위 함수를 가리키게 하여 호환성을 유지하세요.
+    async getElections() {
+        return this.getAllElections();
+    }
+
 }
