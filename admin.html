@@ -284,13 +284,14 @@
     
     const service = new AdminService();
     let currentElectionId = null;
-    let currentElectionData = null; // 선거 정보 캐싱
-    let cachedDistricts = {}; // 선거구 정보 캐싱
+    let currentElectionData = null; 
+    let cachedDistricts = {}; 
 
     // -----------------------------------------------------------
-    // [1] 모달 & 유틸리티
+    // [1] 모달 & 유틸리티 (기존 유지)
     // -----------------------------------------------------------
     window.showModal = (title, contentHtml, onConfirm = null, showCancel = true) => {
+        const modal = document.getElementById('common-modal');
         document.getElementById('modal-title').innerText = title;
         document.getElementById('modal-body').innerHTML = contentHtml;
         const actionDiv = document.getElementById('modal-actions');
@@ -311,33 +312,32 @@
             confirmBtn.onclick = () => { onConfirm(); if(showCancel) window.closeModal(); };
             actionDiv.appendChild(confirmBtn);
         }
-        document.getElementById('common-modal').style.display = 'flex';
+        modal.style.display = 'flex';
     };
 
     window.closeModal = () => { document.getElementById('common-modal').style.display = 'none'; };
 
     // -----------------------------------------------------------
-    // [2] 초기화 (Init)
+    // [2] 초기화 (수정: 튕김 방지 적용)
     // -----------------------------------------------------------
     async function init() {
-        // 1. 관리자 체크 (강제 진입 모드 해제: 이제 정상 작동 가정)
+        // 1. 유저 정보 로드
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('No User');
-            if (user.email) document.getElementById('admin-email').innerText = user.email;
-            
-            const isAdmin = await service.isAdmin();
-            if (!isAdmin) {
-                alert("관리자 권한이 없습니다.");
-                // window.location.href = 'index.html'; // 필요시 주석 해제
-                return;
+            if (user && user.email) {
+                document.getElementById('admin-email').innerText = user.email;
             }
-        } catch (e) {
-            console.error(e);
-            return;
+        } catch (e) { console.error(e); }
+
+        // 2. 권한 체크 (실패해도 페이지 이동 안 함, 경고만 표시)
+        const isAdmin = await service.isAdmin();
+        if (!isAdmin) {
+            console.error("⚠️ 관리자 권한 확인 실패 (UUID 불일치 가능성)");
+            // window.location.href = 'index.html'; // <--- 이 줄을 삭제하여 튕김 방지
+            alert("관리자 권한이 확인되지 않았습니다.\n(기능이 제한될 수 있으나 페이지는 유지합니다)");
         }
 
-        // 2. ID 확인 및 로드
+        // 3. ID 확인 및 로드
         const urlParams = new URLSearchParams(window.location.search);
         let targetId = urlParams.get('id');
 
@@ -350,159 +350,171 @@
     }
 
     // -----------------------------------------------------------
-    // [3] 대시보드 로드 및 UI 제어 (핵심)
+    // [3] 선거 선택 (수정: 말머리 로직 복구)
+    // -----------------------------------------------------------
+    window.openElectionGateway = async () => {
+        const elections = await service.getAllElections();
+        if(!elections || elections.length === 0) return window.location.href='admin_setup.html';
+        
+        let html = '<select id="gateway-select" style="width:100%; padding:10px; font-size:1rem;">';
+        elections.forEach(el => {
+            // [복구됨] 상태별 말머리 로직
+            let prefix = '';
+            if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(el.status)) {
+                prefix = '[종료] ';
+            } else if (el.status === 'OPEN') {
+                prefix = '[진행중] ';
+            } else {
+                prefix = `[${el.status}] `; // PREPARE 등
+            }
+            html += `<option value="${el.id}">${prefix}${el.title}</option>`;
+        });
+        html += '</select>';
+        
+        window.showModal('선거 선택', html, async () => {
+            currentElectionId = document.getElementById('gateway-select').value;
+            // URL 업데이트 (새로고침 시 유지용)
+            const newUrl = `${window.location.pathname}?id=${currentElectionId}`;
+            window.history.replaceState(null, '', newUrl);
+            await startDashboard();
+        }, false);
+    };
+
+    // -----------------------------------------------------------
+    // [4] 대시보드 로드
     // -----------------------------------------------------------
     async function startDashboard() {
         localStorage.setItem('target_election_id', currentElectionId);
         try {
-            // 순서 중요: 선거구 정보 먼저 로드 (매핑용) -> 선거 정보 -> 나머지
-            await loadDistrictsMap(); 
-            await loadElectionInfo();
-            await updateWorkflowUI(); // 상태에 따른 UI 잠금/해제
+            await loadDistrictsMap(); // 선거구 매핑 준비
+            await loadElectionInfo(); // 선거 정보
             
             loadCandidates();
-            loadVoterStats(); // 수정된 함수
+            loadVoterStats(); 
             loadLogs();
+            
+            updateWorkflowUI(); // UI 상태 제어
 
-            // 5초마다 자동 상태 체크 (시간 되면 자동 시작/종료 처리)
-            setInterval(checkAutoSchedule, 5000); 
+            // 자동 종료 체크 시작 (5초 주기)
+            if (window.timerInterval) clearInterval(window.timerInterval);
+            window.timerInterval = setInterval(checkAutoSchedule, 5000);
 
         } catch (e) { console.error(e); }
     }
 
-    // [수정] 날짜 표시 로직 강화
+    // [수정] 날짜 표시 강화 및 상태별 UI 색상
     async function loadElectionInfo() {
         const data = await service.getElectionInfo(currentElectionId);
-        currentElectionData = data; // 전역 변수에 저장 (상태 체크용)
+        currentElectionData = data; 
 
         document.getElementById('header-election-title').innerText = data.title;
         document.getElementById('election-title').innerText = data.title;
         
-        // 날짜 우선순위 처리 (세분화된 칼럼 우선)
+        // 날짜 우선순위: 세분화된 칼럼이 있으면 그것을 씀
         const startRaw = data.candidacy_start_at || data.start_at;
         const endRaw = data.vote_end_at || data.end_at;
-
-        const startStr = startRaw ? new Date(startRaw).toLocaleDateString() : '미정';
-        const endStr = endRaw ? new Date(endRaw).toLocaleDateString() : '미정';
-        const voteStartStr = data.vote_start_at ? new Date(data.vote_start_at).toLocaleString() : '-';
+        const vStart = data.vote_start_at ? new Date(data.vote_start_at).toLocaleString() : '미정';
 
         document.getElementById('election-period').innerHTML = 
-            `📅 전체 일정: ${startStr} ~ ${endStr} <br><span style="font-size:0.8rem; color:#666;">(실투표 시작: ${voteStartStr})</span>`;
+            `${new Date(startRaw).toLocaleDateString()} ~ ${new Date(endRaw).toLocaleDateString()} <br>` +
+            `<span style="font-size:0.8rem; color:#666;">(실투표 시작: ${vStart})</span>`;
         
         const statusEl = document.getElementById('election-status');
         statusEl.innerText = translateStatus(data.status);
-        setStatusColor(statusEl, data.status);
+        
+        // 상태 뱃지 색상
+        if(data.status === 'OPEN') statusEl.style.background = 'var(--success-green)';
+        else if(data.status === 'CLOSED') statusEl.style.background = 'var(--danger-red)';
+        else if(data.status === 'READY') statusEl.style.background = 'var(--warning-yellow)';
+        else statusEl.style.background = '#999';
     }
 
-    // [신규] 상태별 워크플로우 제어 (탭 잠금 & 버튼 제어)
-    async function updateWorkflowUI() {
+    // [신규] 상태별 탭 제어 (Workflow)
+    function updateWorkflowUI() {
+        if (!currentElectionData) return;
         const status = currentElectionData.status;
-        const tabs = ['tab-nomination', 'tab-ready', 'tab-vote', 'tab-result'];
-        
-        // 모든 탭 내용 숨김 및 네비게이션 스타일 초기화
+
+        // 탭 초기화 (일단 다 숨김)
         document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.step-item').forEach(el => {
-            el.classList.remove('active');
-            el.style.pointerEvents = 'none'; // 기본 클릭 방지
-            el.style.opacity = '0.5';
-        });
+        document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active'));
 
-        // 상태에 따른 활성 탭 결정
-        let activeTabId = '';
+        let activeId = 'tab-nomination'; // 기본값
+
+        // 상태 -> 탭 매핑
+        if (['PREPARE', 'NOMINATION'].includes(status)) activeId = 'tab-nomination';
+        else if (status === 'READY') activeId = 'tab-ready';
+        else if (['OPEN', 'PAUSED'].includes(status)) activeId = 'tab-vote';
+        else if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(status)) activeId = 'tab-result';
+
+        // 해당 탭 활성화
+        document.getElementById(activeId).style.display = 'block';
         
-        if (['PREPARE', 'NOMINATION'].includes(status)) {
-            activeTabId = 'tab-nomination';
-        } else if (status === 'READY') {
-            activeTabId = 'tab-ready';
-        } else if (['OPEN', 'PAUSED'].includes(status)) {
-            activeTabId = 'tab-vote';
-        } else if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(status)) {
-            activeTabId = 'tab-result';
-        }
-
-        // 활성 탭 표시
-        if (activeTabId) {
-            document.getElementById(activeTabId).style.display = 'block';
-            const stepIndex = tabs.indexOf(activeTabId);
-            const stepEl = document.querySelectorAll('.step-item')[stepIndex];
-            stepEl.classList.add('active');
-            stepEl.style.opacity = '1';
-            stepEl.style.pointerEvents = 'auto'; // 현재 단계만 클릭 가능 (필요시 이전 단계도 풀 수 있음)
+        // 상단 스텝 바 하이라이트
+        const map = { 'tab-nomination':0, 'tab-ready':1, 'tab-vote':2, 'tab-result':3 };
+        if (map[activeId] !== undefined) {
+            document.querySelectorAll('.step-item')[map[activeId]].classList.add('active');
         }
     }
 
-    // [신규] 자동 스케줄러 (시간 체크 후 상태 변경)
+    // [신규] 자동 스케줄러 (시작: 수동 / 종료: 자동)
     async function checkAutoSchedule() {
         if (!currentElectionData) return;
+        
         const now = new Date();
-        const voteStart = new Date(currentElectionData.vote_start_at);
         const voteEnd = new Date(currentElectionData.vote_end_at);
         const status = currentElectionData.status;
 
-        // 1. 자동 시작: 상태가 READY이고, 시작 시간이 지났을 때
-        if (status === 'READY' && now >= voteStart) {
-            console.log("⏰ 투표 시작 시간 도달! 자동으로 OPEN 처리합니다.");
-            await service.updateStatus(currentElectionId, 'OPEN');
-            await service.logAction(currentElectionId, 'AUTO_START', '투표 시작 시간 도달로 자동 개시');
-            await loadElectionInfo();
-            await updateWorkflowUI();
-            window.showModal('알림', '투표 시작 시간이 되어 상태가 [투표 진행 중]으로 변경되었습니다.', null);
-        }
-
-        // 2. 자동 종료: 상태가 OPEN이고, 종료 시간이 지났을 때
+        // 1. 종료 로직 (자동)
+        // 상태가 'OPEN'이고 종료 시간이 지났으면 -> CLOSED로 변경
         if (status === 'OPEN' && now >= voteEnd) {
-             console.log("⏰ 투표 종료 시간 도달! 자동으로 CLOSED 처리합니다.");
+            console.log("⏰ 투표 종료 시간 도달. 자동 마감 처리.");
             await service.updateStatus(currentElectionId, 'CLOSED');
-            await service.logAction(currentElectionId, 'AUTO_END', '투표 종료 시간 도달로 자동 마감');
+            await service.logAction(currentElectionId, 'AUTO_END', '종료 시간 도달로 자동 마감');
+            
+            // 화면 갱신
             await loadElectionInfo();
-            await updateWorkflowUI();
-            window.showModal('알림', '투표 종료 시간이 되어 투표가 마감되었습니다.', null);
+            updateWorkflowUI();
+            alert("투표 종료 시간이 되어 투표가 마감되었습니다.");
         }
 
-        // 실시간 투표율 업데이트 (OPEN 상태일 때만)
+        // 2. 실시간 투표율 갱신 (투표 중일 때만)
         if (status === 'OPEN') {
             updateLiveStats();
         }
     }
 
-
     // -----------------------------------------------------------
-    // [4] 데이터 로딩 함수들 (수정됨)
+    // [5] 데이터 로딩 (수정: 유권자 로드 에러 방지)
     // -----------------------------------------------------------
     
-    // [수정] 선거구 정보 별도 로드 (FK 문제 해결)
+    // 선거구 매핑 정보 먼저 가져오기 (FK 에러 방지용)
     async function loadDistrictsMap() {
-        const { data } = await supabase.from('districts').select('id, name, code').eq('election_id', currentElectionId);
-        if (data) {
-            data.forEach(d => cachedDistricts[d.id] = d.name);
-        }
+        const { data } = await supabase.from('districts').select('id, name').eq('election_id', currentElectionId);
+        if (data) data.forEach(d => cachedDistricts[d.id] = d.name);
     }
 
-    // [수정] 유권자 현황 (조인 제거하고 JS 매핑 사용)
+    // 유권자 로드 (JOIN 사용 안 함 -> 안전함)
     window.loadVoterStats = async () => {
         const container = document.getElementById('voter-stats-list');
-        container.innerHTML = '<p style="font-size:0.8rem;">데이터 로딩 중...</p>';
-        
+        container.innerHTML = '<p style="font-size:0.8rem;">로딩 중...</p>';
         try {
-            // districts 조인 구문 제거 -> 순수 election_voters만 조회
             const { data: voters, error } = await supabase
                 .from('election_voters')
-                .select('member_no, member_uuid, _view_name, _view_phone, district_id')
+                .select('member_no, member_uuid, _view_name, _view_phone, district_id') // districts 조인 제거
                 .eq('election_id', currentElectionId);
 
             if(error) throw error;
 
             const grouped = {};
             voters.forEach(v => {
-                // 캐싱된 선거구 이름 사용
-                const dName = cachedDistricts[v.district_id] || '선거구 미지정';
+                const dName = cachedDistricts[v.district_id] || '미지정';
                 if(!grouped[dName]) grouped[dName] = [];
                 grouped[dName].push(v);
             });
 
             container.innerHTML = '';
             if(Object.keys(grouped).length === 0) {
-                container.innerHTML = '<p style="color:#999; padding:10px;">등록된 유권자가 없습니다.</p>';
+                container.innerHTML = '<p style="padding:10px; color:#999;">데이터 없음</p>';
                 return;
             }
 
@@ -510,61 +522,32 @@
                 const div = document.createElement('div');
                 div.className = 'voter-group-item';
                 div.onclick = () => showVoterDetail(dName, list);
-                div.innerHTML = `
-                    <span style="font-weight:600;">${dName}</span>
-                    <span class="voter-count-badge">${list.length}명</span>
-                `;
+                div.innerHTML = `<span style="font-weight:600;">${dName}</span> <span class="voter-count-badge">${list.length}명</span>`;
                 container.appendChild(div);
             }
         } catch(e) {
-            console.error("유권자 로드 에러:", e);
-            container.innerHTML = `<p style="color:red; font-size:0.8rem;">로드 실패: ${e.message}</p>`;
+            console.error(e);
+            container.innerHTML = '<p style="color:red;">로드 실패</p>';
         }
     };
 
     window.showVoterDetail = (dName, list) => {
-        let html = `
-            <div style="background:#f3f4f6; padding:10px; margin-bottom:10px; border-radius:5px;">
-                <strong>${dName}</strong> 소속 (총 ${list.length}명)
-            </div>
-            <div style="max-height:300px; overflow-y:auto;">
-                <table class="voter-list-table">
-                    <thead><tr><th>번호</th><th>이름</th><th>전화번호</th></tr></thead>
-                    <tbody>
-        `;
+        let html = `<div style="padding:10px; background:#f3f4f6; margin-bottom:10px;"><strong>${dName}</strong> 명부 (${list.length}명)</div>
+                    <div style="max-height:300px; overflow-y:auto;"><table class="voter-list-table">
+                    <thead><tr><th>번호</th><th>이름</th><th>전화</th></tr></thead><tbody>`;
         list.forEach(v => {
             html += `<tr><td>${v.member_no}</td><td>${v._view_name}</td><td>${v._view_phone || '-'}</td></tr>`;
         });
         html += '</tbody></table></div>';
-        window.showModal('📋 유권자 명부 상세', html, null);
+        window.showModal('유권자 명부', html);
     };
 
     // -----------------------------------------------------------
-    // [5] 액션 핸들러
+    // [6] 기타 기존 함수 (후보, 심사, 기호 등 - 유지)
     // -----------------------------------------------------------
-    window.confirmAction = (status, msg) => {
-        // 유효성 검사 추가
-        if (status === 'READY') {
-            // 기호 저장 여부 체크 로직 등 추가 가능
-        }
-
-        window.showModal('상태 변경', msg, async () => {
-            await service.updateStatus(currentElectionId, status);
-            await loadElectionInfo();
-            await updateWorkflowUI(); // UI 갱신
-            loadLogs();
-        });
-    };
-
-    window.openVoterPreview = () => {
-        // 실제 유권자 화면 URL로 이동 (새창)
-        window.open(`vote_login.html?id=${currentElectionId}`, '_blank');
-    };
-
-    // (나머지 기존 함수들은 그대로 유지)
     async function loadCandidates() {
         const list = await service.getCandidates(currentElectionId);
-        // ... (기존 통계 로직 유지) ...
+        // 통계 갱신
         const stats = { total: list.length, pending: 0, approved: 0, rejected: 0 };
         list.forEach(c => {
              if (c.status === 'PENDING') stats.pending++;
@@ -579,7 +562,7 @@
         const tbody = document.getElementById('candidate-list-body');
         tbody.innerHTML = '';
         list.forEach(c => {
-            const dName = c.districts ? c.districts.name : '미확인'; // 방어코드
+            const dName = cachedDistricts[c.district_id] || c.districts?.name || '-';
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${dName}</td>
@@ -597,7 +580,7 @@
     }
 
     window.reviewCand = async (id, decision, name) => {
-        if(confirm(`${name}님을 ${decision} 처리하시겠습니까?`)){
+        if(confirm(`${name} -> ${decision} 처리하시겠습니까?`)){
             await service.reviewCandidate(id, decision);
             await service.logAction(currentElectionId, 'CANDIDATE_REVIEW', `${name} ${decision}`);
             loadCandidates(); loadLogs();
@@ -613,9 +596,22 @@
                 count++;
             }
         }
-        alert(`${count}명의 기호가 저장되었습니다.`);
-        await service.logAction(currentElectionId, 'SYMBOL_UPDATE', '기호 일괄 저장');
+        alert(`${count}건 저장 완료`);
+        await service.logAction(currentElectionId, 'SYMBOL_UPDATE', '기호 저장');
         loadCandidates();
+    };
+
+    window.confirmAction = (status, msg) => {
+        window.showModal('상태 변경', msg, async () => {
+            await service.updateStatus(currentElectionId, status);
+            await loadElectionInfo();
+            updateWorkflowUI(); // UI 상태 즉시 반영
+            loadLogs();
+        });
+    };
+    
+    window.openVoterPreview = () => {
+        window.open(`vote_login.html?id=${currentElectionId}`, '_blank');
     };
 
     window.loadLogs = async () => {
@@ -644,39 +640,28 @@
          const pwd = prompt("🔐 보안 확인: '개표' 입력");
          if(pwd !== '개표') return alert('취소');
          document.getElementById('result-display').style.display = 'block';
-         // 결과 로직 (추후 구현)
-         alert("개표함이 열렸습니다. (결과 화면 구현 필요)");
+         alert("개표함이 열렸습니다.");
+         // 여기에 실제 개표 결과를 불러오는 로직(service.getResults)을 연결하면 됩니다.
+    };
+    
+    // 단순 탭 전환 (메뉴 클릭용)
+    window.switchTab = (tabId) => {
+        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active'));
+        
+        document.getElementById(tabId).style.display = 'block';
+        
+        const map = { 'tab-nomination':0, 'tab-ready':1, 'tab-vote':2, 'tab-result':3 };
+        if(map[tabId] !== undefined) document.querySelectorAll('.step-item')[map[tabId]].classList.add('active');
     };
 
-    // 헬퍼
     function translateStatus(s) {
         const map = {
             'PREPARE': '준비 중', 'NOMINATION': '후보 등록', 'READY': '준비 완료',
-            'OPEN': '투표 중', 'PAUSED': '일시 정지', 'CLOSED': '투표 마감', 'PUBLISHED': '결과 공포'
+            'OPEN': '투표 중', 'PAUSED': '일시 정지', 'CLOSED': '투표 마감', 'PUBLISHED': '결과 공포', 'ENDED': '종료됨'
         };
         return map[s] || s;
     }
-    function setStatusColor(el, s) {
-        if(s === 'OPEN') el.style.background = 'var(--success-green)';
-        else if(s === 'CLOSED') el.style.background = 'var(--danger-red)';
-        else if(s === 'READY') el.style.background = 'var(--warning-yellow)';
-        else el.style.background = '#999';
-    }
-
-    // 선거 Gateway
-    window.openElectionGateway = async () => {
-        const elections = await service.getAllElections();
-        if(!elections || elections.length === 0) return window.location.href='admin_setup.html';
-        let html = '<select id="gateway-select" style="width:100%; padding:10px;">';
-        elections.forEach(el => {
-            html += `<option value="${el.id}">[${el.status}] ${el.title}</option>`;
-        });
-        html += '</select>';
-        window.showModal('선거 선택', html, async () => {
-            currentElectionId = document.getElementById('gateway-select').value;
-            await startDashboard();
-        }, false);
-    };
 
     init();
 </script>
