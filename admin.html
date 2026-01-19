@@ -320,17 +320,58 @@
     // -----------------------------------------------------------
     // [2] 초기화 (Init)
     // -----------------------------------------------------------
+// -----------------------------------------------------------
+    // [2] 초기화 (Init) - 디버깅 모드 적용
+    // -----------------------------------------------------------
     async function init() {
-        // 권한 체크
-        try { if (!await service.isAdmin()) { alert('관리자 권한이 없습니다.'); window.location.href='index.html'; return; } } catch(e){ return; }
+        console.log("🚀 [Debug] 초기화 시작");
 
-        // 유저 정보 표시
+        // 1. 로그인된 유저 정보 확인
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error || !user) {
+            console.error("❌ [Debug] 유저 정보가 없습니다. (비로그인 상태)", error);
+            // 실제 배포시는 쫓아내야 하지만, 디버깅을 위해 로그만 남김
+            alert("로그인되지 않았습니다. 콘솔을 확인하세요.");
+            return;
+        }
+
+        console.log("👤 [Debug] 현재 로그인 유저 정보:");
+        console.log(" - Email:", user.email);
+        console.log(" - UUID:", user.id); 
+        // ⚠️ 이 UUID가 DB 테이블의 member_uuid 컬럼과 정확히 일치해야 합니다.
+
+        // 유저 정보 표시 UI 업데이트
+        if (user.email) document.getElementById('admin-email').innerText = user.email;
+
+        // 2. 권한 체크 디버깅
         try {
-            const { data } = await supabase.auth.getUser();
-            if (data.user && data.user.email) document.getElementById('admin-email').innerText = data.user.email;
-        } catch(e) {}
+            console.log("🔎 [Debug] service.isAdmin() 검사 시작...");
+            const isAdmin = await service.isAdmin();
+            
+            console.log("🕵️ [Debug] isAdmin() 결과:", isAdmin);
 
-        // 진입 경로 확인
+            if (!isAdmin) {
+                console.warn("⚠️ [Warning] 관리자 권한이 'false'입니다.");
+                console.warn("👉 원인 1: DB의 관리자 테이블에 위 UUID가 없거나 다릅니다.");
+                console.warn("👉 원인 2: RLS 정책이 조회를 막고 있습니다.");
+                
+                // 🚨 [수정] 디버깅을 위해 리다이렉트를 주석 처리했습니다.
+                // alert('관리자 권한이 없습니다.'); 
+                // window.location.href='index.html'; 
+                // return; 
+                
+                // 대신 강제로 진행시켜서 DB 에러를 화면에 띄웁니다.
+                console.log("🔧 [Debug] 강제로 대시보드 로드를 진행합니다...");
+            } else {
+                console.log("✅ [Success] 관리자 인증 성공!");
+            }
+        } catch(e) {
+            console.error("❌ [Error] isAdmin() 실행 중 에러:", e);
+            return;
+        }
+
+        // 3. 진입 경로 확인 및 대시보드 로드
         const urlParams = new URLSearchParams(window.location.search);
         let targetId = urlParams.get('id');
 
@@ -338,7 +379,6 @@
             currentElectionId = targetId;
             await startDashboard();
         } else {
-            // ID 없이 들어오면 선거 선택창 띄우기
             await openElectionGateway();
         }
     }
