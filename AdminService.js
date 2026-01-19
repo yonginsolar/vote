@@ -107,19 +107,7 @@ export class AdminService {
         if (error) throw error;
         return ballots; // 화면에서 가공해서 그림
     }
-    // [추가] 모든 선거 이력 가져오기 (최신순 정렬)
-    async getAllElections() {
-        const { data, error } = await supabase
-            .from('elections')
-            .select('*')
-            .order('created_at', { ascending: false }); // 최신 선거가 위로
 
-        if (error) {
-            console.error('선거 목록 로드 실패:', error);
-            return [];
-        }
-        return data;
-    }
     // [추가] 로그 기록 함수 (핵심)
     async logAction(electionId, actionType, details) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -182,11 +170,16 @@ export class AdminService {
         
         if (error) throw error;
     }
-    // AdminService.js 예시
 async getElections() {
-    // 실제 백엔드 API 엔드포인트에 맞춰 수정 필요
-    const response = await fetch('/api/elections'); 
-    if (!response.ok) throw new Error('목록 조회 실패');
-    return await response.json();
+    const { data, error } = await supabase
+        .from('elections')
+        .select('*')
+        .order('created_at', { ascending: false }); // 최신순
+
+    if (error) {
+        console.error('선거 목록 로드 실패:', error);
+        return [];
+    }
+    return data;
 }
 }
