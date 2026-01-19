@@ -458,6 +458,11 @@
             candidacy_end_at: candEnd,
             vote_start_at: voteStart,
             vote_end_at: voteEnd,
+            // 💡 제안하신 내용 적용:
+            // start_at -> 선거의 시작(후보 등록 시작일)
+            // end_at   -> 선거의 끝(투표 종료일)
+            start_at: candStart, 
+            end_at: voteEnd,
             status: 'PREPARE'
         }).select().single();
 
