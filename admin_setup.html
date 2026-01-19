@@ -373,20 +373,55 @@
         document.getElementById('setup-section').style.display = 'none';
     }
 
-    // 관리자 여부 확인 후 대시보드 렌더링 (이 부분이 핵심)
+// 기존 checkAdminAndRender 함수를 이 코드로 전체 교체
     async function checkAdminAndRender(session) {
-        // 일단 UI부터 전환해서 로그인이 됐는지 시각적으로 확인
-        document.getElementById('login-section').style.display = 'none';
-        document.getElementById('user-info-area').style.display = 'flex';
-        document.getElementById('login-info').innerText = session.user.email;
+        const userEmail = session.user.email;
 
-        // [중요] 여기서 DB 체크를 수행함
-        // 만약 '관리자 DB 하드코딩'이 문제라면 여기서 걸릴 것임.
-        // 현재는 별도 체크 없이 바로 대시보드를 보여줌.
-        
-        console.log("📊 [6] 대시보드 로드");
-        document.getElementById('dashboard-section').style.display = 'block';
-        loadDashboard();
+        try {
+            // [보안 로직 추가] DB에서 해당 이메일의 role 확인
+            // 전제: coop_members 테이블에 'email' 컬럼과 'role' 컬럼이 있어야 함
+            const { data: member, error } = await supabase
+                .from('coop_members')
+                .select('role, name') // 이름도 가져와서 환영 메시지에 활용 가능
+                .eq('email', userEmail)
+                .maybeSingle(); // 데이터가 없어도 에러 대신 null 반환
+
+            if (error) {
+                console.error("DB 조회 에러:", error);
+                throw new Error("관리자 정보를 확인하는 중 오류가 발생했습니다.");
+            }
+
+            // 1. DB에 해당 이메일이 없는 경우
+            if (!member) {
+                throw new Error("등록된 관리자 정보가 없습니다.\n관리자에게 문의하세요.");
+            }
+
+            // 2. role이 admin이 아닌 경우
+            // (대소문자 구분 없이 처리하려면 .toLowerCase() 추가 가능, 현재는 엄격하게 비교)
+            if (member.role !== 'admin') {
+                throw new Error("접근 권한이 없습니다.\n(Role: " + (member.role || 'None') + ")");
+            }
+
+            // 3. 인증 & 인가 성공 -> UI 전환
+            console.log(`✅ 관리자 확인됨: ${member.name} (${userEmail})`);
+            
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('user-info-area').style.display = 'flex';
+            
+            // 로그인 정보에 이름까지 표시해주면 더 좋음
+            document.getElementById('login-info').innerText = `${member.name || '관리자'} (${userEmail})`;
+
+            console.log("📊 [6] 대시보드 로드");
+            document.getElementById('dashboard-section').style.display = 'block';
+            loadDashboard();
+
+        } catch (e) {
+            // 권한 없음 또는 에러 발생 시 -> 강제 로그아웃 및 경고
+            console.warn("🚫 접근 거부:", e.message);
+            window.showAlert(e.message);
+            await supabase.auth.signOut(); // 세션 파기
+            renderLoginScreen(); // 로그인 화면으로 복귀
+        }
     }
 
     // (참고: 기존 loadDashboard, handleStatusChange 등은 그대로 유지)
