@@ -409,32 +409,62 @@
     // -----------------------------------------------------------
     // [3] 선거 선택 (수정: 말머리 로직 복구)
     // -----------------------------------------------------------
+// [수정] 선거 선택 창 (모달 닫기 기능 포함)
     window.openElectionGateway = async () => {
-        const elections = await service.getAllElections();
-        if(!elections || elections.length === 0) return window.location.href='admin_setup.html';
-        
-        let html = '<select id="gateway-select" style="width:100%; padding:10px; font-size:1rem;">';
-        elections.forEach(el => {
-            // [복구됨] 상태별 말머리 로직
-            let prefix = '';
-            if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(el.status)) {
-                prefix = '[종료] ';
-            } else if (el.status === 'OPEN') {
-                prefix = '[진행중] ';
-            } else {
-                prefix = `[${el.status}] `; // PREPARE 등
+        try {
+            // 1. 모든 선거 목록 가져오기
+            const elections = await service.getAllElections();
+            
+            // 2. 선거가 없으면 설정 페이지로 이동
+            if (!elections || elections.length === 0) {
+                alert("진행 중인 선거가 없습니다.");
+                window.location.href = 'admin_setup.html'; 
+                return;
             }
-            html += `<option value="${el.id}">${prefix}${el.title}</option>`;
-        });
-        html += '</select>';
-        
-        window.showModal('선거 선택', html, async () => {
-            currentElectionId = document.getElementById('gateway-select').value;
-            // URL 업데이트 (새로고침 시 유지용)
-            const newUrl = `${window.location.pathname}?id=${currentElectionId}`;
-            window.history.replaceState(null, '', newUrl);
-            await startDashboard();
-        }, false);
+            
+            // 3. 선택 박스 HTML 생성
+            let html = '<p style="margin-bottom:10px;">관리할 선거를 선택하세요.</p>';
+            html += '<select id="gateway-select" style="width:100%; padding:10px; font-size:1rem; border:1px solid #ddd; border-radius:6px;">';
+            
+            elections.forEach(el => {
+                // 상태별 말머리 처리 (기존 로직 유지)
+                let prefix = '';
+                if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(el.status)) {
+                    prefix = '[종료] ';
+                } else if (el.status === 'OPEN') {
+                    prefix = '[진행중] ';
+                } else {
+                    prefix = `[${el.status}] `;
+                }
+                
+                // 날짜 정보 포함
+                const startStr = el.start_at ? new Date(el.start_at).toLocaleDateString() : '미정';
+                html += `<option value="${el.id}">${prefix}${el.title} (${startStr}~)</option>`;
+            });
+            html += '</select>';
+            
+            // 4. 모달 띄우기
+            window.showModal('🗳️ 선거 선택', html, async () => {
+                const selectedId = document.getElementById('gateway-select').value;
+                if (selectedId) {
+                    currentElectionId = selectedId;
+                    
+                    // URL 업데이트 (새로고침 시 유지용)
+                    const newUrl = `${window.location.pathname}?id=${selectedId}`;
+                    window.history.replaceState(null, '', newUrl);
+                    
+                    // 대시보드 시작
+                    await startDashboard();
+                    
+                    // [중요] 확인 누르면 모달 닫기
+                    window.closeModal(); 
+                }
+            }, false); // 취소 버튼 없음 (강제 선택)
+
+        } catch (e) { 
+            console.error("선거 목록 로드 실패:", e);
+            alert("목록을 불러오지 못했습니다.");
+        }
     };
 
     // -----------------------------------------------------------
@@ -487,55 +517,109 @@
     }
 
     // [신규] 상태별 탭 제어 (Workflow)
+// [수정] 워크플로우 UI 제어 (순차 진행 강제화)
     function updateWorkflowUI() {
+        // 데이터가 없으면 중단
         if (!currentElectionData) return;
+        
         const status = currentElectionData.status;
 
-        // 탭 초기화 (일단 다 숨김)
-        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.step-item').forEach(el => el.classList.remove('active'));
+        // 1. 모든 탭 내용 숨기기 (초기화)
+        document.querySelectorAll('.tab-content').forEach(el => {
+            el.style.display = 'none';
+        });
 
-        let activeId = 'tab-nomination'; // 기본값
+        // 2. 상단 단계(Step) 버튼 초기화 (비활성화)
+        document.querySelectorAll('.step-item').forEach(el => {
+            el.classList.remove('active');
+            el.style.pointerEvents = 'none'; // 클릭 방지 (건너뛰기 금지)
+            el.style.opacity = '0.5';        // 흐릿하게 표시
+            el.style.cursor = 'not-allowed';
+        });
 
-        // 상태 -> 탭 매핑
-        if (['PREPARE', 'NOMINATION'].includes(status)) activeId = 'tab-nomination';
-        else if (status === 'READY') activeId = 'tab-ready';
-        else if (['OPEN', 'PAUSED'].includes(status)) activeId = 'tab-vote';
-        else if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(status)) activeId = 'tab-result';
-
-        // 해당 탭 활성화
-        document.getElementById(activeId).style.display = 'block';
+        // 3. 현재 상태에 따른 활성 탭 결정 (Strict Mode)
+        let activeTabId = '';
         
-        // 상단 스텝 바 하이라이트
-        const map = { 'tab-nomination':0, 'tab-ready':1, 'tab-vote':2, 'tab-result':3 };
-        if (map[activeId] !== undefined) {
-            document.querySelectorAll('.step-item')[map[activeId]].classList.add('active');
+        // 상태별로 보여줄 탭 매핑
+        switch (status) {
+            case 'PREPARE':      // 준비 중
+            case 'NOMINATION':   // 후보 등록
+                activeTabId = 'tab-nomination';
+                break;
+                
+            case 'READY':        // 준비 완료 (공포)
+                activeTabId = 'tab-ready';
+                break;
+                
+            case 'OPEN':         // 투표 중
+            case 'PAUSED':       // 일시 정지
+                activeTabId = 'tab-vote';
+                break;
+                
+            case 'CLOSED':       // 투표 마감
+            case 'PUBLISHED':    // 결과 공포
+            case 'ENDED':        // 완전 종료
+                activeTabId = 'tab-result';
+                break;
+                
+            default:
+                activeTabId = 'tab-nomination'; // 기본값
+        }
+
+        // 4. 결정된 탭만 화면에 표시
+        if (activeTabId) {
+            const targetTab = document.getElementById(activeTabId);
+            if (targetTab) targetTab.style.display = 'block';
+            
+            // 상단 스텝바 해당 단계 하이라이트
+            const map = { 'tab-nomination':0, 'tab-ready':1, 'tab-vote':2, 'tab-result':3 };
+            const stepIndex = map[activeTabId];
+            
+            if (stepIndex !== undefined) {
+                const stepEl = document.querySelectorAll('.step-item')[stepIndex];
+                stepEl.classList.add('active'); // 색상 활성화
+                stepEl.style.opacity = '1';     // 불투명
+                // stepEl.style.pointerEvents = 'auto'; // (필요 시 주석 해제: 현재 단계만 클릭 허용)
+            }
         }
     }
 
-    // [신규] 자동 스케줄러 (시작: 수동 / 종료: 자동)
+// [수정] 자동 스케줄러 (투표 자동 종료 감지)
     async function checkAutoSchedule() {
-        if (!currentElectionData) return;
+        // 데이터가 없거나 선거 ID가 없으면 실행하지 않음
+        if (!currentElectionData || !currentElectionId) return;
         
         const now = new Date();
         const voteEnd = new Date(currentElectionData.vote_end_at);
         const status = currentElectionData.status;
 
-        // 1. 종료 로직 (자동)
-        // 상태가 'OPEN'이고 종료 시간이 지났으면 -> CLOSED로 변경
+        // 1. 자동 종료 로직
+        // 조건: 현재 '투표 중(OPEN)' 상태이고, 종료 시간이 지났을 때
         if (status === 'OPEN' && now >= voteEnd) {
-            console.log("⏰ 투표 종료 시간 도달. 자동 마감 처리.");
-            await service.updateStatus(currentElectionId, 'CLOSED');
-            await service.logAction(currentElectionId, 'AUTO_END', '종료 시간 도달로 자동 마감');
+            console.log(`⏰ [Auto Close] 투표 종료 시간(${voteEnd.toLocaleString()}) 도달.`);
             
-            // 화면 갱신
-            await loadElectionInfo();
-            updateWorkflowUI();
-            alert("투표 종료 시간이 되어 투표가 마감되었습니다.");
+            try {
+                // DB 상태 업데이트 (CLOSED)
+                await service.updateStatus(currentElectionId, 'CLOSED');
+                
+                // 로그 기록
+                await service.logAction(currentElectionId, 'AUTO_END', '투표 시간 종료로 시스템 자동 마감');
+                
+                // UI 즉시 갱신 (정보 다시 로드 -> 워크플로우 UI 반영)
+                await loadElectionInfo();
+                updateWorkflowUI();
+                
+                // 관리자에게 알림
+                alert("약속된 투표 종료 시간이 되어\n시스템이 투표를 자동으로 마감했습니다.");
+                
+            } catch (e) {
+                console.error("자동 종료 처리 중 오류:", e);
+            }
         }
 
-        // 2. 실시간 투표율 갱신 (투표 중일 때만)
+        // 2. 실시간 투표율 갱신 (투표 중일 때만 작동)
         if (status === 'OPEN') {
+            // UI 업데이트 함수 호출 (기존 함수 재사용)
             updateLiveStats();
         }
     }
@@ -696,12 +780,53 @@
         loadCandidates();
     };
 
-    window.confirmAction = (status, msg) => {
-        window.showModal('상태 변경', msg, async () => {
-            await service.updateStatus(currentElectionId, status);
-            await loadElectionInfo();
-            updateWorkflowUI(); // UI 상태 즉시 반영
-            loadLogs();
+// [수정] 액션 확인 및 실행 (시간 체크 기능 포함)
+    window.confirmAction = (nextStatus, msg) => {
+        // 1. 투표 시작(OPEN) 시도 시 시간 체크 로직
+        if (nextStatus === 'OPEN') {
+            // 시작 시간이 설정되어 있는지 확인
+            if (!currentElectionData.vote_start_at) {
+                alert("오류: 투표 시작 시간이 설정되지 않았습니다.");
+                return;
+            }
+
+            const now = new Date();
+            const startAt = new Date(currentElectionData.vote_start_at);
+
+            // 현재 시간이 시작 시간보다 이전인 경우 (아직 때가 아님)
+            if (now < startAt) {
+                // 남은 시간 계산 (분 단위)
+                const diffMin = Math.ceil((startAt - now) / (1000 * 60));
+                
+                // 경고 및 확인 (강제 진행 여부 묻기)
+                const userConfirmed = confirm(
+                    `⚠️ 주의: 아직 투표 시작 시간이 아닙니다.\n` +
+                    `설정된 시작 시간: ${startAt.toLocaleString()}\n` +
+                    `약 ${diffMin}분 남았습니다.\n\n` +
+                    `그래도 지금 강제로 투표를 시작하시겠습니까?`
+                );
+                
+                // 취소하면 중단
+                if (!userConfirmed) return;
+            }
+        }
+
+        // 2. 상태 변경 실행 (모달 띄우기)
+        window.showModal('상태 변경 확인', msg, async () => {
+            try {
+                // 상태 업데이트 요청
+                await service.updateStatus(currentElectionId, nextStatus);
+                
+                // 데이터 갱신
+                await loadElectionInfo(); // 선거 정보 다시 로드
+                updateWorkflowUI();       // 탭/UI 상태 변경
+                loadLogs();               // 로그 갱신
+                
+                // 모달 닫기는 showModal 내부 콜백에서 처리됨
+            } catch (e) {
+                console.error("상태 변경 실패:", e);
+                alert("상태 변경 중 오류가 발생했습니다: " + e.message);
+            }
         });
     };
     
