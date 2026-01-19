@@ -182,4 +182,11 @@ export class AdminService {
         
         if (error) throw error;
     }
+    // AdminService.js 예시
+async getElections() {
+    // 실제 백엔드 API 엔드포인트에 맞춰 수정 필요
+    const response = await fetch('/api/elections'); 
+    if (!response.ok) throw new Error('목록 조회 실패');
+    return await response.json();
+}
 }
