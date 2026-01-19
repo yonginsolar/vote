@@ -5,15 +5,24 @@ export class AdminService {
     // [보안] 관리자 여부 확인 (화면 진입 시 체크용)
     // 실제 보안은 DB RLS가 막아주지만, UX를 위해 1차 체크
 // [수정] 관리자 여부 확인 (DB의 is_admin 함수를 직접 호출하여 정확도 100% 확보)
+// [AdminService.js 내부]
+
+    // [수정] 관리자 및 선관위 위원 권한 확인
     async isAdmin() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return false;
 
-        // DB에 정의된 is_admin() 함수 실행
-        const { data, error } = await supabase.rpc('is_admin');
+        // DB의 새로운 함수(is_election_admin) 호출
+        // 이 함수는 coop_officials 테이블을 조회하여 'election_comm' 또는 'admin'인지 확인합니다.
+        const { data, error } = await supabase.rpc('is_election_admin');
         
-        // 에러 없고, 결과가 true면 관리자임
-        return !error && data; 
+        if (error) {
+            console.error("권한 체크 실패:", error);
+            return false;
+        }
+        
+        // true면 권한 있음, false면 권한 없음
+        return data; 
     }
 
     // 1. 선거 정보 및 현재 상태 가져오기
