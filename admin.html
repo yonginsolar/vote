@@ -317,35 +317,92 @@
 
     window.closeModal = () => { document.getElementById('common-modal').style.display = 'none'; };
 
-    // -----------------------------------------------------------
-    // [2] 초기화 (수정: 튕김 방지 적용)
+// -----------------------------------------------------------
+    // [수정된 init 함수] 관리자 및 선관위원 권한 검증 로직
     // -----------------------------------------------------------
     async function init() {
-        // 1. 유저 정보 로드
+        // [보안] 검증 시작 전까지 화면 숨김 (CSS가 없어도 JS로 강제 적용)
+        document.body.style.display = 'none';
+
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user && user.email) {
-                document.getElementById('admin-email').innerText = user.email;
+            // 1. 유저 정보 획득
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            
+            if (authError || !user || !user.email) {
+                throw new Error("로그인 정보가 없습니다.");
             }
-        } catch (e) { console.error(e); }
 
-        // 2. 권한 체크 (실패해도 페이지 이동 안 함, 경고만 표시)
-        const isAdmin = await service.isAdmin();
-        if (!isAdmin) {
-            console.error("⚠️ 관리자 권한 확인 실패 (UUID 불일치 가능성)");
-            // window.location.href = 'index.html'; // <--- 이 줄을 삭제하여 튕김 방지
-            alert("관리자 권한이 확인되지 않았습니다.\n(기능이 제한될 수 있으나 페이지는 유지합니다)");
-        }
+            const userEmail = user.email;
+            // 화면에 이메일 표시 (엘리먼트가 있을 때만)
+            const emailEl = document.getElementById('admin-email');
+            if (emailEl) emailEl.innerText = userEmail;
 
-        // 3. ID 확인 및 로드
-        const urlParams = new URLSearchParams(window.location.search);
-        let targetId = urlParams.get('id');
+            // 2. 권한 검증 (DB 조회 2단계)
+            let isAuthorized = false;
+            let roleName = '';
 
-        if (targetId) {
-            currentElectionId = targetId;
-            await startDashboard();
-        } else {
-            await openElectionGateway();
+            // 2-1. 관리자(admin) 체크 (coop_members 테이블)
+            const { data: memberData, error: memberError } = await supabase
+                .from('coop_members')
+                .select('role, member_id')
+                .eq('email', userEmail)
+                .maybeSingle();
+
+            if (memberError) console.error("Member DB Error:", memberError);
+
+            if (memberData) {
+                // 관리자라면 즉시 통과
+                if (memberData.role === 'admin') {
+                    isAuthorized = true;
+                    roleName = '관리자';
+                } 
+                // 관리자가 아니고 member_id가 있다면 선관위원 여부 체크
+                else if (memberData.member_id) {
+                    // 2-2. 선관위원(election_comm) 체크 (coop_officials 테이블)
+                    // 조건: member_id 일치 AND category='election_comm' AND status='active'
+                    const { data: officialData, error: officialError } = await supabase
+                        .from('coop_officials')
+                        .select('id')
+                        .eq('member_id', memberData.member_id)
+                        .eq('category', 'election_comm')
+                        .eq('status', 'active')
+                        .maybeSingle();
+
+                    if (officialData) {
+                        isAuthorized = true;
+                        roleName = '선거관리위원';
+                    }
+                }
+            }
+
+            // 3. 결과 처리
+            if (isAuthorized) {
+                // [성공] 화면 공개
+                console.log(`✅ 접속 허용: ${roleName}`);
+                document.body.style.display = 'block'; 
+                
+                // URL 파라미터 확인 후 대시보드 로드
+                const urlParams = new URLSearchParams(window.location.search);
+                let targetId = urlParams.get('id');
+                if (targetId) {
+                    currentElectionId = targetId;
+                    await startDashboard();
+                } else {
+                    await openElectionGateway();
+                }
+
+            } else {
+                // [실패] 내용 파기 및 경고 후 내보내기
+                document.body.innerHTML = ''; // 보안을 위해 DOM 내용 삭제
+                alert("🚫 접근 권한이 없습니다.\n(관리자 또는 활성 선관위원만 접속 가능합니다)");
+                window.location.href = 'index.html'; 
+            }
+
+        } catch (e) {
+            console.error("Critical Auth Error:", e);
+            document.body.innerHTML = '';
+            alert("인증 오류가 발생했습니다. 다시 로그인해주세요.");
+            window.location.href = 'index.html';
         }
     }
 
