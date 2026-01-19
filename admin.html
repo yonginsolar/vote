@@ -140,17 +140,22 @@
 </head>
 <body>
 
-    <header>
-        <div class="header-left">
-            </div>
-        <div class="header-center">
-            <h2>🛡️ 통합 선거 관리 시스템</h2>
+<header>
+    <div class="header-left">
         </div>
-        <div class="header-right">
-            <span id="admin-email" style="font-weight:600; color:#374151;">관리자님</span>
-            <button class="btn btn-outline btn-sm" onclick="window.close()">나가기</button>
-        </div>
-    </header>
+    <div class="header-center" style="display:flex; flex-direction:column; align-items:center;">
+        <span style="font-size:0.8rem; color:#666; margin-bottom:4px;">현재 관리 중인 선거</span>
+        
+        <select id="election-selector" onchange="changeElection(this.value)" 
+                style="font-size:1.2rem; font-weight:bold; padding:5px 10px; border:1px solid #ddd; border-radius:8px; color:var(--primary-blue); cursor:pointer;">
+            <option value="" disabled>선거를 선택하세요</option>
+            </select>
+    </div>
+    <div class="header-right">
+        <span id="admin-email" style="font-weight:600; color:#374151;">관리자님</span>
+        <button class="btn btn-outline btn-sm" onclick="window.close()">나가기</button>
+    </div>
+</header>
 
     <div class="admin-container">
         
@@ -345,67 +350,121 @@
             document.getElementById('common-modal').style.display = 'none';
         };
 
-// [초기화] - Zero Base 재설계
-async function init() {
-    // 1. 관리자 권한 확인
-    if (!await service.isAdmin()) {
-        window.showModal('접근 거부', '관리자 권한이 확인되지 않았습니다.', () => window.close());
-        return;
-    }
+        // 1. 선거 변경 핸들러 (드롭다운 선택 시 실행)
+window.changeElection = async (newId) => {
+    if (!newId) return;
 
-    // 2. 선거 ID 식별 단계 (순차적 Fallback)
-    const urlParams = new URLSearchParams(window.location.search);
-    
-    // 우선순위 1: URL 파라미터 (?id=...)
-    // 우선순위 2: 로컬 스토리지 (이전에 작업하던 선거)
-    let targetId = urlParams.get('id') || localStorage.getItem('target_election_id');
+    // 선택된 ID로 전역 변수 업데이트
+    currentElectionId = newId;
+    localStorage.setItem('target_election_id', newId);
 
-    // 우선순위 3: 둘 다 없다면 서버에서 '최신 선거' 자동 조회 (신규 로직)
-    if (!targetId) {
-        try {
-            // 주의: AdminService에 getRecentElection 혹은 getMyElections 메서드가 필요합니다.
-            // 여기서는 getElectionInfo 대신 목록을 가져와 첫 번째 것을 선택하는 로직으로 예시를 듭니다.
-            // 만약 service에 해당 기능이 없다면, service.getElections() 같은 함수를 구현해야 합니다.
-            
-            // (가정) 현재 관리자가 접근 가능한 선거 목록을 가져옴
-            const elections = await service.getElections(); 
-            
-            if (elections && elections.length > 0) {
-                // 가장 최근(혹은 첫 번째) 선거를 자동으로 선택
-                targetId = elections[0].id;
-                
-                // UX 개선: 자동으로 선택된 선거를 로컬 스토리지에 저장해 다음 접속 시 유지
-                localStorage.setItem('target_election_id', targetId);
-                console.log(`[System] 최신 선거 자동 선택됨: ${targetId}`);
-            }
-        } catch (e) {
-            console.warn("선거 목록을 불러오는 중 오류 발생:", e);
-        }
-    }
+    // URL도 보기 좋게 변경 (페이지 리로드는 안 함)
+    const newUrl = `${window.location.pathname}?id=${newId}`;
+    window.history.pushState({ path: newUrl }, '', newUrl);
 
-    // 3. 최종 검증
-    if (!targetId) {
-        window.showModal(
-            '선거 정보 없음', 
-            '관리할 수 있는 선거가 없습니다.<br>새로운 선거를 생성하거나 관리자에게 문의하세요.', 
-            () => window.close() // 혹은 선거 생성 페이지로 이동
-        );
-        return;
-    }
-
-    // 4. 전역 변수 설정 및 데이터 로드
-    currentElectionId = targetId;
-
-    // 비동기 병렬 처리로 로딩 속도 최적화
+    // 데이터 새로고침 (화면 갱신)
     await Promise.all([
         loadElectionInfo(),
         loadCandidates(),
         loadLogs()
     ]);
     
-    // 실시간 통계 시작
-    setInterval(updateLiveStats, 5000);
+    // 알림
+    console.log(`✅ 선거 전환 완료: ID ${newId}`);
+};
+
+// 2. 선거 목록 불러오기 및 드롭다운 세팅 함수
+async function loadElectionSelector() {
+    try {
+        // 모든 선거 목록 가져오기 (AdminService에 getAllElections가 있어야 함)
+        const elections = await service.getAllElections(); 
+        const selector = document.getElementById('election-selector');
+        
+        selector.innerHTML = ''; // 초기화
+
+        elections.forEach(el => {
+            const option = document.createElement('option');
+            option.value = el.id;
+            
+            // 텍스트: [상태] 선거제목 (기간)
+            // 날짜가 없으면 '미정' 처리
+            const start = el.start_at ? new Date(el.start_at).toLocaleDateString() : '날짜미정';
+            option.text = `[${el.status}] ${el.title} (${start}~)`;
+            
+            selector.appendChild(option);
+        });
+
+        // 현재 선택된 선거를 드롭다운에서도 선택 상태로 만듦
+        if (currentElectionId) {
+            selector.value = currentElectionId;
+        }
+    } catch (e) {
+        console.error("선거 목록 로드 실패:", e);
+    }
 }
+
+// [수정된 init 함수 전체]
+    async function init() {
+        // 1. 관리자 권한 확인
+        if (!await service.isAdmin()) {
+            window.showModal('접근 거부', '관리자 권한이 확인되지 않았습니다.', () => window.close());
+            return;
+        }
+
+        // 2. [요청사항 반영] 헤더에 이메일 표시
+        try {
+            // import { supabase } ... 가 상단에 있어야 함
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user && user.email) {
+                const emailEl = document.getElementById('admin-email');
+                if(emailEl) emailEl.innerText = user.email; // "관리자님" 대신 이메일 표시
+            }
+        } catch (e) {
+            console.warn("사용자 정보 로드 실패:", e);
+        }
+
+        // 3. 선거 ID 식별 (URL -> 스토리지 -> 서버 최신순)
+        const urlParams = new URLSearchParams(window.location.search);
+        let targetId = urlParams.get('id') || localStorage.getItem('target_election_id');
+
+        // ID가 없으면 서버에서 최신 선거 자동 탐색
+        if (!targetId) {
+            try {
+                const elections = await service.getAllElections();
+                if (elections && elections.length > 0) {
+                    targetId = elections[0].id; // 가장 최신 선거
+                    console.log(`✅ 최신 선거 자동 선택: ${targetId}`);
+                }
+            } catch (e) {
+                console.warn("선거 목록 자동 조회 실패:", e);
+            }
+        }
+
+        // 4. 최종 검증
+        if (!targetId) {
+            window.showModal(
+                '데이터 없음', 
+                '관리할 수 있는 선거가 없습니다.<br>새 선거를 생성해주세요.', 
+                () => window.close()
+            );
+            return;
+        }
+
+        // 5. 전역 변수 설정 및 저장
+        currentElectionId = targetId;
+        localStorage.setItem('target_election_id', targetId);
+
+        // 6. 데이터 병렬 로드 (드롭다운 -> 정보 -> 후보 -> 로그)
+        await loadElectionSelector(); // 드롭다운 먼저 구성
+        await Promise.all([
+            loadElectionInfo(),
+            loadCandidates(),
+            loadLogs()
+        ]);
+        
+        // 7. 실시간 통계 시작
+        setInterval(updateLiveStats, 5000);
+    }
 
         // [정보 로드]
         async function loadElectionInfo() {
