@@ -301,19 +301,48 @@
     // ----------------------------------------------------------------
     // [2] 초기화 및 대시보드
     // ----------------------------------------------------------------
-    async function init() {
-        const { data: { session } } = await supabase.auth.getSession();
+// ----------------------------------------------------------------
+    // [2] 초기화 및 대시보드 (수정됨: onAuthStateChange 적용)
+    // ----------------------------------------------------------------
+    
+    // UI 상태를 변경하는 함수 분리
+    function renderUI(session) {
         if (session) {
             document.getElementById('login-section').style.display = 'none';
             document.getElementById('user-info-area').style.display = 'flex';
             document.getElementById('login-info').innerText = session.user.email;
             document.getElementById('dashboard-section').style.display = 'block';
+            
+            // 기존 setup-section은 숨김 (상태 유지 로직이 필요하다면 별도 처리 필요)
             document.getElementById('setup-section').style.display = 'none';
+            
             loadDashboard(); 
         } else {
             document.getElementById('login-section').style.display = 'block';
+            document.getElementById('user-info-area').style.display = 'none';
+            document.getElementById('dashboard-section').style.display = 'none';
+            document.getElementById('setup-section').style.display = 'none';
         }
     }
+
+    async function init() {
+        // 1. 현재 세션 확인 (이미 로그인된 경우를 위해)
+        const { data: { session } } = await supabase.auth.getSession();
+        renderUI(session);
+
+        // 2. 인증 상태 변화 감지 (매직링크 클릭 시 여기서 처리됨)
+        supabase.auth.onAuthStateChange((event, session) => {
+            console.log("Auth Event:", event); // 디버깅용
+            
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                renderUI(session);
+            } else if (event === 'SIGNED_OUT') {
+                renderUI(null);
+            }
+        });
+    }
+
+    // (참고: 기존 loadDashboard, handleStatusChange 등은 그대로 유지)
 
     async function loadDashboard() {
         const elections = await adminService.getAllElections();
