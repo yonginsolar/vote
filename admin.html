@@ -332,7 +332,7 @@
         window.location.href = 'admin_setup.html';
     };
 
-    // [모달] 공통 모달
+    // [모달] 공통 모달 (cancelButton 숨김 옵션 추가)
     window.showModal = (title, contentHtml, onConfirm = null, showCancel = true) => {
         document.getElementById('modal-title').innerText = title;
         document.getElementById('modal-body').innerHTML = contentHtml;
@@ -350,12 +350,10 @@
         if (onConfirm) {
             const confirmBtn = document.createElement('button');
             confirmBtn.className = 'btn btn-primary';
-            confirmBtn.innerText = '확인 (진입)';
+            confirmBtn.innerText = '확인';
             confirmBtn.onclick = () => { 
                 onConfirm(); 
-                // 모달 닫기는 onConfirm 내부 로직에 맡기거나 여기서 닫음
-                // 선거 선택 시에는 로딩 후 닫아야 하므로 상황에 따라 다름
-                window.closeModal(); 
+                if (showCancel) window.closeModal(); // 강제 모달이 아닐 때만 닫기
             };
             actionDiv.appendChild(confirmBtn);
         }
@@ -368,17 +366,29 @@
     };
 
     // -----------------------------------------------------------
-    // [2] 초기화 (Init) - 게이트웨이 로직 적용
+    // [2] 초기화 (Init) - 로그인 방어 로직 추가
     // -----------------------------------------------------------
     async function init() {
         // 1. 관리자 권한 확인
         try {
-            if (!await service.isAdmin()) {
-                alert('관리자 권한이 없습니다.');
-                window.location.href = 'index.html'; 
-                return;
+            const isAdmin = await service.isAdmin();
+            
+            if (!isAdmin) {
+                // 권한이 없는데, 로그인을 아예 안 한 상태라면? -> 로그인 창 띄우기
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                if (!session) {
+                    await openLoginModal(); // 로그인 모달 실행
+                    return; // 이후 로직 중단
+                } else {
+                    // 로그인은 했는데 관리자가 아님 -> 진짜 권한 없음
+                    alert('접근 권한이 없는 계정입니다. 관리자 계정으로 다시 로그인하세요.');
+                    await supabase.auth.signOut(); // 로그아웃 시키고
+                    window.location.reload();      // 새로고침해서 로그인 창 띄움
+                    return;
+                }
             }
-        } catch (e) { return; }
+        } catch (e) { console.error(e); return; }
 
         // 2. 이메일 표시
         try {
@@ -395,30 +405,64 @@
         let targetId = urlParams.get('id');
 
         if (targetId) {
-            // [Case A] ID를 가지고 들어옴 (슈퍼 관리자 / 링크 접속) -> 바로 로드
             currentElectionId = targetId;
             await startDashboard();
         } else {
-            // [Case B] ID 없이 들어옴 (선관위 위원) -> 선거 선택 모달 띄우기
             await openElectionGateway();
         }
     }
 
     // -----------------------------------------------------------
-    // [3] 선거 선택 게이트웨이 (핵심 기능)
+    // [3] 로그인 모달 & 핸들러 (새로 추가됨)
+    // -----------------------------------------------------------
+    async function openLoginModal() {
+        const html = `
+            <p style="color:#666; margin-bottom:15px;">관리자 이메일을 입력하세요.</p>
+            <input type="email" id="login-email" placeholder="admin@example.com" 
+                   style="width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; margin-bottom:10px;">
+            <p style="font-size:0.8rem; color:#999;">* 입력한 이메일로 로그인 링크가 발송됩니다.</p>
+        `;
+
+        window.showModal(
+            '🔐 관리자 로그인', 
+            html, 
+            async () => {
+                const email = document.getElementById('login-email').value;
+                if (!email) {
+                    alert('이메일을 입력해주세요.');
+                    return;
+                }
+
+                // 로그인 링크 발송
+                const { error } = await supabase.auth.signInWithOtp({
+                    email: email,
+                    options: { emailRedirectTo: window.location.href } // 로그인 후 현재 페이지로 복귀
+                });
+
+                if (error) {
+                    alert('에러 발생: ' + error.message);
+                } else {
+                    alert('메일함에서 로그인 링크를 확인해주세요! \n링크를 클릭하면 관리자 페이지로 이동합니다.');
+                    window.closeModal();
+                }
+            }, 
+            false // 취소 버튼 없음 (로그인 강제)
+        );
+    }
+
+    // -----------------------------------------------------------
+    // [4] 선거 선택 게이트웨이
     // -----------------------------------------------------------
     async function openElectionGateway() {
         try {
             const elections = await service.getAllElections();
 
-            // 데이터가 아예 없으면 로비로 보냄
             if (!elections || elections.length === 0) {
-                alert('진행 중인 선거가 없습니다. 관리자에게 문의하세요.');
+                alert('진행 중인 선거가 없습니다. 로비로 이동합니다.');
                 window.goToLobby();
                 return;
             }
 
-            // 선택용 HTML 생성
             let html = `
                 <p style="margin-bottom:10px; color:#555;">관리할 선거를 선택해주세요.</p>
                 <select id="gateway-select" style="width:100%; padding:10px; font-size:1.1rem; border:1px solid #ddd; border-radius:6px;">
@@ -430,7 +474,6 @@
             });
             html += `</select>`;
 
-            // 모달 띄우기 (취소 버튼 없음 - 선택 강제)
             window.showModal(
                 '🗳️ 선거 선택', 
                 html, 
@@ -438,15 +481,13 @@
                     const selectedId = document.getElementById('gateway-select').value;
                     if (selectedId) {
                         currentElectionId = selectedId;
-                        
-                        // URL 업데이트 (새로고침 해도 유지되도록)
                         const newUrl = `${window.location.pathname}?id=${selectedId}`;
                         window.history.replaceState(null, '', newUrl);
-
                         await startDashboard();
+                        window.closeModal();
                     }
                 },
-                false // 취소 버튼 숨김 (선택 안 하면 못 들어감)
+                false 
             );
 
         } catch (e) {
@@ -456,7 +497,7 @@
     }
 
     // -----------------------------------------------------------
-    // [4] 대시보드 구동 (공통)
+    // [5] 대시보드 구동
     // -----------------------------------------------------------
     async function startDashboard() {
         localStorage.setItem('target_election_id', currentElectionId);
@@ -475,7 +516,7 @@
     }
 
     // -----------------------------------------------------------
-    // [5] 데이터 로드 및 렌더링 (기존 로직 유지)
+    // [6] 데이터 로드 및 렌더링
     // -----------------------------------------------------------
 
     async function loadElectionInfo() {
@@ -555,7 +596,7 @@
     }
 
     // -----------------------------------------------------------
-    // [6] 사용자 액션 (User Actions)
+    // [7] 사용자 액션 핸들러
     // -----------------------------------------------------------
 
     window.openVoterPreview = () => {
