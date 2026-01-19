@@ -108,29 +108,38 @@ export class AdminService {
         return ballots; // 화면에서 가공해서 그림
     }
 
-    // [추가] 로그 기록 함수 (핵심)
+
+
+// [AdminService.js 내부]
+
+    // [수정] 로그 기록 (테이블명 변경: admin_logs -> vote_admin_logs)
     async logAction(electionId, actionType, details) {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        await supabase.from('admin_logs').insert({
+        const { error } = await supabase.from('vote_admin_logs').insert({
             election_id: electionId,
             admin_email: user.email,
             action_type: actionType,
             details: details
         });
+
+        if (error) console.error("로그 저장 실패:", error);
     }
 
-    // [추가] 로그 목록 가져오기 (최신순 50개)
+    // [수정] 로그 목록 가져오기 (테이블명 변경: admin_logs -> vote_admin_logs)
     async getLogs(electionId) {
         const { data, error } = await supabase
-            .from('admin_logs')
+            .from('vote_admin_logs')  // 여기를 변경
             .select('*')
             .eq('election_id', electionId)
             .order('created_at', { ascending: false })
             .limit(50);
         
-        if (error) return [];
+        if (error) {
+            console.error("로그 로드 실패:", error);
+            return [];
+        }
         return data;
     }
 
