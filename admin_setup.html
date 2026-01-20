@@ -426,7 +426,7 @@
 
     // (참고: 기존 loadDashboard, handleStatusChange 등은 그대로 유지)
 
-    async function loadDashboard() {
+async function loadDashboard() {
         const elections = await adminService.getAllElections();
         const activeContainer = document.getElementById('active-list');
         const timelineContainer = document.getElementById('history-timeline');
@@ -439,41 +439,62 @@
             return;
         }
 
-        const activeStatuses = ['PREPARE', 'NOMINATION', 'READY', 'OPEN', 'PAUSED'];
+        // [수정] DRAFT 상태 추가
+        const activeStatuses = ['DRAFT', 'PREPARE', 'NOMINATION', 'READY', 'OPEN', 'PAUSED'];
 
         elections.forEach(el => {
             if (activeStatuses.includes(el.status)) {
-                // 진행 중 카드
+                // 카드 생성
                 const card = document.createElement('div');
                 card.className = 'active-election-card';
-                card.onclick = () => {
-                    localStorage.setItem('target_election_id', el.id);
-                    window.location.href = `admin.html?id=${el.id}`;
-                };
+                
+                // [핵심 로직 수정] 상태에 따른 클릭 동작 분기
+                if (el.status === 'DRAFT') {
+                    // 작성 중 -> 설정 이어하기
+                    card.onclick = () => resumeSetup(el);
+                    card.style.borderLeftColor = '#9ca3af'; // 회색 라인
+                } else {
+                    // 그 외 -> 관리 페이지 이동
+                    card.onclick = () => {
+                        localStorage.setItem('target_election_id', el.id);
+                        window.location.href = `admin.html?id=${el.id}`;
+                    };
+                }
 
                 let controlButtons = '';
-                if (el.status === 'OPEN' || el.status === 'NOMINATION') {
+                // 버튼 로직은 그대로 유지하되, DRAFT 일 때 표시
+                if (el.status === 'DRAFT') {
+                    controlButtons = `<button class="btn-control" style="background:#4b5563; color:white;" onclick="resumeSetup(null); event.stopPropagation(); resumeSetup(arguments[0] || ${JSON.stringify(el).replace(/"/g, "'")})">✏️ 설정 이어하기</button>`;
+                    // 위 인라인 핸들러가 복잡하니 아래처럼직접 호출 권장
+                     controlButtons = `<span style="font-size:0.8rem; color:#d97706; font-weight:bold;">⚠️ 설정 미완료</span>`;
+                } else if (el.status === 'OPEN' || el.status === 'NOMINATION') {
+                    // ... (기존 코드 유지)
                     controlButtons = `
                         <button class="btn-control btn-pause" onclick="handleStatusChange(event, '${el.id}', 'PAUSED')">⏸ 일시정지</button>
                         <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
                     `;
                 } else if (el.status === 'PAUSED') {
+                     // ... (기존 코드 유지)
                     controlButtons = `
                         <button class="btn-control btn-resume" onclick="handleStatusChange(event, '${el.id}', 'OPEN')">▶️ 투표 재개</button>
                         <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
                     `;
-                } else if (el.status === 'PREPARE') {
-                    controlButtons = `<span style="font-size:0.8rem; color:#999;">준비 중</span>`;
+                } else if (el.status === 'PREPARE' || el.status === 'READY') {
+                    controlButtons = `<span style="font-size:0.8rem; color:#999;">관리 페이지에서 설정</span>`;
                 }
 
-                // 날짜 표시 로직 수정 (투표 기간 기준)
                 const startStr = el.vote_start_at ? new Date(el.vote_start_at).toLocaleDateString() : '미정';
                 const endStr = el.vote_end_at ? new Date(el.vote_end_at).toLocaleDateString() : '미정';
+                
+                // 뱃지 색상 처리
+                let badgeColor = '#6b7280';
+                if(el.status === 'OPEN') badgeColor = 'var(--color-primary)';
+                if(el.status === 'DRAFT') badgeColor = '#9ca3af';
 
                 card.innerHTML = `
                     <div style="flex:1;">
-                        <span style="background:${el.status === 'OPEN' ? 'var(--color-primary)' : '#6b7280'}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold;">
-                            ${el.status}
+                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold;">
+                            ${el.status === 'DRAFT' ? '작성 중' : el.status}
                         </span>
                         <h4 style="margin:8px 0 5px 0; font-size:1.1rem; color:#1f2937;">${el.title}</h4>
                         <span style="font-size:0.85rem; color:#666;">투표: ${startStr} ~ ${endStr}</span>
@@ -484,14 +505,11 @@
                 `;
                 activeContainer.appendChild(card);
             } else {
-                // 지난 선거
+                // ... (지난 선거 이력 코드는 기존과 동일)
                 const item = document.createElement('div');
                 item.className = 'timeline-item';
                 item.onclick = () => window.openHistoryModal(el);
-                
-                // 종료일 기준 표시
                 const endDate = el.vote_end_at ? new Date(el.vote_end_at).toLocaleDateString() : '종료';
-                
                 item.innerHTML = `
                     <div class="timeline-date">${endDate} 종료</div>
                     <div class="timeline-content">
@@ -503,6 +521,60 @@
             }
         });
     }
+    // [신규] 작성 중인 선거 이어하기
+    window.resumeSetup = async (el) => {
+        // 1. 화면 전환
+        document.getElementById('dashboard-section').style.display = 'none';
+        document.getElementById('setup-section').style.display = 'block';
+        
+        // 2. 전역 변수 설정
+        newElectionId = el.id;
+
+        // 3. Step 1 폼 데이터 채우기
+        document.getElementById('election-title').value = el.title;
+        document.getElementById('candidacy-start').value = el.candidacy_start_at ? el.candidacy_start_at.slice(0,16) : '';
+        document.getElementById('candidacy-end').value = el.candidacy_end_at ? el.candidacy_end_at.slice(0,16) : '';
+        document.getElementById('vote-start').value = el.vote_start_at ? el.vote_start_at.slice(0,16) : '';
+        document.getElementById('vote-end').value = el.vote_end_at ? el.vote_end_at.slice(0,16) : '';
+
+        // 4. Step 2 선거구 정보 복원 (중요: createdDistricts 재매핑)
+        createdDistricts = {}; // 초기화
+        document.getElementById('district-list').innerHTML = ''; // 리스트 초기화
+
+        const { data: districts } = await supabase
+            .from('districts')
+            .select('*')
+            .eq('election_id', newElectionId);
+            
+        if (districts && districts.length > 0) {
+            districts.forEach(d => {
+                createdDistricts[d.code] = d.id; // 메모리 복구
+                
+                const li = document.createElement('li');
+                li.style.marginBottom = '5px';
+                li.innerHTML = `<strong>${d.name}</strong> (${d.code}) : ${d.quota}명 선출 [${d.vote_type === 'CANDIDATE' ? '인물' : '찬반'}]`;
+                document.getElementById('district-list').appendChild(li);
+            });
+        }
+
+        // 5. UI 상태 업데이트
+        document.getElementById('step-2').style.display = 'block';
+        
+        // 선거구가 있으면 Step 3도 보여줌
+        const count = Object.keys(createdDistricts).length;
+        const warningEl = document.getElementById('district-warning');
+        if (count > 0) {
+            warningEl.style.color = 'green';
+            warningEl.innerText = `✅ 선거구 불러오기 완료 (현재 ${count}개)`;
+            document.getElementById('step-3').style.display = 'block';
+        } else {
+            warningEl.style.color = 'red';
+            warningEl.innerText = `⚠️ 선거구는 최소 1개 이상 등록해야 합니다.`;
+            document.getElementById('step-3').style.display = 'none';
+        }
+        
+        window.showAlert('작성 중이던 내용을 불러왔습니다.\n설정을 이어서 진행해주세요.');
+    };
 
     // 상태 변경
     window.handleStatusChange = async (event, electionId, newStatus) => {
@@ -547,14 +619,14 @@
         document.getElementById('setup-section').style.display = 'block';
     };
 
-    // [Step 1 수정: 기간 4개 입력]
-    window.createElection = async () => {
+window.createElection = async () => {
+        // ... (입력값 유효성 검사 코드는 기존과 동일) ...
         const title = document.getElementById('election-title').value;
         const candStart = document.getElementById('candidacy-start').value;
         const candEnd = document.getElementById('candidacy-end').value;
         const voteStart = document.getElementById('vote-start').value;
         const voteEnd = document.getElementById('vote-end').value;
-
+        
         if(!title || !candStart || !candEnd || !voteStart || !voteEnd) {
             return window.showAlert('모든 기간 정보를 입력하세요.');
         }
@@ -562,25 +634,23 @@
         // 간단한 날짜 유효성 검사
         if(candStart >= candEnd) return window.showAlert('후보 등록 종료일은 시작일보다 뒤여야 합니다.');
         if(voteStart >= voteEnd) return window.showAlert('투표 종료일은 시작일보다 뒤여야 합니다.');
-
+        
+        // [수정] status: 'DRAFT' 로 저장
         const { data, error } = await supabase.from('elections').insert({
             title, 
             candidacy_start_at: candStart,
             candidacy_end_at: candEnd,
             vote_start_at: voteStart,
             vote_end_at: voteEnd,
-            // 💡 제안하신 내용 적용:
-            // start_at -> 선거의 시작(후보 등록 시작일)
-            // end_at   -> 선거의 끝(투표 종료일)
             start_at: candStart, 
             end_at: voteEnd,
-            status: 'PREPARE'
+            status: 'DRAFT' // 여기가 변경됨
         }).select().single();
 
         if(error) return window.showAlert('생성 실패: ' + error.message);
 
         newElectionId = data.id;
-        window.showAlert('선거 정보가 저장되었습니다.\n이어서 선거구 및 선출 인원을 등록하세요.');
+        window.showAlert('임시 저장되었습니다 (작성 중 상태).\n선거구 설정을 계속해주세요.');
         document.getElementById('step-2').style.display = 'block';
     };
 
@@ -753,7 +823,7 @@
         updatePreviewTable_Safe(); 
     };
 
-    window.confirmUpload = async () => {
+window.confirmUpload = async () => {
         if (pendingVoters.length === 0) return window.showAlert('저장할 데이터가 없습니다.');
         
         window.showConfirm(`총 ${pendingVoters.length}명의 명부를 등록하시겠습니까?`, async () => {
@@ -769,8 +839,18 @@
             
             if(insError) return window.showAlert('DB 저장 실패: ' + insError.message);
             
-            window.showAlert('✅ 명부 등록이 완료되었습니다!\n관리자 페이지로 이동합니다.');
-            setTimeout(() => window.location.href = 'admin.html', 1000); 
+            // [신규] 모든 설정이 끝났으므로 DRAFT -> PREPARE 상태 변경
+            const { error: updateError } = await supabase
+                .from('elections')
+                .update({ status: 'PREPARE' })
+                .eq('id', newElectionId);
+
+            if(updateError) console.error("상태 업데이트 실패:", updateError);
+
+            window.showAlert('✅ 선거 생성이 최종 완료되었습니다!\n이제 관리자 대시보드에서 관리할 수 있습니다.');
+            
+            // 바로 이동하지 않고 대시보드 리로드 (UI 자연스럽게)
+            setTimeout(() => window.location.reload(), 1500); 
         });
     };
 
