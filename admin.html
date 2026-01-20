@@ -409,63 +409,80 @@
     // -----------------------------------------------------------
     // [3] 선거 선택 (수정: 말머리 로직 복구)
     // -----------------------------------------------------------
-// [수정] 선거 선택 창 (모달 닫기 기능 포함)
-    window.openElectionGateway = async () => {
-        try {
-            // 1. 모든 선거 목록 가져오기
-            const elections = await service.getAllElections();
-            
-            // 2. 선거가 없으면 설정 페이지로 이동
-            if (!elections || elections.length === 0) {
-                alert("진행 중인 선거가 없습니다.");
-                window.location.href = 'admin_setup.html'; 
-                return;
+// [수정] 선거 선택 창 (DRAFT 상태는 보이지만 선택 불가 처리)
+window.openElectionGateway = async () => {
+    try {
+        // 1. 모든 선거 목록 가져오기
+        const elections = await service.getAllElections();
+        
+        // 선거가 아예 없으면 설정 페이지로 이동
+        if (!elections || elections.length === 0) {
+            alert("생성된 선거가 없습니다. 설정 페이지로 이동합니다.");
+            window.location.href = 'admin_setup.html'; 
+            return;
+        }
+        
+        // 2. 선택 박스 HTML 생성
+        let html = '<p style="margin-bottom:10px;">관리할 선거를 선택하세요.</p>';
+        html += '<select id="gateway-select" style="width:100%; padding:10px; font-size:1rem; border:1px solid #ddd; border-radius:6px;">';
+        
+        // [기본값] 선택 유도용 (모든 항목이 DRAFT일 때 자동 선택 방지)
+        html += '<option value="" selected disabled>-- 선거를 선택해주세요 --</option>';
+
+        elections.forEach(el => {
+            // 변수 준비
+            let prefix = '';
+            let isDisabled = false;
+            let extraText = '';
+
+            // 상태별 분기 처리
+            if (el.status === 'DRAFT') {
+                prefix = '📝 [작성중] ';
+                isDisabled = true; // 선택 불가 설정
+                extraText = ' (설정 완료 필요)';
+            } else if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(el.status)) {
+                prefix = '🏁 [종료] ';
+            } else if (el.status === 'OPEN') {
+                prefix = '🟢 [진행중] ';
+            } else {
+                prefix = `[${el.status}] `;
             }
             
-            // 3. 선택 박스 HTML 생성
-            let html = '<p style="margin-bottom:10px;">관리할 선거를 선택하세요.</p>';
-            html += '<select id="gateway-select" style="width:100%; padding:10px; font-size:1rem; border:1px solid #ddd; border-radius:6px;">';
+            const startStr = el.start_at ? new Date(el.start_at).toLocaleDateString() : '미정';
             
-            elections.forEach(el => {
-                // 상태별 말머리 처리 (기존 로직 유지)
-                let prefix = '';
-                if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(el.status)) {
-                    prefix = '[종료] ';
-                } else if (el.status === 'OPEN') {
-                    prefix = '[진행중] ';
-                } else {
-                    prefix = `[${el.status}] `;
-                }
-                
-                // 날짜 정보 포함
-                const startStr = el.start_at ? new Date(el.start_at).toLocaleDateString() : '미정';
-                html += `<option value="${el.id}">${prefix}${el.title} (${startStr}~)</option>`;
-            });
-            html += '</select>';
-            
-            // 4. 모달 띄우기
-            window.showModal('🗳️ 선거 선택', html, async () => {
-                const selectedId = document.getElementById('gateway-select').value;
-                if (selectedId) {
-                    currentElectionId = selectedId;
-                    
-                    // URL 업데이트 (새로고침 시 유지용)
-                    const newUrl = `${window.location.pathname}?id=${selectedId}`;
-                    window.history.replaceState(null, '', newUrl);
-                    
-                    // 대시보드 시작
-                    await startDashboard();
-                    
-                    // [중요] 확인 누르면 모달 닫기
-                    window.closeModal(); 
-                }
-            }, false); // 취소 버튼 없음 (강제 선택)
+            // [핵심] disabled 속성 주입
+            // HTML 레벨에서 선택을 막습니다. (회색으로 표시됨)
+            html += `<option value="${el.id}" ${isDisabled ? 'disabled' : ''}>
+                        ${prefix}${el.title} (${startStr}~)${extraText}
+                     </option>`;
+        });
+        html += '</select>';
+        
+        // 3. 모달 띄우기
+        window.showModal('🗳️ 선거 선택', html, async () => {
+            const selectEl = document.getElementById('gateway-select');
+            const selectedId = selectEl.value;
 
-        } catch (e) { 
-            console.error("선거 목록 로드 실패:", e);
-            alert("목록을 불러오지 못했습니다.");
-        }
-    };
+            // [방어] 선택된 값이 없으면(DRAFT만 있거나 선택 안 함) 진입 차단
+            if (!selectedId) {
+                alert("관리할 수 있는 선거를 선택해주세요.\n(작성 중인 선거는 선택할 수 없습니다)");
+                return;
+            }
+
+            // 정상 진입 로직
+            currentElectionId = selectedId;
+            const newUrl = `${window.location.pathname}?id=${selectedId}`;
+            window.history.replaceState(null, '', newUrl);
+            
+            await startDashboard();
+            window.closeModal(); 
+        }, false); 
+
+    } catch (e) { 
+        console.error("선거 목록 로드 실패:", e);
+        alert("목록을 불러오지 못했습니다.");
+    }
+};
 
     // -----------------------------------------------------------
     // [4] 대시보드 로드
