@@ -325,43 +325,50 @@
         }
     }
 
-// [진단용] 초기화 코드
+// [수정된 init 함수]
     async function init() {
-        console.log("🚀 [1] 앱 초기화 시작");
+        console.log("🚀 [1] 앱 초기화 및 인증 감지 시작");
 
-        // 1. URL 해시 확인 (매직링크 토큰이 잘 왔는지)
+        // 1. URL에 토큰이 있는지 먼저 확인 (UI 깜빡임 방지용)
         const hash = window.location.hash;
-        console.log("🔎 [2] URL 해시 감지:", hash ? "있음 (토큰 포함 가능성)" : "없음");
-
-        // 2. 현재 세션 상태 조회
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const hasToken = hash && hash.includes('access_token');
         
-        if (error) {
-            console.error("❌ [3] 세션 조회 에러:", error);
-            window.showAlert("인증 에러 발생: " + error.message);
-            return;
+        // 토큰이 있다면, 성급하게 로그인 화면을 띄우지 말고 로딩 상태로 둡니다.
+        if (hasToken) {
+            console.log("⏳ [2] 매직링크 토큰 감지됨. 인증 처리 대기...");
+            document.getElementById('login-section').innerHTML = '<h3 style="color:var(--color-primary);">🔄 인증 확인 중입니다...</h3><p>잠시만 기다려주세요.</p>';
+            document.getElementById('login-section').style.display = 'block';
         }
 
-        console.log("👤 [3] 세션 상태:", session ? "로그인됨 (" + session.user.email + ")" : "비로그인 상태");
-
-        // 3. 상태 변화 리스너 등록
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log("🔄 [4] 인증 상태 변화 감지:", event);
+        // 2. [핵심] 리스너를 가장 먼저 등록하여 이벤트를 놓치지 않게 함
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log(`🔄 [3] 상태 변경 감지: ${event}`);
             
             if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                console.log("✅ [5] 로그인 성공! UI 전환 시도");
+                console.log("✅ 인증 성공! 대시보드로 이동합니다.");
                 await checkAdminAndRender(session);
             } else if (event === 'SIGNED_OUT') {
-                console.log("👋 [5] 로그아웃됨");
+                console.log("👋 로그아웃 상태");
                 renderLoginScreen();
             }
         });
 
-        // 초기 상태에 따른 렌더링
-        if (session) {
-            await checkAdminAndRender(session);
-        } else {
-            renderLoginScreen();
+        // 3. 토큰이 없는 경우에만 수동으로 세션 체크 (일반 접속 시)
+        // (토큰이 있으면 위 리스너가 SIGNED_IN을 처리하므로 여기선 건너뜀)
+        if (!hasToken) {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            
+            if (error) {
+                console.error("세션 조회 에러:", error);
+            }
+
+            if (session) {
+                console.log("💾 저장된 세션 발견");
+                await checkAdminAndRender(session);
+            } else {
+                console.log("👤 저장된 세션 없음 -> 로그인 화면");
+                renderLoginScreen();
+            }
         }
     }
 
