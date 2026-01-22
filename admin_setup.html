@@ -342,63 +342,63 @@
 // [전역 변수] 중복 실행 방지용 잠금 장치
     let isAuthChecking = false;
 
-    async function init() {
-        console.log("🚀 앱 초기화 시작...");
+// [admin_setup.html 용 init 함수 수정본]
 
-        // 1. 시각적 피드백: URL에 토큰이 있으면 '인증 중' 메시지 표시
-        if (window.location.hash.includes('access_token')) {
-            document.getElementById('login-section').innerHTML = 
-                '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
+// [전역 변수] 중복 실행 방지용 잠금 장치
+let isAuthChecking = false;
+
+async function init() {
+    console.log("🚀 앱 초기화 시작...");
+
+    // 1. 시각적 피드백
+    if (window.location.hash.includes('access_token')) {
+        document.getElementById('login-section').innerHTML = 
+            '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
+    }
+
+    // 2. 인증 상태 감지 리스너
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log(`📣 인증 상태 변경 감지: ${event}`);
+
+        // [Lock] 이미 로직 실행 중이면 무시
+        if (isAuthChecking) {
+            console.log("⚠️ 인증 로직 중복 실행 방지");
+            return;
         }
 
-        // 2. 인증 상태 감지 리스너
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(`📣 인증 상태 변경 감지: ${event}`);
-
-            // [핵심 1] 이미 인증 체크 중이라면 중복 실행 차단 (Lock)
-            if (isAuthChecking) {
-                console.log("⚠️ 인증 로직이 이미 실행 중입니다. 이번 이벤트는 건너뜁니다.");
-                return;
-            }
-
-            // [케이스 A] 로그인 성공 (세션이 있는 경우)
-            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
-                if (session && session.user) {
-                    isAuthChecking = true; // 🔒 문 잠금
-
-                    try {
-                        // DB 권한 확인 및 대시보드 렌더링
-                        await checkAdminAndRender(session);
-                        
-                        // [핵심 2] 모든 로직이 성공적으로 끝난 "뒤에" URL 청소
-                        if (window.location.hash.includes('access_token')) {
-                            window.history.replaceState(null, '', window.location.pathname);
-                        }
-                    } catch (error) {
-                        // [핵심 3] AbortError는 시스템상 취소이므로 무시, 진짜 에러만 알림
-                        if (error.name !== 'AbortError') {
-                            console.error("인증 처리 중 오류:", error);
-                            window.showAlert(error.message);
-                            // 치명적 오류 시 로그아웃 처리하여 재진입 유도
-                            await supabase.auth.signOut();
-                            renderLoginScreen();
-                        }
-                    } finally {
-                        isAuthChecking = false; // 🔓 문 열기
+        // Case A: 로그인 성공
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
+            if (session && session.user) {
+                isAuthChecking = true; // 잠금
+                try {
+                    // 권한 체크 및 렌더링
+                    await checkAdminAndRender(session);
+                    
+                    // 성공 후 URL 청소
+                    if (window.location.hash.includes('access_token')) {
+                        window.history.replaceState(null, '', window.location.pathname);
                     }
+                } catch (error) {
+                    // AbortError 무시, 그 외 에러는 알림
+                    if (error.name !== 'AbortError') {
+                        console.error(error);
+                        window.showAlert(error.message);
+                        await supabase.auth.signOut();
+                        renderLoginScreen();
+                    }
+                } finally {
+                    isAuthChecking = false; // 잠금 해제
                 }
-            } 
-            // [케이스 B] 로그아웃 상태
-            else if (event === 'SIGNED_OUT') {
-                // 토큰이 처리 중인 찰나의 순간에 SIGNED_OUT이 먼저 뜨는 경우 방어
-                if (window.location.hash.includes('access_token')) {
-                    console.log("⏳ 토큰 파싱 중... 로그아웃 화면 보류");
-                    return;
-                }
-                renderLoginScreen();
             }
-        });
-    }
+        } 
+        // Case B: 로그아웃
+        else if (event === 'SIGNED_OUT') {
+            // 토큰 처리 중일 땐 로그아웃 화면 전환 보류
+            if (window.location.hash.includes('access_token')) return;
+            renderLoginScreen();
+        }
+    });
+} // <--- [중요] init 함수 닫는 괄호 (여기가 빠져서 에러가 났었습니다)
 
     // [관리자 권한 확인 및 렌더링 함수]
     async checkAdminAndRender(session) {
