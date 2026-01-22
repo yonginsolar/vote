@@ -425,7 +425,63 @@
         if(error) window.showAlert(error.message);
         else loadDistrictsList();
     };
-    
+
+    // [수정] 선거구 리스트 조회 및 렌더링 (Step 3 연동 강화)
+    async function loadDistrictsList() {
+        if(!newElectionId) return;
+
+        const { data, error } = await supabase.from('districts')
+            .select('*').eq('election_id', newElectionId).order('created_at');
+        
+        if(error) return;
+        districtsCache = data;
+
+        const listEl = document.getElementById('district-list');
+        const selectEl = document.getElementById('target-district-select'); // Step 3 셀렉트박스
+        
+        // 초기화
+        listEl.innerHTML = '';
+        selectEl.innerHTML = '<option value="">선거구를 선택하세요</option>'; // 기본값 복구
+
+        if(data.length > 0) {
+            document.getElementById('district-warning').innerText = `✅ 총 ${data.length}개 선거구 등록됨`;
+            document.getElementById('district-warning').style.color = 'green';
+            
+            // Step 3 영역 보이기
+            document.getElementById('step-3').style.display = 'block';
+            
+            // Step 3용 조합원 데이터 미리 로드 (없으면)
+            if(allMembers.length === 0) fetchAllMembers();
+        } else {
+             document.getElementById('step-3').style.display = 'none';
+        }
+
+        data.forEach(d => {
+            // 1. 관리 리스트 (Step 2 UI) - 수정/삭제 버튼 포함
+            const div = document.createElement('div');
+            div.className = 'district-item';
+            const badge = d.is_common ? '<span class="badge-common">비례/공통</span>' : '';
+            div.innerHTML = `
+                <div>
+                    <strong>${d.name}</strong> (${d.code}) ${badge}
+                    <div style="font-size:0.85rem; color:#666; margin-top:4px;">
+                        ${d.vote_type === 'CANDIDATE' ? '인물' : '찬반'} / ${d.quota}명 선출
+                    </div>
+                </div>
+                <div class="card-actions">
+                    <button onclick="editDistrict('${d.id}')" style="cursor:pointer; border:1px solid #ddd; background:white; padding:4px 8px; border-radius:4px;">✏️</button>
+                    <button onclick="deleteDistrict('${d.id}')" style="cursor:pointer; border:1px solid #fca5a5; background:#fee2e2; color:#dc2626; padding:4px 8px; border-radius:4px;">🗑️</button>
+                </div>
+            `;
+            listEl.appendChild(div);
+
+            // 2. Step 3 셀렉트박스 옵션 추가 (이게 안 떠서 문제였음)
+            const option = document.createElement('option');
+            option.value = d.id;
+            option.innerText = `${d.name} ${d.is_common ? '(비례)' : ''}`;
+            selectEl.appendChild(option);
+        });
+    }
 
     // -----------------------------------------------------------
     // [Step 3] 스마트 명부 관리 (핵심 로직)
@@ -984,6 +1040,7 @@ function clearDistrictInputs() {
     // [3] 비즈니스 로직 (대시보드 등)
     // ----------------------------------------------------------------
 
+// [수정] 대시보드 로드 (삭제 버튼 추가됨)
     async function loadDashboard() {
         const elections = await adminService.getAllElections();
         const activeContainer = document.getElementById('active-list');
@@ -998,79 +1055,75 @@ function clearDistrictInputs() {
         }
 
         const activeStatuses = ['DRAFT', 'PREPARE', 'NOMINATION', 'READY', 'OPEN', 'PAUSED'];
-
         elections.forEach(el => {
             if (activeStatuses.includes(el.status)) {
-                // 카드 생성
                 const card = document.createElement('div');
                 card.className = 'active-election-card';
                 
-                // [핵심 로직 수정] 상태에 따른 클릭 동작 분기
+                // 상태별 뱃지 색상
+                let badgeColor = '#6b7280';
+                if(el.status === 'OPEN') badgeColor = 'var(--color-primary)';
+                if(el.status === 'DRAFT') badgeColor = '#d97706'; // 주황색
+
+                // 클릭 이벤트 분기
                 if (el.status === 'DRAFT') {
-                    // 작성 중 -> 설정 이어하기
-                    card.onclick = () => resumeSetup(el);
-                    card.style.borderLeftColor = '#9ca3af'; // 회색 라인
+                    card.onclick = (e) => {
+                        // 삭제 버튼 클릭 시 카드 클릭 이벤트 방지
+                        if(e.target.tagName === 'BUTTON') return; 
+                        resumeSetup(el);
+                    };
+                    card.style.borderLeftColor = '#9ca3af';
                 } else {
-                    // 그 외 -> 관리 페이지 이동
-                    card.onclick = () => {
+                    card.onclick = (e) => {
+                        if(e.target.tagName === 'BUTTON') return;
                         localStorage.setItem('target_election_id', el.id);
                         window.location.href = `admin.html?id=${el.id}`;
                     };
                 }
 
-                let controlButtons = '';
-                if (el.status === 'DRAFT') {
-                     controlButtons = `<span style="font-size:0.8rem; color:#d97706; font-weight:bold;">⚠️ 설정 미완료</span>`;
-                } else if (el.status === 'OPEN' || el.status === 'NOMINATION') {
-                    controlButtons = `
-                        <button class="btn-control btn-pause" onclick="handleStatusChange(event, '${el.id}', 'PAUSED')">⏸ 일시정지</button>
-                        <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
-                    `;
-                } else if (el.status === 'PAUSED') {
-                    controlButtons = `
-                        <button class="btn-control btn-resume" onclick="handleStatusChange(event, '${el.id}', 'OPEN')">▶️ 투표 재개</button>
-                        <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
-                    `;
-                } else if (el.status === 'PREPARE' || el.status === 'READY') {
-                    controlButtons = `<span style="font-size:0.8rem; color:#999;">관리 페이지에서 설정</span>`;
-                }
-
+                // 날짜 포맷팅
                 const startStr = el.vote_start_at ? new Date(el.vote_start_at).toLocaleDateString() : '미정';
                 const endStr = el.vote_end_at ? new Date(el.vote_end_at).toLocaleDateString() : '미정';
-                
-                let badgeColor = '#6b7280';
-                if(el.status === 'OPEN') badgeColor = 'var(--color-primary)';
-                if(el.status === 'DRAFT') badgeColor = '#9ca3af';
 
                 card.innerHTML = `
                     <div style="flex:1;">
-                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold;">
-                            ${el.status === 'DRAFT' ? '작성 중' : el.status}
-                        </span>
+                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${el.status === 'DRAFT' ? '작성 중' : el.status}</span>
                         <h4 style="margin:8px 0 5px 0; font-size:1.1rem; color:#1f2937;">${el.title}</h4>
                         <span style="font-size:0.85rem; color:#666;">투표: ${startStr} ~ ${endStr}</span>
                     </div>
                     <div class="card-actions">
-                        ${controlButtons}
+                        ${el.status === 'OPEN' || el.status === 'PAUSED' ? 
+                          `<button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">종료</button>` : ''}
+                        
+                        <button onclick="deleteElection('${el.id}')" style="margin-left:5px; padding:6px 12px; border-radius:4px; border:1px solid #fca5a5; background:#fee2e2; color:#dc2626; font-weight:bold; cursor:pointer;">
+                            🗑️ 삭제
+                        </button>
                     </div>
                 `;
                 activeContainer.appendChild(card);
             } else {
+                // 지난 선거 이력
                 const item = document.createElement('div');
                 item.className = 'timeline-item';
                 item.onclick = () => window.openHistoryModal(el);
-                const endDate = el.vote_end_at ? new Date(el.vote_end_at).toLocaleDateString() : '종료';
-                item.innerHTML = `
-                    <div class="timeline-date">${endDate} 종료</div>
-                    <div class="timeline-content">
-                        <h4>${el.title}</h4>
-                        <p style="font-size:0.85rem; color:#666;">최종 상태: ${el.status}</p>
-                    </div>
-                `;
+                item.innerHTML = `<div class="timeline-date">${new Date(el.end_at).toLocaleDateString()} 종료</div>
+                    <div class="timeline-content"><h4>${el.title}</h4></div>`;
                 timelineContainer.appendChild(item);
             }
         });
     }
+
+    // [신규] 선거 삭제 함수
+    window.deleteElection = async (id) => {
+        if(!confirm('정말 이 선거를 삭제하시겠습니까?\n설정된 선거구와 명부 등 모든 데이터가 영구 삭제됩니다.')) return;
+        
+        const { error } = await supabase.from('elections').delete().eq('id', id);
+        if(error) window.showAlert('삭제 실패: ' + error.message);
+        else {
+            window.showAlert('삭제되었습니다.');
+            loadDashboard(); // 대시보드 새로고침
+        }
+    };
 
 // [수정] 작성 중인 선거 이어하기 (전체 코드)
     window.resumeSetup = async (el) => {
@@ -1192,38 +1245,52 @@ function clearDistrictInputs() {
         document.getElementById('step-2').style.display = 'block';
     };
 
-    // [Step 2 수정: 정수(Quota) 포함]
+// [수정] 선거구 추가/수정 (중복 오류 해결 + 즉시 새로고침)
     window.addDistrict = async () => {
-        if(!newElectionId) return;
+        if(!newElectionId) return window.showAlert('Step 1 저장을 먼저 해주세요.');
+        
         const name = document.getElementById('dist-name').value.trim();
         const code = document.getElementById('dist-code').value.trim();
-        const type = document.getElementById('dist-type').value;
         const quota = document.getElementById('dist-quota').value;
+        const type = document.getElementById('dist-type').value;
+        const isCommon = document.getElementById('dist-is-common').checked;
 
-        if (!name || !code) return window.showAlert('정보를 입력하세요.');
-        if (createdDistricts[code]) return window.showAlert('중복된 코드입니다.');
+        if (!name || !code) return window.showAlert('선거구명과 코드를 입력하세요.');
 
-        const { data, error } = await supabase.from('districts').insert({
-            election_id: newElectionId, name, code, vote_type: type, quota: parseInt(quota)
-        }).select().single();
+        // [중복 체크 로직 개선]
+        // 1. 코드가 같은 게 있는지 찾는다.
+        const duplicate = districtsCache.find(d => d.code === code);
+        // 2. 중복이 있는데, 그게 '나 자신(수정 중인 ID)'이 아니라면 에러다.
+        if (duplicate) {
+            if (!editingDistrictId || (editingDistrictId && duplicate.id !== editingDistrictId)) {
+                return window.showAlert('이미 존재하는 코드입니다.');
+            }
+        }
 
-        if(error) return window.showAlert('추가 실패: ' + error.message);
+        const payload = {
+            election_id: newElectionId,
+            name, code, quota: parseInt(quota), 
+            vote_type: type,
+            is_common: isCommon
+        };
 
-        createdDistricts[code] = data.id;
-        const li = document.createElement('li');
-        li.style.marginBottom = '5px';
-        li.innerHTML = `<strong>${name}</strong> (${code}) : ${quota}명`;
-        document.getElementById('district-list').appendChild(li);
-        
-        const count = Object.keys(createdDistricts).length;
-        if (count > 0) { // 1개 이상이면 통과
-            document.getElementById('district-warning').innerText = `✅ 선거구 등록됨 (${count}개)`;
-            document.getElementById('district-warning').style.color = 'green';
-            document.getElementById('step-3').style.display = 'block';
+        // [수정 모드]
+        if (editingDistrictId) {
+            const { error } = await supabase.from('districts')
+                .update(payload).eq('id', editingDistrictId);
+            
+            if(error) return window.showAlert('수정 실패: ' + error.message);
+            window.showAlert('수정되었습니다.');
+            clearDistrictInputs();
+        } 
+        // [추가 모드]
+        else {
+            const { error } = await supabase.from('districts').insert(payload);
+            if(error) return window.showAlert('추가 실패: ' + error.message);
         }
         
-        document.getElementById('dist-name').value = '';
-        document.getElementById('dist-code').value = '';
+        // [핵심] 리스트를 다시 불러와서 UI를 갱신함 (새로고침 없이 버튼 생김)
+        await loadDistrictsList(); 
     };
 
 
