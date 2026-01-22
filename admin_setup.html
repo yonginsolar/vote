@@ -247,57 +247,59 @@
                 <p id="district-warning" style="font-size:0.9rem; color:red;">⚠️ 선거구는 최소 1개 이상 등록해야 합니다.</p>
                 <div id="district-list"></div> </div>
 
-            <div id="step-3" style="display:none; margin-top:1rem;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:10px;">
-                    <h3 style="margin:0;">Step 3. 선거인 명부 관리</h3>
-                    <div style="text-align:right;">
-                        <label style="font-size:0.9rem; font-weight:bold; margin-right:5px;">작업 대상 선거구:</label>
-                        <select id="target-district-select" onchange="loadDistrictVoters()" style="padding:6px; border:2px solid var(--color-primary); border-radius:4px; font-weight:bold;">
-                            </select>
-                    </div>
+<div id="step-3" style="display:none; margin-top:1rem;">
+                <h3 style="margin-bottom:15px;">Step 3. 선거인 명부 관리</h3>
+                
+                <div style="background:#f0f9ff; padding:20px; border-radius:8px; border:1px solid #bae6fd; text-align:center; margin-bottom:20px;">
+                    <label style="font-size:1.1rem; font-weight:bold; color:#0369a1; display:block; margin-bottom:10px;">
+                        📌 작업할 선거구를 먼저 선택해주세요
+                    </label>
+                    <select id="target-district-select" onchange="loadDistrictVoters()" style="padding:10px; width:300px; font-size:1rem; border:2px solid var(--color-primary); border-radius:6px; font-weight:bold;">
+                        <option value="">선거구 목록 불러오는 중...</option>
+                    </select>
                 </div>
 
-                <div class="split-container">
-                    <div class="panel">
-                        <div class="panel-header">
-                            <span>👥 전체 조합원 DB</span>
-                            <span id="total-member-count" style="font-size:0.8rem; color:#666;">0명</span>
-                        </div>
-                        <div style="padding:10px 10px 0 10px;">
-                            <input type="text" id="search-member" placeholder="이름, 전화번호, 주소 검색..." class="search-box" onkeyup="filterMembers()">
-                            <div style="display:flex; gap:5px; margin-bottom:5px;">
-                                <button onclick="setFilter('수지')" class="btn-control" style="background:#eff6ff; color:#1d4ed8;">#수지</button>
-                                <button onclick="setFilter('기흥')" class="btn-control" style="background:#eff6ff; color:#1d4ed8;">#기흥</button>
-                                <button onclick="setFilter('처인')" class="btn-control" style="background:#eff6ff; color:#1d4ed8;">#처인</button>
-                                <button onclick="setFilter('')" class="btn-control" style="background:#f3f4f6; color:#333;">초기화</button>
+                <div id="manage-panel" style="display:none;">
+                    <div class="split-container">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <span>👥 전체 조합원 (대기)</span>
+                                <span id="total-member-count" style="font-size:0.8rem; color:#666;">0명</span>
+                            </div>
+                            <div style="padding:10px 10px 0 10px;">
+                                <input type="text" id="search-member" placeholder="이름, 전화번호, 주소..." class="search-box" onkeyup="filterMembers()">
+                                <div style="display:flex; gap:5px; margin-bottom:5px;">
+                                    <button onclick="setFilter('수지')" class="btn-control" style="background:#eff6ff; color:#1d4ed8;">#수지</button>
+                                    <button onclick="setFilter('기흥')" class="btn-control" style="background:#eff6ff; color:#1d4ed8;">#기흥</button>
+                                    <button onclick="setFilter('처인')" class="btn-control" style="background:#eff6ff; color:#1d4ed8;">#처인</button>
+                                    <button onclick="setFilter('')" class="btn-control" style="background:#f3f4f6; color:#333;">초기화</button>
+                                </div>
+                            </div>
+                            <div id="source-list" class="panel-body"></div>
+                            <div style="padding:10px; border-top:1px solid #eee;">
+                                <button id="btn-add-all-common" onclick="addAllMembersToCommon()" style="width:100%; padding:10px; background:#8b5cf6; color:white; border:none; border-radius:4px; font-weight:bold; margin-bottom:5px; display:none;">
+                                    ⚡ 전체 인원 일괄 등록 (비례)
+                                </button>
+                                <button id="btn-add-selected" onclick="addSelectedVoters()" style="width:100%; padding:10px; background:var(--color-primary); color:white; border:none; border-radius:4px; font-weight:bold;">
+                                    선택 인원 등록 >
+                                </button>
                             </div>
                         </div>
-                        <div id="source-list" class="panel-body">
-                            </div>
-                        <div style="padding:10px; border-top:1px solid #eee; text-align:center;">
-                             <button id="btn-add-all-common" onclick="addAllMembersToCommon()" style="width:100%; padding:8px; background:#8b5cf6; color:white; border:none; border-radius:4px; display:none;">
-                                ⚡ 전체 인원 일괄 등록 (비례)
-                             </button>
-                             <button id="btn-add-selected" onclick="addSelectedVoters()" style="width:100%; padding:8px; background:var(--color-primary); color:white; border:none; border-radius:4px;">
-                                선택 인원 등록 >
-                             </button>
-                        </div>
-                    </div>
 
-                    <div class="panel">
-                        <div class="panel-header">
-                            <span id="target-dist-name" style="font-weight:bold; color:var(--color-primary);">선거구 선택 필요</span>
-                            <span id="voter-count" style="font-size:0.8rem; background:var(--color-primary); color:white; padding:2px 8px; border-radius:10px;">0명</span>
-                        </div>
-                        <div style="padding:10px 10px 0 10px;">
-                            <input type="text" id="search-voter" placeholder="등록된 명부 내 검색..." class="search-box" onkeyup="filterVoters()">
-                        </div>
-                        <div id="target-list" class="panel-body">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <span id="target-dist-name" style="font-weight:bold; color:var(--color-primary);">선거구 명부</span>
+                                <span id="voter-count" style="font-size:0.8rem; background:var(--color-primary); color:white; padding:2px 8px; border-radius:10px;">0명</span>
                             </div>
-                         <div style="padding:10px; border-top:1px solid #eee;">
-                             <button onclick="removeSelectedVoters()" style="width:100%; padding:8px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px;">
-                                < 선택 인원 제외 (삭제)
-                             </button>
+                            <div style="padding:10px 10px 0 10px;">
+                                <input type="text" id="search-voter" placeholder="등록된 명부 내 검색..." class="search-box" onkeyup="filterVoters()">
+                            </div>
+                            <div id="target-list" class="panel-body"></div>
+                            <div style="padding:10px; border-top:1px solid #eee;">
+                                <button onclick="removeSelectedVoters()" style="width:100%; padding:10px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px; font-weight:bold;">
+                                    < 선택 인원 제외 (삭제)
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -483,38 +485,59 @@
         window.filterMembers();
     };
 
-    // 오른쪽 패널: 특정 선거구 유권자 로드
+// [수정] 선거구 유권자 로드 (UX 변경 대응)
     window.loadDistrictVoters = async () => {
         const distId = document.getElementById('target-district-select').value;
-        if(!distId) return;
+        
+        // 1. 선거구가 선택되지 않았다면 패널을 숨김
+        if(!distId) {
+            document.getElementById('manage-panel').style.display = 'none';
+            return;
+        }
 
-        // UI 세팅
+        // 2. 선거구가 선택되면 패널을 보여줌
+        document.getElementById('manage-panel').style.display = 'block';
+
         const dist = districtsCache.find(d => d.id === distId);
         document.getElementById('target-dist-name').innerText = dist.name;
         
-        // 비례대표면 '전체 등록' 버튼 보이기
+        // 버튼 텍스트/보임 여부 처리
         const btnAll = document.getElementById('btn-add-all-common');
         const btnSel = document.getElementById('btn-add-selected');
         
         if(dist.is_common) {
             btnAll.style.display = 'block';
             btnSel.innerText = '선택 인원 추가 (중복 허용) >';
+            btnSel.style.background = '#8b5cf6'; // 보라색
         } else {
             btnAll.style.display = 'none';
             btnSel.innerText = '선택 인원 이동/등록 (배타적) >';
+            btnSel.style.background = 'var(--color-primary)'; // 초록색
         }
 
-        // 유권자 Fetch (조인)
+        // 유권자 데이터 가져오기
         const { data, error } = await supabase.from('election_voters')
-            .select('*, member:coop_members(name, member_id)') // Join
+            .select('*, member:coop_members(name, member_id)')
             .eq('election_id', newElectionId)
-            .eq('district_id', distId);
+            .eq('district_id', distId)
+            .order('created_at', { ascending: false }); // 최신순
 
         if(error) console.error(error);
-        
         currentVoters = data || [];
         document.getElementById('voter-count').innerText = `${currentVoters.length}명`;
         renderTargetList(currentVoters);
+    };
+
+    // [신규 추가] 오른쪽 패널(유권자) 검색 필터 함수 (에러 원인 해결)
+    window.filterVoters = () => {
+        const keyword = document.getElementById('search-voter').value.toLowerCase();
+        
+        // currentVoters(현재 불러온 유권자)에서 검색
+        const filtered = currentVoters.filter(v => 
+            v.member.name.toLowerCase().includes(keyword) || 
+            v.member.member_id.includes(keyword)
+        );
+        renderTargetList(filtered);
     };
 
     function renderTargetList(list) {
