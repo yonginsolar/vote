@@ -58,10 +58,18 @@
     .btn-resume { background: var(--color-primary); color: white; }
 
     /* [모달 공통] */
+/* [수정] 모달 중앙 정렬 강제 적용 */
     .modal-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background-color: var(--bg-overlay); z-index: 9999;
-        display: none; justify-content: center; align-items: center;
+        position: fixed; 
+        top: 0; 
+        left: 0; 
+        width: 100%; 
+        height: 100%;
+        background-color: var(--bg-overlay); 
+        z-index: 9999;
+        display: none; /* JS에서 flex로 변경됨 */
+        justify-content: center; /* 가로 중앙 */
+        align-items: center; /* 세로 중앙 */
         backdrop-filter: blur(2px);
     }
     .modal-content {
@@ -261,14 +269,20 @@
     // ----------------------------------------------------------------
     // [1] 필수 유틸리티: 모달 함수 정의
     // ----------------------------------------------------------------
+// [수정] 알럿 모달 띄우기
     window.showAlert = (msg) => {
         const modal = document.getElementById('common-alert-modal');
         const msgBox = document.getElementById('common-alert-msg');
         const btnBox = document.getElementById('common-alert-btns');
 
+        // 메시지 줄바꿈 처리
         msgBox.innerHTML = msg.replace(/\n/g, '<br>');
+        
+        // 확인 버튼 (중앙 정렬)
         btnBox.innerHTML = `<button onclick="document.getElementById('common-alert-modal').style.display='none'" class="btn-modal btn-confirm">확인</button>`;
-        modal.style.display = 'flex';
+        btnBox.style.justifyContent = 'center'; // 버튼 중앙 정렬
+        
+        modal.style.display = 'flex'; // flex로 띄워야 중앙에 옴
     };
 
     window.showConfirm = (msg, yesCallback) => {
@@ -325,51 +339,36 @@
         }
     }
 
-// [수정된 init 함수]
+// [수정된 init] AbortError 해결 버전
     async function init() {
-        console.log("🚀 [1] 앱 초기화 및 인증 감지 시작");
+        console.log("🚀 앱 초기화 중...");
 
-        // 1. URL에 토큰이 있는지 먼저 확인 (UI 깜빡임 방지용)
+        // 1. URL에 토큰이 있는지 확인 (UI 깜빡임 방지)
         const hash = window.location.hash;
         const hasToken = hash && hash.includes('access_token');
-        
-        // 토큰이 있다면, 성급하게 로그인 화면을 띄우지 말고 로딩 상태로 둡니다.
+
         if (hasToken) {
-            console.log("⏳ [2] 매직링크 토큰 감지됨. 인증 처리 대기...");
-            document.getElementById('login-section').innerHTML = '<h3 style="color:var(--color-primary);">🔄 인증 확인 중입니다...</h3><p>잠시만 기다려주세요.</p>';
-            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('login-section').innerHTML = '<h3>🔄 인증 확인 중입니다...</h3>';
         }
 
-        // 2. [핵심] 리스너를 가장 먼저 등록하여 이벤트를 놓치지 않게 함
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(`🔄 [3] 상태 변경 감지: ${event}`);
+        // 2. 상태 감지 리스너 (이것만 믿으면 됩니다)
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log(`Checking Auth State: ${event}`);
             
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                console.log("✅ 인증 성공! 대시보드로 이동합니다.");
-                await checkAdminAndRender(session);
+            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
+                if (session && session.user) {
+                    // URL 청소
+                    if (window.location.hash.includes('access_token')) {
+                        window.history.replaceState(null, '', window.location.pathname);
+                    }
+                    await checkAdminAndRender(session);
+                }
             } else if (event === 'SIGNED_OUT') {
-                console.log("👋 로그아웃 상태");
                 renderLoginScreen();
             }
         });
-
-        // 3. 토큰이 없는 경우에만 수동으로 세션 체크 (일반 접속 시)
-        // (토큰이 있으면 위 리스너가 SIGNED_IN을 처리하므로 여기선 건너뜀)
-        if (!hasToken) {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            
-            if (error) {
-                console.error("세션 조회 에러:", error);
-            }
-
-            if (session) {
-                console.log("💾 저장된 세션 발견");
-                await checkAdminAndRender(session);
-            } else {
-                console.log("👤 저장된 세션 없음 -> 로그인 화면");
-                renderLoginScreen();
-            }
-        }
+        
+        // *주의: 여기서 getSession()을 또 호출하지 않습니다. (AbortError 원인 제거)
     }
 
     // 로그인 화면 렌더링
@@ -609,7 +608,7 @@ async function loadDashboard() {
         window.location.reload();
     };
 
-    window.handleLogin = async () => {
+window.handleLogin = async () => {
         const email = document.getElementById('admin-email').value;
         if (!email) return window.showAlert('이메일을 입력하세요.');
 
@@ -627,87 +626,61 @@ async function loadDashboard() {
     };
 
 window.createElection = async () => {
-        // ... (입력값 유효성 검사 코드는 기존과 동일) ...
         const title = document.getElementById('election-title').value;
-        const candStart = document.getElementById('candidacy-start').value;
-        const candEnd = document.getElementById('candidacy-end').value;
-        const voteStart = document.getElementById('vote-start').value;
-        const voteEnd = document.getElementById('vote-end').value;
-        
-        if(!title || !candStart || !candEnd || !voteStart || !voteEnd) {
-            return window.showAlert('모든 기간 정보를 입력하세요.');
-        }
+        const cS = document.getElementById('candidacy-start').value;
+        const cE = document.getElementById('candidacy-end').value;
+        const vS = document.getElementById('vote-start').value;
+        const vE = document.getElementById('vote-end').value;
 
-        // 간단한 날짜 유효성 검사
-        if(candStart >= candEnd) return window.showAlert('후보 등록 종료일은 시작일보다 뒤여야 합니다.');
-        if(voteStart >= voteEnd) return window.showAlert('투표 종료일은 시작일보다 뒤여야 합니다.');
-        
-        // [수정] status: 'DRAFT' 로 저장
+        if(!title || !cS || !cE || !vS || !vE) return window.showAlert('모든 정보를 입력하세요.');
+        if(cS >= cE) return window.showAlert('후보 등록 종료일 오류');
+        if(vS >= vE) return window.showAlert('투표 종료일 오류');
+
         const { data, error } = await supabase.from('elections').insert({
-            title, 
-            candidacy_start_at: candStart,
-            candidacy_end_at: candEnd,
-            vote_start_at: voteStart,
-            vote_end_at: voteEnd,
-            start_at: candStart, 
-            end_at: voteEnd,
-            status: 'DRAFT' // 여기가 변경됨
+            title, candidacy_start_at: cS, candidacy_end_at: cE,
+            vote_start_at: vS, vote_end_at: vE,
+            start_at: cS, end_at: vE, status: 'DRAFT'
         }).select().single();
 
         if(error) return window.showAlert('생성 실패: ' + error.message);
 
         newElectionId = data.id;
-        window.showAlert('임시 저장되었습니다 (작성 중 상태).\n선거구 설정을 계속해주세요.');
+        window.showAlert('임시 저장되었습니다.\n선거구 설정을 계속해주세요.');
         document.getElementById('step-2').style.display = 'block';
     };
 
     // [Step 2 수정: 정수(Quota) 포함]
-    window.addDistrict = async () => {
+window.addDistrict = async () => {
         if(!newElectionId) return;
         const name = document.getElementById('dist-name').value.trim();
         const code = document.getElementById('dist-code').value.trim();
         const type = document.getElementById('dist-type').value;
         const quota = document.getElementById('dist-quota').value;
 
-        if (!name || !code) return window.showAlert('선거구 이름과 코드를 모두 입력해주세요.');
-        if (createdDistricts[code]) return window.showAlert('이미 등록된 선거구 코드입니다.');
-        if (!quota || quota < 1) return window.showAlert('선출 인원은 최소 1명 이상이어야 합니다.');
+        if (!name || !code) return window.showAlert('정보를 입력하세요.');
+        if (createdDistricts[code]) return window.showAlert('중복된 코드입니다.');
 
         const { data, error } = await supabase.from('districts').insert({
-            election_id: newElectionId, 
-            name, 
-            code, 
-            vote_type: type,
-            quota: parseInt(quota) // 정수 저장
+            election_id: newElectionId, name, code, vote_type: type, quota: parseInt(quota)
         }).select().single();
 
         if(error) return window.showAlert('추가 실패: ' + error.message);
 
         createdDistricts[code] = data.id;
-        
         const li = document.createElement('li');
         li.style.marginBottom = '5px';
-        li.innerHTML = `<strong>${name}</strong> (${code}) : ${quota}명 선출 [${type === 'CANDIDATE' ? '인물' : '찬반'}]`;
+        li.innerHTML = `<strong>${name}</strong> (${code}) : ${quota}명`;
         document.getElementById('district-list').appendChild(li);
         
-        // 입력창 초기화
-        document.getElementById('dist-name').value = '';
-        document.getElementById('dist-code').value = '';
-        document.getElementById('dist-quota').value = '1';
-
         const count = Object.keys(createdDistricts).length;
-        const warningEl = document.getElementById('district-warning');
-        
-        // 임원 선거(1개 선거구)도 가능하므로 최소 조건 1개로 완화 또는 정책에 맞게 수정
-        if (count < 1) {
-            warningEl.style.color = 'red';
-            warningEl.innerText = `⚠️ 선거구는 최소 1개 이상 등록해야 합니다.`;
-            document.getElementById('step-3').style.display = 'none';
-        } else {
-            warningEl.style.color = 'green';
-            warningEl.innerText = `✅ 선거구 등록됨 (현재 ${count}개)`;
+        if (count > 0) { // 1개 이상이면 통과
+            document.getElementById('district-warning').innerText = `✅ 선거구 등록됨 (${count}개)`;
+            document.getElementById('district-warning').style.color = 'green';
             document.getElementById('step-3').style.display = 'block';
         }
+        
+        document.getElementById('dist-name').value = '';
+        document.getElementById('dist-code').value = '';
     };
 
     window.uploadVoters = async () => {
@@ -833,31 +806,19 @@ window.createElection = async () => {
 window.confirmUpload = async () => {
         if (pendingVoters.length === 0) return window.showAlert('저장할 데이터가 없습니다.');
         
-        window.showConfirm(`총 ${pendingVoters.length}명의 명부를 등록하시겠습니까?`, async () => {
-             const finalPayload = pendingVoters.map(item => ({
-                election_id: item.election_id,
-                district_id: item.district_id,
-                member_uuid: item.member_uuid,
-                member_no: item.member_no
+        window.showConfirm(`총 ${pendingVoters.length}명을 등록하시겠습니까?`, async () => {
+            const payload = pendingVoters.map(p => ({
+                election_id: p.election_id, district_id: p.district_id,
+                member_uuid: p.member_uuid, member_no: p.member_no
             }));
-
-            const { error: insError } = await supabase.from('election_voters')
-                .upsert(finalPayload, { onConflict: 'election_id, member_uuid' });
             
-            if(insError) return window.showAlert('DB 저장 실패: ' + insError.message);
-            
-            // [신규] 모든 설정이 끝났으므로 DRAFT -> PREPARE 상태 변경
-            const { error: updateError } = await supabase
-                .from('elections')
-                .update({ status: 'PREPARE' })
-                .eq('id', newElectionId);
+            const { error } = await supabase.from('election_voters').upsert(payload, { onConflict: 'election_id, member_uuid'});
+            if(error) return window.showAlert('실패: ' + error.message);
 
-            if(updateError) console.error("상태 업데이트 실패:", updateError);
-
-            window.showAlert('✅ 선거 생성이 최종 완료되었습니다!\n이제 관리자 대시보드에서 관리할 수 있습니다.');
+            await supabase.from('elections').update({ status: 'PREPARE' }).eq('id', newElectionId);
             
-            // 바로 이동하지 않고 대시보드 리로드 (UI 자연스럽게)
-            setTimeout(() => window.location.reload(), 1500); 
+            window.showAlert('✅ 완료되었습니다! 대시보드로 이동합니다.');
+            setTimeout(() => window.location.reload(), 1500);
         });
     };
 
