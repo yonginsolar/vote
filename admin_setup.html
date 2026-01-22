@@ -380,7 +380,7 @@ async function init() {
 } // <--- [중요] init 함수 닫는 괄호 (여기가 빠져서 에러가 났었습니다)
 
     // [관리자 권한 확인 및 렌더링 함수]
-    async checkAdminAndRender(session) {
+    async function checkAdminAndRender(session) {
         const userEmail = session.user.email ? session.user.email.toLowerCase() : '';
         console.log(`🔎 권한 조회 시작: ${userEmail}`);
 
