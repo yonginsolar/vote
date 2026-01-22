@@ -544,7 +544,7 @@ function updateStatusBadge(status) {
     }
 } // End of updateStatusBadge
 
-    // [수정] 선거구 추가 및 수정 처리 함수
+// [수정] 선거구 추가 및 수정 처리 함수
 async function addDistrict() {
     // 1. ID 복구 시도 (새로고침 대응)
     if (!newElectionId) newElectionId = localStorage.getItem('draft_election_id');
@@ -567,9 +567,7 @@ async function addDistrict() {
 
         if (error) return window.showAlert('수정 실패: ' + error.message);
 
-        // UI 갱신: 기존 리스트 아이템을 찾아 교체하는 대신, 화면을 단순화하기 위해
-        // 기존 아이템을 지우고 그 자리에 업데이트된 내용을 다시 그림 (혹은 리스트 전체 갱신)
-        // 여기서는 간단히 DOM 요소를 찾아서 텍스트만 바꿉니다.
+        // UI 갱신
         const li = document.getElementById(`li-${editingDistrictId}`);
         if (li) {
             li.innerHTML = `<strong>${name}</strong> (${code}) : ${quota}명`;
@@ -583,7 +581,7 @@ async function addDistrict() {
         // 수정 모드 종료
         editingDistrictId = null;
         btn.innerText = '+ 선거구 추가';
-        btn.style.background = '#4b5563'; // 원래 색상(회색) 복구
+        btn.style.background = '#4b5563'; 
     } 
     // [Mode 2: 추가 모드]
     else {
@@ -598,7 +596,21 @@ async function addDistrict() {
         createdDistricts[code] = data.id;
         addDistrictToListUI(data.id, name, code, quota, type);
     }
-    // [수정] 선거구 리스트 UI 생성 (수정/삭제 버튼 포함)
+
+    // 입력창 초기화
+    clearDistrictInputs();
+    
+    // UI 상태 업데이트
+    const count = document.getElementById('district-list').children.length;
+    const warningEl = document.getElementById('district-warning');
+    if (count > 0) {
+        warningEl.innerText = `✅ 선거구 등록됨 (${count}개)`;
+        warningEl.style.color = 'green';
+        document.getElementById('step-3').style.display = 'block';
+    }
+} // End of addDistrict (여기서 함수가 끝납니다!)
+
+// [전역 함수] 선거구 리스트 UI 생성 (수정/삭제 버튼 포함)
 function addDistrictToListUI(id, name, code, quota, type) {
     const list = document.getElementById('district-list');
     
@@ -629,7 +641,7 @@ function addDistrictToListUI(id, name, code, quota, type) {
     list.appendChild(li);
 }
 
-// [신규] 리스트 아이템에 수정/삭제 버튼을 부착하는 함수
+// [전역 함수] 리스트 아이템에 수정/삭제 버튼을 부착하는 함수
 function addButtonsToLi(container, id, name, code, quota, type) {
     container.innerHTML = ''; // 기존 버튼 초기화
 
@@ -690,7 +702,7 @@ function addButtonsToLi(container, id, name, code, quota, type) {
     container.appendChild(delBtn);
 }
 
-// [신규] 입력창 및 수정 모드 초기화 헬퍼
+// [전역 함수] 입력창 및 수정 모드 초기화 헬퍼
 function clearDistrictInputs() {
     document.getElementById('dist-name').value = '';
     document.getElementById('dist-code').value = '';
@@ -703,19 +715,6 @@ function clearDistrictInputs() {
         btn.style.background = '#4b5563';
     }
 }
-
-    // 입력창 초기화
-    clearDistrictInputs();
-    
-    // UI 상태 업데이트
-    const count = document.getElementById('district-list').children.length;
-    const warningEl = document.getElementById('district-warning');
-    if (count > 0) {
-        warningEl.innerText = `✅ 선거구 등록됨 (${count}개)`;
-        warningEl.style.color = 'green';
-        document.getElementById('step-3').style.display = 'block';
-    }
-} // End of addDistrict
     
     // ----------------------------------------------------------------
     // [3] 비즈니스 로직 (대시보드 등)
