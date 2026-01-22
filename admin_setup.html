@@ -319,33 +319,12 @@
     // [2] 초기화 및 대시보드 (수정됨: onAuthStateChange 적용)
     // ----------------------------------------------------------------
     
-    // UI 상태를 변경하는 함수 분리
-    function renderUI(session) {
-        if (session) {
-            document.getElementById('login-section').style.display = 'none';
-            document.getElementById('user-info-area').style.display = 'flex';
-            document.getElementById('login-info').innerText = session.user.email;
-            document.getElementById('dashboard-section').style.display = 'block';
-            
-            // 기존 setup-section은 숨김 (상태 유지 로직이 필요하다면 별도 처리 필요)
-            document.getElementById('setup-section').style.display = 'none';
-            
-            loadDashboard(); 
-        } else {
-            document.getElementById('login-section').style.display = 'block';
-            document.getElementById('user-info-area').style.display = 'none';
-            document.getElementById('dashboard-section').style.display = 'none';
-            document.getElementById('setup-section').style.display = 'none';
-        }
-    }
+
 
 // [전역 변수] 중복 실행 방지용 잠금 장치
     let isAuthChecking = false;
 
-// [admin_setup.html 용 init 함수 수정본]
 
-// [전역 변수] 중복 실행 방지용 잠금 장치
-let isAuthChecking = false;
 
 async function init() {
     console.log("🚀 앱 초기화 시작...");
