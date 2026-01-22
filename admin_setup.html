@@ -318,57 +318,51 @@
     // [전역 변수] 중복 실행 방지용 잠금 장치 (하나만 남김)
     let isAuthChecking = false;
 
-// [수정] 앱 초기화 및 인증 리스너 (새로고침 시 로그인 화면 튕김 방지 적용)
+// [수정된 init] 세션 우선 조회 방식 (새로고침 유지 + 무한로딩 방지)
 async function init() {
-    console.log("🚀 앱 초기화 시작...");
+    console.log("🚀 앱 초기화 시작 (Session-First Strategy)...");
 
-    // 1. URL에 토큰이 있다면 즉시 '인증 중' 화면 표시 (UX)
-    if (window.location.hash.includes('access_token')) {
+    // 1. [UX] 매직링크로 진입했다면 일단 '인증 중' 화면 표시
+    const isMagicLink = window.location.hash.includes('access_token');
+    if (isMagicLink) {
         document.getElementById('login-section').innerHTML = 
-            '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
+            '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>잠시만 기다려주세요.</p>';
     }
 
-    // [핵심] 새로고침 시 깜빡임 방지를 위해 로딩 상태가 아니면 로그인 화면을 띄우지 않음.
-    // Supabase가 세션을 확인하는 동안(약 0.5초)은 아무것도 하지 않고 기다림.
+    // 2. [핵심] 이벤트 리스너보다 먼저, 현재 저장된 세션이 있는지 '능동적'으로 확인
+    // -> 새로고침 시 여기서 즉시 로그인 처리되므로 AbortError가 날 틈이 없음.
+    const { data: { session }, error } = await supabase.auth.getSession();
 
-    // 2. 인증 상태 감지 리스너 등록
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    if (session) {
+        console.log("✅ 저장된 세션 발견 (새로고침 복구)");
+        // 세션이 있으면 바로 권한 체크 후 대시보드 진입
+        await checkAdminAndRender(session);
+        return; // 리스너 등록 전에 종료하여 중복 실행 방지
+    }
+
+    // 3. 저장된 세션이 없을 때만(최초 로그인/매직링크) 이벤트 리스너 가동
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log(`📣 인증 상태 변경 감지: ${event}`);
 
-        // [방어 로직] 이미 인증 확인 작업이 진행 중이라면 중복 실행 방지
-        if (isAuthChecking) return;
-
-        // Case A: 로그인 성공 (세션 확인됨)
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
-            if (session && session.user) {
-                isAuthChecking = true; // 잠금 설정
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            if (session) {
                 try {
-                    // 권한 체크 및 대시보드 렌더링 시도
                     await checkAdminAndRender(session);
-                    
-                    // URL에 남은 토큰 정보 청소 (보안)
+                    // 매직링크 토큰이 URL에 남아있으면 청소
                     if (window.location.hash.includes('access_token')) {
                         window.history.replaceState(null, '', window.location.pathname);
                     }
-                } catch (error) {
-                    // AbortError는 시스템상 자동 취소이므로 무시하되, 
-                    // 그 외 진짜 에러는 사용자에게 알림
-                    if (error.name !== 'AbortError') {
-                        console.error(error);
-                        window.showAlert(error.message);
-                        await supabase.auth.signOut();
-                        renderLoginScreen();
-                    }
-                } finally {
-                    isAuthChecking = false; // 잠금 해제
+                } catch (err) {
+                    console.error("인증 후 렌더링 실패:", err);
+                    // AbortError가 아닌 진짜 에러만 표시
+                    if (err.name !== 'AbortError') window.showAlert(err.message);
                 }
             }
-        } 
-        // Case B: 로그아웃 상태임이 '확실'할 때만 로그인 화면 표시
-        else if (event === 'SIGNED_OUT') {
-            // 토큰을 처리 중인 찰나의 순간에 SIGNED_OUT이 먼저 발생하는 경우 방어
-            if (window.location.hash.includes('access_token')) return;
-            renderLoginScreen();
+        } else if (event === 'SIGNED_OUT') {
+            // 매직링크 처리 중이 아닐 때만 로그인 화면 표시
+            if (!window.location.hash.includes('access_token')) {
+                renderLoginScreen();
+            }
         }
     });
 } // End of init
