@@ -318,58 +318,60 @@
     // [전역 변수] 중복 실행 방지용 잠금 장치 (하나만 남김)
     let isAuthChecking = false;
 
-    async function init() {
-        console.log("🚀 앱 초기화 시작...");
+// [수정] 앱 초기화 및 인증 리스너 (새로고침 시 로그인 화면 튕김 방지 적용)
+async function init() {
+    console.log("🚀 앱 초기화 시작...");
 
-        // 1. 시각적 피드백
-        if (window.location.hash.includes('access_token')) {
-            document.getElementById('login-section').innerHTML = 
-                '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
-        }
+    // 1. URL에 토큰이 있다면 즉시 '인증 중' 화면 표시 (UX)
+    if (window.location.hash.includes('access_token')) {
+        document.getElementById('login-section').innerHTML = 
+            '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
+    }
 
-        // 2. 인증 상태 감지 리스너
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(`📣 인증 상태 변경 감지: ${event}`);
+    // [핵심] 새로고침 시 깜빡임 방지를 위해 로딩 상태가 아니면 로그인 화면을 띄우지 않음.
+    // Supabase가 세션을 확인하는 동안(약 0.5초)은 아무것도 하지 않고 기다림.
 
-            // [Lock] 이미 로직 실행 중이면 무시
-            if (isAuthChecking) {
-                console.log("⚠️ 인증 로직 중복 실행 방지");
-                return;
-            }
+    // 2. 인증 상태 감지 리스너 등록
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log(`📣 인증 상태 변경 감지: ${event}`);
 
-            // Case A: 로그인 성공
-            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
-                if (session && session.user) {
-                    isAuthChecking = true; // 잠금
-                    try {
-                        // 권한 체크 및 렌더링
-                        await checkAdminAndRender(session);
-                        
-                        // 성공 후 URL 청소
-                        if (window.location.hash.includes('access_token')) {
-                            window.history.replaceState(null, '', window.location.pathname);
-                        }
-                    } catch (error) {
-                        // AbortError 무시, 그 외 에러는 알림
-                        if (error.name !== 'AbortError') {
-                            console.error(error);
-                            window.showAlert(error.message);
-                            await supabase.auth.signOut();
-                            renderLoginScreen();
-                        }
-                    } finally {
-                        isAuthChecking = false; // 잠금 해제
+        // [방어 로직] 이미 인증 확인 작업이 진행 중이라면 중복 실행 방지
+        if (isAuthChecking) return;
+
+        // Case A: 로그인 성공 (세션 확인됨)
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
+            if (session && session.user) {
+                isAuthChecking = true; // 잠금 설정
+                try {
+                    // 권한 체크 및 대시보드 렌더링 시도
+                    await checkAdminAndRender(session);
+                    
+                    // URL에 남은 토큰 정보 청소 (보안)
+                    if (window.location.hash.includes('access_token')) {
+                        window.history.replaceState(null, '', window.location.pathname);
                     }
+                } catch (error) {
+                    // AbortError는 시스템상 자동 취소이므로 무시하되, 
+                    // 그 외 진짜 에러는 사용자에게 알림
+                    if (error.name !== 'AbortError') {
+                        console.error(error);
+                        window.showAlert(error.message);
+                        await supabase.auth.signOut();
+                        renderLoginScreen();
+                    }
+                } finally {
+                    isAuthChecking = false; // 잠금 해제
                 }
-            } 
-            // Case B: 로그아웃
-            else if (event === 'SIGNED_OUT') {
-                // 토큰 처리 중일 땐 로그아웃 화면 전환 보류
-                if (window.location.hash.includes('access_token')) return;
-                renderLoginScreen();
             }
-        });
-    } // End of init
+        } 
+        // Case B: 로그아웃 상태임이 '확실'할 때만 로그인 화면 표시
+        else if (event === 'SIGNED_OUT') {
+            // 토큰을 처리 중인 찰나의 순간에 SIGNED_OUT이 먼저 발생하는 경우 방어
+            if (window.location.hash.includes('access_token')) return;
+            renderLoginScreen();
+        }
+    });
+} // End of init
 
     // [관리자 권한 확인 및 렌더링 함수] - 전역 함수 선언
     async function checkAdminAndRender(session) {
@@ -411,7 +413,195 @@
         document.getElementById('dashboard-section').style.display = 'none';
         document.getElementById('setup-section').style.display = 'none';
     }
+    // [신규] 지난 선거 데이터 불러오기
+async function loadPreviousElectionData() {
+    // 가장 최근에 생성된 선거 1개를 조회
+    const { data, error } = await supabase.from('elections')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+        
+    if (error || !data) return window.showAlert('불러올 이전 선거 데이터가 없습니다.');
 
+    window.showConfirm(`최근 선거 '${data.title}'의 정보를 불러오시겠습니까?`, () => {
+        document.getElementById('election-title').value = data.title + ' (복사본)';
+        
+        // 날짜 데이터가 있으면 포맷(YYYY-MM-DDTHH:mm)에 맞춰 입력
+        if(data.candidacy_start_at) document.getElementById('candidacy-start').value = data.candidacy_start_at.slice(0,16);
+        if(data.candidacy_end_at) document.getElementById('candidacy-end').value = data.candidacy_end_at.slice(0,16);
+        if(data.vote_start_at) document.getElementById('vote-start').value = data.vote_start_at.slice(0,16);
+        if(data.vote_end_at) document.getElementById('vote-end').value = data.vote_end_at.slice(0,16);
+        
+        window.showAlert('데이터가 채워졌습니다.');
+    });
+} // End of loadPreviousElectionData
+
+// [신규] Step 1 폼 초기화 버튼용
+function resetStep1Form() {
+    document.getElementById('election-title').value = '';
+    document.getElementById('candidacy-start').value = '';
+    document.getElementById('candidacy-end').value = '';
+    document.getElementById('vote-start').value = '';
+    document.getElementById('vote-end').value = '';
+} // End of resetStep1Form
+
+    // [수정] 엑셀 업로드 및 유효성 검사 (제안 A 적용)
+async function uploadVoters() {
+    if (Object.keys(createdDistricts).length < 1) return window.showAlert('선거구가 없습니다.');
+    const fileInput = document.getElementById('excel-file');
+    if(fileInput.files.length === 0) return window.showAlert('파일을 선택하세요.');
+
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+        // 조합원 DB 전체 로드 (비교용)
+        const { data: members, error: memError } = await supabase.from('coop_members').select('id, member_id, name, phone');
+        if(memError) return window.showAlert('DB 로드 실패');
+
+        const memberMap = new Map();
+        members.forEach(m => memberMap.set(String(m.member_id), m));
+
+        const tempPayload = []; // 성공 데이터
+        const failLog = [];     // 실패 데이터
+
+        // 데이터 한 줄씩 검증
+        for(const row of rows) {
+            const memIdStr = String(row.member_id || '').trim();
+            const distCodeStr = String(row.district_code || '').trim();
+            
+            const memberInfo = memberMap.get(memIdStr);
+            const distId = createdDistricts[distCodeStr];
+
+            // [검증] 회원 정보가 있고 && 선거구 코드가 유효한가?
+            if(memberInfo && distId) {
+                tempPayload.push({
+                    election_id: newElectionId,
+                    district_id: distId,
+                    member_uuid: memberInfo.id,
+                    member_no: memIdStr,
+                    _view_name: memberInfo.name,
+                    _view_phone: memberInfo.phone,
+                    _view_dist_code: distCodeStr,
+                    isValid: true
+                });
+            } else {
+                // 실패 원인 분석
+                let reason = '';
+                if(!memberInfo) reason += '[회원정보 없음] ';
+                if(!distId) reason += '[선거구 코드 불일치] ';
+                
+                failLog.push({ ...row, reason });
+            }
+        }
+
+        // [UI] 검증 결과 리포트 표시 (HTML 요소를 동적으로 찾아서 넣음)
+        const summaryDiv = document.getElementById('preview-summary') || document.createElement('div');
+        summaryDiv.id = 'preview-summary'; // 없으면 생성
+        summaryDiv.style.cssText = "margin-bottom:15px; padding:10px; background:#f0f9ff; border-radius:6px; color:#0369a1;";
+        
+        summaryDiv.innerHTML = `
+            <strong>📊 검증 결과 리포트</strong><br>
+            - ✅ 등록 가능: <span style="color:green; font-weight:bold;">${tempPayload.length}건</span><br>
+            - ❌ 등록 불가: <span style="color:red; font-weight:bold;">${failLog.length}건</span>
+            ${failLog.length > 0 ? `<br><small style="color:#d97706;">* 실패한 데이터는 업로드에서 제외됩니다.</small>` : ''}
+        `;
+        
+        // 모달 내용 상단에 요약 삽입
+        const modalContent = document.querySelector('#preview-modal .modal-content');
+        const listDiv = document.getElementById('preview-list');
+        modalContent.insertBefore(summaryDiv, listDiv);
+
+        if(tempPayload.length > 0) {
+            renderPreview(tempPayload); // 미리보기 함수 호출
+        } else {
+            window.showAlert('등록 가능한 유효 데이터가 0건입니다.\n엑셀 내용을 확인해주세요.');
+        }
+    };
+    reader.readAsArrayBuffer(file);
+} // End of uploadVoters
+
+// [신규] 상태 뱃지 업데이트 헬퍼 함수
+function updateStatusBadge(status) {
+    const badge = document.getElementById('status-badge');
+    if (!badge) return; // 요소가 없으면 패스
+
+    if (!status) {
+        badge.style.display = 'none';
+        return;
+    }
+    badge.style.display = 'inline-block';
+    badge.innerText = status === 'DRAFT' ? '작성 중' : status;
+    
+    // 상태별 색상 적용
+    if (status === 'DRAFT') {
+        badge.style.background = '#fef3c7'; badge.style.color = '#d97706'; // 노랑
+    } else if (status === 'OPEN') {
+        badge.style.background = '#d1fae5'; badge.style.color = '#059669'; // 초록
+    } else {
+        badge.style.background = '#e5e7eb'; badge.style.color = '#374151'; // 회색
+    }
+} // End of updateStatusBadge
+    // [수정] 선거구 추가 (버그 픽스: ID 없을 시 복구 시도)
+async function addDistrict() {
+    // 1. 메모리에 ID가 없으면 스토리지에서 복구 시도
+    if(!newElectionId) {
+        newElectionId = localStorage.getItem('draft_election_id');
+    }
+    
+    // 2. 그래도 없으면 경고 후 중단 (침묵 방지)
+    if(!newElectionId) return window.showAlert('먼저 Step 1 설정을 저장해주세요.');
+
+    const name = document.getElementById('dist-name').value.trim();
+    const code = document.getElementById('dist-code').value.trim();
+    const type = document.getElementById('dist-type').value;
+    const quota = document.getElementById('dist-quota').value;
+
+    if (!name || !code) return window.showAlert('정보를 입력하세요.');
+    if (createdDistricts[code]) return window.showAlert('중복된 코드입니다.');
+
+    // DB Insert
+    const { data, error } = await supabase.from('districts').insert({
+        election_id: newElectionId, name, code, vote_type: type, quota: parseInt(quota)
+    }).select().single();
+
+    if(error) return window.showAlert('추가 실패: ' + error.message);
+
+    // UI 업데이트
+    createdDistricts[code] = data.id;
+    const li = document.createElement('li');
+    li.style.marginBottom = '5px';
+    li.innerHTML = `<strong>${name}</strong> (${code}) : ${quota}명`;
+    
+    // [추가 기능] 삭제 버튼 달기
+    const delBtn = document.createElement('button');
+    delBtn.innerText = '삭제';
+    delBtn.className = 'btn-delete';
+    delBtn.style.marginLeft = '10px';
+    delBtn.onclick = async () => {
+         await supabase.from('districts').delete().eq('id', data.id);
+         delete createdDistricts[code];
+         li.remove();
+    };
+    li.appendChild(delBtn);
+
+    document.getElementById('district-list').appendChild(li);
+    
+    // 경고 메시지를 성공 메시지로 변경
+    document.getElementById('district-warning').innerText = `✅ 선거구 등록됨`;
+    document.getElementById('district-warning').style.color = 'green';
+    document.getElementById('step-3').style.display = 'block';
+    
+    // 입력창 초기화
+    document.getElementById('dist-name').value = '';
+    document.getElementById('dist-code').value = '';
+} // End of addDistrict
+    
     // ----------------------------------------------------------------
     // [3] 비즈니스 로직 (대시보드 등)
     // ----------------------------------------------------------------
