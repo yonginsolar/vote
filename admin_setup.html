@@ -339,43 +339,99 @@
         }
     }
 
-// [수정된 init] 매직링크 토큰 처리 시점 문제(Race Condition) 해결 버전
+// [전역 변수] 중복 실행 방지용 잠금 장치
+    let isAuthChecking = false;
+
     async function init() {
-        console.log("🚀 앱 초기화 중...");
+        console.log("🚀 앱 초기화 시작...");
 
-        // 1. URL에 토큰이 있는지 확인 (UI 깜빡임 방지 및 로직 제어용)
-        const hash = window.location.hash;
-        const hasToken = hash && hash.includes('access_token');
-
-        if (hasToken) {
-            // 토큰이 있으면 로그인 화면 대신 인증 중 화면 표시
-            document.getElementById('login-section').innerHTML = '<h3>🔄 인증 확인 중입니다... 잠시만 기다려주세요.</h3>';
+        // 1. 시각적 피드백: URL에 토큰이 있으면 '인증 중' 메시지 표시
+        if (window.location.hash.includes('access_token')) {
+            document.getElementById('login-section').innerHTML = 
+                '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
         }
 
-        // 2. 상태 감지 리스너 (이것만 믿으면 됩니다)
+        // 2. 인증 상태 감지 리스너
         supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(`Checking Auth State: ${event}`);
-            
+            console.log(`📣 인증 상태 변경 감지: ${event}`);
+
+            // [핵심 1] 이미 인증 체크 중이라면 중복 실행 차단 (Lock)
+            if (isAuthChecking) {
+                console.log("⚠️ 인증 로직이 이미 실행 중입니다. 이번 이벤트는 건너뜁니다.");
+                return;
+            }
+
+            // [케이스 A] 로그인 성공 (세션이 있는 경우)
             if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
                 if (session && session.user) {
-                    // URL 청소
-                    if (window.location.hash.includes('access_token')) {
-                        window.history.replaceState(null, '', window.location.pathname);
+                    isAuthChecking = true; // 🔒 문 잠금
+
+                    try {
+                        // DB 권한 확인 및 대시보드 렌더링
+                        await checkAdminAndRender(session);
+                        
+                        // [핵심 2] 모든 로직이 성공적으로 끝난 "뒤에" URL 청소
+                        if (window.location.hash.includes('access_token')) {
+                            window.history.replaceState(null, '', window.location.pathname);
+                        }
+                    } catch (error) {
+                        // [핵심 3] AbortError는 시스템상 취소이므로 무시, 진짜 에러만 알림
+                        if (error.name !== 'AbortError') {
+                            console.error("인증 처리 중 오류:", error);
+                            window.showAlert(error.message);
+                            // 치명적 오류 시 로그아웃 처리하여 재진입 유도
+                            await supabase.auth.signOut();
+                            renderLoginScreen();
+                        }
+                    } finally {
+                        isAuthChecking = false; // 🔓 문 열기
                     }
-                    await checkAdminAndRender(session);
                 }
-            } else if (event === 'SIGNED_OUT') {
-                // [핵심 수정] 토큰이 처리 중인 상태(hasToken)라면 로그아웃 처리를 보류함.
-                // Supabase가 토큰을 인식하고 SIGNED_IN을 뱉기 전에 SIGNED_OUT이 먼저 튀는 경우를 방어.
-                if (hasToken && window.location.hash.includes('access_token')) {
-                    console.log("⏳ 토큰 처리 중이므로 초기 로그아웃 이벤트 무시함");
-                    return; 
+            } 
+            // [케이스 B] 로그아웃 상태
+            else if (event === 'SIGNED_OUT') {
+                // 토큰이 처리 중인 찰나의 순간에 SIGNED_OUT이 먼저 뜨는 경우 방어
+                if (window.location.hash.includes('access_token')) {
+                    console.log("⏳ 토큰 파싱 중... 로그아웃 화면 보류");
+                    return;
                 }
                 renderLoginScreen();
             }
         });
+    }
+
+    // [관리자 권한 확인 및 렌더링 함수]
+    async checkAdminAndRender(session) {
+        const userEmail = session.user.email ? session.user.email.toLowerCase() : '';
+        console.log(`🔎 권한 조회 시작: ${userEmail}`);
+
+        // 1. 관리자 정보 조회 (AdminService 사용 가능 시 활용, 여기선 직접 호출 유지)
+        const { data: member, error } = await supabase
+            .from('coop_members')
+            .select('role, name, email')
+            .eq('email', userEmail)
+            .maybeSingle();
+
+        // 2. 에러 처리
+        if (error) throw new Error("데이터베이스 연결 오류: " + error.message);
+        if (!member) throw new Error("등록된 회원 정보가 없습니다. 관리자에게 문의하세요.");
         
-        // *주의: 여기서 getSession()을 또 호출하지 않습니다. (AbortError 원인 제거)
+        // [중요] role 체크 (admin 또는 election_comm 등 허용 범위 설정)
+        // 대소문자 이슈 방지를 위해 소문자로 변환 후 비교 권장
+        const userRole = member.role ? member.role.toLowerCase() : '';
+        if (userRole !== 'admin' && userRole !== 'super_admin') {
+            throw new Error(`접근 권한이 없습니다. (현재 등급: ${member.role})`);
+        }
+
+        // 3. 성공 시 UI 전환
+        console.log("✅ 관리자 승인 완료.");
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('user-info-area').style.display = 'flex';
+        document.getElementById('login-info').innerText = `${member.name}님 (${userEmail})`;
+        
+        // 4. 대시보드 로드
+        document.getElementById('dashboard-section').style.display = 'block';
+        await loadDashboard(); 
     }
 
     // 로그인 화면 렌더링
@@ -386,57 +442,7 @@
         document.getElementById('setup-section').style.display = 'none';
     }
 
-// 기존 checkAdminAndRender 함수를 이 코드로 전체 교체
-    async function checkAdminAndRender(session) {
-        // [수정] 이메일 대소문자 정규화 (DB 불일치 방지)
-        const userEmail = session.user.email ? session.user.email.toLowerCase() : '';
 
-        try {
-            // [보안 로직 추가] DB에서 해당 이메일의 role 확인
-            // 전제: coop_members 테이블에 'email' 컬럼과 'role' 컬럼이 있어야 함
-            const { data: member, error } = await supabase
-                .from('coop_members')
-                .select('role, name, email') // 이름도 가져와서 환영 메시지에 활용 가능
-                .eq('email', userEmail)
-                .maybeSingle(); // 데이터가 없어도 에러 대신 null 반환
-
-            if (error) {
-                console.error("DB 조회 에러:", error);
-                throw new Error("관리자 정보를 확인하는 중 오류가 발생했습니다.\n" + error.message);
-            }
-
-            // 1. DB에 해당 이메일이 없는 경우
-            if (!member) {
-                throw new Error("등록된 관리자 정보가 없습니다.\n관리자에게 문의하세요.");
-            }
-
-            // 2. role이 admin이 아닌 경우
-            // (대소문자 구분 없이 처리하려면 .toLowerCase() 추가 가능, 현재는 엄격하게 비교)
-            if (member.role !== 'admin') {
-                throw new Error("접근 권한이 없습니다.\n(Role: " + (member.role || 'None') + ")");
-            }
-
-            // 3. 인증 & 인가 성공 -> UI 전환
-            console.log(`✅ 관리자 확인됨: ${member.name} (${userEmail})`);
-            
-            document.getElementById('login-section').style.display = 'none';
-            document.getElementById('user-info-area').style.display = 'flex';
-            
-            // 로그인 정보에 이름까지 표시해주면 더 좋음
-            document.getElementById('login-info').innerText = `${member.name || '관리자'} (${userEmail})`;
-
-            console.log("📊 [6] 대시보드 로드");
-            document.getElementById('dashboard-section').style.display = 'block';
-            loadDashboard();
-
-        } catch (e) {
-            // 권한 없음 또는 에러 발생 시 -> 강제 로그아웃 및 경고
-            console.warn("🚫 접근 거부:", e.message);
-            window.showAlert(e.message);
-            await supabase.auth.signOut(); // 세션 파기
-            renderLoginScreen(); // 로그인 화면으로 복귀
-        }
-    }
 
     // (참고: 기존 loadDashboard, handleStatusChange 등은 그대로 유지)
 
