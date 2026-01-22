@@ -339,16 +339,17 @@
         }
     }
 
-// [수정된 init] AbortError 해결 버전
+// [수정된 init] 매직링크 토큰 처리 시점 문제(Race Condition) 해결 버전
     async function init() {
         console.log("🚀 앱 초기화 중...");
 
-        // 1. URL에 토큰이 있는지 확인 (UI 깜빡임 방지)
+        // 1. URL에 토큰이 있는지 확인 (UI 깜빡임 방지 및 로직 제어용)
         const hash = window.location.hash;
         const hasToken = hash && hash.includes('access_token');
 
         if (hasToken) {
-            document.getElementById('login-section').innerHTML = '<h3>🔄 인증 확인 중입니다...</h3>';
+            // 토큰이 있으면 로그인 화면 대신 인증 중 화면 표시
+            document.getElementById('login-section').innerHTML = '<h3>🔄 인증 확인 중입니다... 잠시만 기다려주세요.</h3>';
         }
 
         // 2. 상태 감지 리스너 (이것만 믿으면 됩니다)
@@ -364,6 +365,12 @@
                     await checkAdminAndRender(session);
                 }
             } else if (event === 'SIGNED_OUT') {
+                // [핵심 수정] 토큰이 처리 중인 상태(hasToken)라면 로그아웃 처리를 보류함.
+                // Supabase가 토큰을 인식하고 SIGNED_IN을 뱉기 전에 SIGNED_OUT이 먼저 튀는 경우를 방어.
+                if (hasToken && window.location.hash.includes('access_token')) {
+                    console.log("⏳ 토큰 처리 중이므로 초기 로그아웃 이벤트 무시함");
+                    return; 
+                }
                 renderLoginScreen();
             }
         });
@@ -381,20 +388,21 @@
 
 // 기존 checkAdminAndRender 함수를 이 코드로 전체 교체
     async function checkAdminAndRender(session) {
-        const userEmail = session.user.email;
+        // [수정] 이메일 대소문자 정규화 (DB 불일치 방지)
+        const userEmail = session.user.email ? session.user.email.toLowerCase() : '';
 
         try {
             // [보안 로직 추가] DB에서 해당 이메일의 role 확인
             // 전제: coop_members 테이블에 'email' 컬럼과 'role' 컬럼이 있어야 함
             const { data: member, error } = await supabase
                 .from('coop_members')
-                .select('role, name') // 이름도 가져와서 환영 메시지에 활용 가능
+                .select('role, name, email') // 이름도 가져와서 환영 메시지에 활용 가능
                 .eq('email', userEmail)
                 .maybeSingle(); // 데이터가 없어도 에러 대신 null 반환
 
             if (error) {
                 console.error("DB 조회 에러:", error);
-                throw new Error("관리자 정보를 확인하는 중 오류가 발생했습니다.");
+                throw new Error("관리자 정보를 확인하는 중 오류가 발생했습니다.\n" + error.message);
             }
 
             // 1. DB에 해당 이메일이 없는 경우
