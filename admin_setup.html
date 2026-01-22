@@ -809,44 +809,58 @@ function clearDistrictInputs() {
         });
     }
 
-// [수정] 작성 중인 선거 이어하기 (resumeSetup)
-window.resumeSetup = async (el) => {
-    // ... (상단 화면 전환 코드는 그대로 유지) ...
-    document.getElementById('dashboard-section').style.display = 'none';
-    document.getElementById('setup-section').style.display = 'block';
-    
-    newElectionId = el.id;
-    localStorage.setItem('draft_election_id', newElectionId);
-    updateStatusBadge('작성 중');
-
-    // Step 1 데이터 채우기
-    document.getElementById('election-title').value = el.title;
-    if(el.candidacy_start_at) document.getElementById('candidacy-start').value = el.candidacy_start_at.slice(0,16);
-    if(el.candidacy_end_at) document.getElementById('candidacy-end').value = el.candidacy_end_at.slice(0,16);
-    if(el.vote_start_at) document.getElementById('vote-start').value = el.vote_start_at.slice(0,16);
-    if(el.vote_end_at) document.getElementById('vote-end').value = el.vote_end_at.slice(0,16);
-
-    // Step 2 선거구 복원
-    createdDistricts = {}; 
-    document.getElementById('district-list').innerHTML = ''; 
-
-    const { data: districts } = await supabase
-        .from('districts').select('*').eq('election_id', newElectionId);
+// [수정] 작성 중인 선거 이어하기 (전체 코드)
+    window.resumeSetup = async (el) => {
+        // 1. 화면 전환 (대시보드 숨김 -> 설정창 표시)
+        document.getElementById('dashboard-section').style.display = 'none';
+        document.getElementById('setup-section').style.display = 'block';
         
-    if (districts && districts.length > 0) {
-        districts.forEach(d => {
-            createdDistricts[d.code] = d.id;
-            // [중요] 새로 만든 UI 함수 사용
-            addDistrictToListUI(d.id, d.name, d.code, d.quota, d.vote_type);
-        });
-        document.getElementById('step-2').style.display = 'block';
-        document.getElementById('step-3').style.display = 'block';
-        document.getElementById('district-warning').style.color = 'green';
-        document.getElementById('district-warning').innerText = `✅ 선거구 불러오기 완료 (${districts.length}개)`;
-    } else {
-         document.getElementById('step-2').style.display = 'block';
-    }
-}; // End of resumeSetup
+        // 2. 전역 변수 설정 및 스토리지 저장 (새로고침 방어)
+        newElectionId = el.id;
+        localStorage.setItem('draft_election_id', newElectionId);
+        updateStatusBadge('작성 중');
+
+        // 3. Step 1 폼 데이터 채우기
+        document.getElementById('election-title').value = el.title;
+        
+        // 날짜 데이터가 있는 경우에만 포맷에 맞춰 입력 (YYYY-MM-DDTHH:mm)
+        if(el.candidacy_start_at) document.getElementById('candidacy-start').value = el.candidacy_start_at.slice(0,16);
+        if(el.candidacy_end_at) document.getElementById('candidacy-end').value = el.candidacy_end_at.slice(0,16);
+        if(el.vote_start_at) document.getElementById('vote-start').value = el.vote_start_at.slice(0,16);
+        if(el.vote_end_at) document.getElementById('vote-end').value = el.vote_end_at.slice(0,16);
+
+        // 4. Step 2 선거구 정보 복원
+        createdDistricts = {}; // 메모리 초기화
+        document.getElementById('district-list').innerHTML = ''; // 화면 리스트 초기화
+
+        // DB에서 선거구 조회
+        const { data: districts } = await supabase
+            .from('districts')
+            .select('*')
+            .eq('election_id', newElectionId);
+            
+        // 선거구가 존재하면 리스트 생성
+        if (districts && districts.length > 0) {
+            districts.forEach(d => {
+                createdDistricts[d.code] = d.id; // 중복 방지용 맵 업데이트
+                
+                // [중요] 새로 만든 UI 헬퍼 함수를 사용하여 수정/삭제 버튼이 포함된 리스트 생성
+                addDistrictToListUI(d.id, d.name, d.code, d.quota, d.vote_type);
+            });
+
+            // UI 상태 업데이트 (Step 3 활성화)
+            document.getElementById('step-2').style.display = 'block';
+            document.getElementById('step-3').style.display = 'block';
+            document.getElementById('district-warning').style.color = 'green';
+            document.getElementById('district-warning').innerText = `✅ 선거구 불러오기 완료 (${districts.length}개)`;
+        } else {
+            // 선거구가 없으면 Step 2만 표시하고 경고 문구 출력
+             document.getElementById('step-2').style.display = 'block';
+             document.getElementById('step-3').style.display = 'none';
+             document.getElementById('district-warning').innerText = '⚠️ 선거구는 최소 1개 이상 등록해야 합니다.';
+             document.getElementById('district-warning').style.color = 'red';
+        }
+    }; // End of resumeSetup
 
     // 상태 변경
     window.handleStatusChange = async (event, electionId, newStatus) => {
