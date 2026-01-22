@@ -575,24 +575,41 @@
         });
     };
 
-    // [신규] 미배정 인원 필터링 (가장 중요한 기능)
+// [수정] 미배정 인원 필터링 (비례대표 등록 여부는 무시하고, '지역구' 미배정만 찾음)
     window.filterUnassigned = async () => {
-        // 1. 현재 선거(newElectionId)에 등록된 모든 유권자 ID를 가져옴
+        // 1. 현재 선거구 캐시(districtsCache)에서 '지역구(is_common: false)'인 것들의 ID만 추출
+        const regionalDistIds = districtsCache
+            .filter(d => !d.is_common) // 비례대표 제외
+            .map(d => d.id);
+
+        if (regionalDistIds.length === 0) {
+            return window.showAlert('등록된 지역구가 없습니다.\n먼저 Step 2에서 지역구를 생성해주세요.');
+        }
+
+        // 2. '지역구'에 등록된 유권자만 DB에서 조회 (비례대표 등록자는 조회 안 함)
         const { data: assigned, error } = await supabase.from('election_voters')
             .select('member_uuid')
-            .eq('election_id', newElectionId);
+            .eq('election_id', newElectionId)
+            .in('district_id', regionalDistIds); // 지역구 ID 목록에 포함된 사람만
         
-        if(error) return window.showAlert('데이터 조회 실패');
+        if(error) return window.showAlert('데이터 조회 실패: ' + error.message);
         
-        // 2. Set으로 변환 (빠른 검색)
+        // 3. Set으로 변환 (지역구 배정된 사람들의 ID 집합)
         const assignedIds = new Set(assigned.map(v => v.member_uuid));
 
-        // 3. 전체 조합원 중 'assignedIds'에 없는 사람만 필터링
+        // 4. 전체 조합원 중 '지역구 배정자'가 아닌 사람만 필터링
+        // (비례대표에 있든 없든, 지역구에 없으면 뜹니다)
         const unassignedMembers = allMembers.filter(m => !assignedIds.has(m.id));
 
-        // 4. 렌더링
+        // 5. 렌더링
         renderSourceList(unassignedMembers);
-        window.showAlert(`총 ${unassignedMembers.length}명의 미배정 인원이 조회되었습니다.`);
+        
+        // 안내 메시지
+        if (unassignedMembers.length === 0) {
+            window.showAlert("모든 조합원이 지역구에 배정되었습니다! 🎉");
+        } else {
+            window.showAlert(`지역구 미배정 인원: ${unassignedMembers.length}명 조회됨\n(비례대표 등록 여부는 무관합니다)`);
+        }
     };
 
     // [수정] 유권자 등록 (Alert -> ShowAlert, Confirm -> ShowConfirm 교체)
