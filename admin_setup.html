@@ -58,7 +58,6 @@
     .btn-resume { background: var(--color-primary); color: white; }
 
     /* [모달 공통] */
-/* [수정] 모달 중앙 정렬 강제 적용 */
     .modal-overlay {
         position: fixed; 
         top: 0; 
@@ -269,7 +268,7 @@
     // ----------------------------------------------------------------
     // [1] 필수 유틸리티: 모달 함수 정의
     // ----------------------------------------------------------------
-// [수정] 알럿 모달 띄우기
+    // [수정] 알럿 모달 띄우기
     window.showAlert = (msg) => {
         const modal = document.getElementById('common-alert-modal');
         const msgBox = document.getElementById('common-alert-msg');
@@ -315,76 +314,69 @@
     // ----------------------------------------------------------------
     // [2] 초기화 및 대시보드
     // ----------------------------------------------------------------
-// ----------------------------------------------------------------
-    // [2] 초기화 및 대시보드 (수정됨: onAuthStateChange 적용)
-    // ----------------------------------------------------------------
-    
 
-
-// [전역 변수] 중복 실행 방지용 잠금 장치
+    // [전역 변수] 중복 실행 방지용 잠금 장치 (하나만 남김)
     let isAuthChecking = false;
 
+    async function init() {
+        console.log("🚀 앱 초기화 시작...");
 
-
-async function init() {
-    console.log("🚀 앱 초기화 시작...");
-
-    // 1. 시각적 피드백
-    if (window.location.hash.includes('access_token')) {
-        document.getElementById('login-section').innerHTML = 
-            '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
-    }
-
-    // 2. 인증 상태 감지 리스너
-    supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log(`📣 인증 상태 변경 감지: ${event}`);
-
-        // [Lock] 이미 로직 실행 중이면 무시
-        if (isAuthChecking) {
-            console.log("⚠️ 인증 로직 중복 실행 방지");
-            return;
+        // 1. 시각적 피드백
+        if (window.location.hash.includes('access_token')) {
+            document.getElementById('login-section').innerHTML = 
+                '<h3 style="color:var(--color-primary);">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
         }
 
-        // Case A: 로그인 성공
-        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
-            if (session && session.user) {
-                isAuthChecking = true; // 잠금
-                try {
-                    // 권한 체크 및 렌더링
-                    await checkAdminAndRender(session);
-                    
-                    // 성공 후 URL 청소
-                    if (window.location.hash.includes('access_token')) {
-                        window.history.replaceState(null, '', window.location.pathname);
-                    }
-                } catch (error) {
-                    // AbortError 무시, 그 외 에러는 알림
-                    if (error.name !== 'AbortError') {
-                        console.error(error);
-                        window.showAlert(error.message);
-                        await supabase.auth.signOut();
-                        renderLoginScreen();
-                    }
-                } finally {
-                    isAuthChecking = false; // 잠금 해제
-                }
+        // 2. 인증 상태 감지 리스너
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log(`📣 인증 상태 변경 감지: ${event}`);
+
+            // [Lock] 이미 로직 실행 중이면 무시
+            if (isAuthChecking) {
+                console.log("⚠️ 인증 로직 중복 실행 방지");
+                return;
             }
-        } 
-        // Case B: 로그아웃
-        else if (event === 'SIGNED_OUT') {
-            // 토큰 처리 중일 땐 로그아웃 화면 전환 보류
-            if (window.location.hash.includes('access_token')) return;
-            renderLoginScreen();
-        }
-    });
-} // <--- [중요] init 함수 닫는 괄호 (여기가 빠져서 에러가 났었습니다)
 
-    // [관리자 권한 확인 및 렌더링 함수]
+            // Case A: 로그인 성공
+            if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || (event === 'TOKEN_REFRESHED' && session)) {
+                if (session && session.user) {
+                    isAuthChecking = true; // 잠금
+                    try {
+                        // 권한 체크 및 렌더링
+                        await checkAdminAndRender(session);
+                        
+                        // 성공 후 URL 청소
+                        if (window.location.hash.includes('access_token')) {
+                            window.history.replaceState(null, '', window.location.pathname);
+                        }
+                    } catch (error) {
+                        // AbortError 무시, 그 외 에러는 알림
+                        if (error.name !== 'AbortError') {
+                            console.error(error);
+                            window.showAlert(error.message);
+                            await supabase.auth.signOut();
+                            renderLoginScreen();
+                        }
+                    } finally {
+                        isAuthChecking = false; // 잠금 해제
+                    }
+                }
+            } 
+            // Case B: 로그아웃
+            else if (event === 'SIGNED_OUT') {
+                // 토큰 처리 중일 땐 로그아웃 화면 전환 보류
+                if (window.location.hash.includes('access_token')) return;
+                renderLoginScreen();
+            }
+        });
+    } // End of init
+
+    // [관리자 권한 확인 및 렌더링 함수] - 전역 함수 선언
     async function checkAdminAndRender(session) {
         const userEmail = session.user.email ? session.user.email.toLowerCase() : '';
         console.log(`🔎 권한 조회 시작: ${userEmail}`);
 
-        // 1. 관리자 정보 조회 (AdminService 사용 가능 시 활용, 여기선 직접 호출 유지)
+        // 1. 관리자 정보 조회
         const { data: member, error } = await supabase
             .from('coop_members')
             .select('role, name, email')
@@ -395,8 +387,7 @@ async function init() {
         if (error) throw new Error("데이터베이스 연결 오류: " + error.message);
         if (!member) throw new Error("등록된 회원 정보가 없습니다. 관리자에게 문의하세요.");
         
-        // [중요] role 체크 (admin 또는 election_comm 등 허용 범위 설정)
-        // 대소문자 이슈 방지를 위해 소문자로 변환 후 비교 권장
+        // [중요] role 체크
         const userRole = member.role ? member.role.toLowerCase() : '';
         if (userRole !== 'admin' && userRole !== 'super_admin') {
             throw new Error(`접근 권한이 없습니다. (현재 등급: ${member.role})`);
@@ -421,11 +412,11 @@ async function init() {
         document.getElementById('setup-section').style.display = 'none';
     }
 
+    // ----------------------------------------------------------------
+    // [3] 비즈니스 로직 (대시보드 등)
+    // ----------------------------------------------------------------
 
-
-    // (참고: 기존 loadDashboard, handleStatusChange 등은 그대로 유지)
-
-async function loadDashboard() {
+    async function loadDashboard() {
         const elections = await adminService.getAllElections();
         const activeContainer = document.getElementById('active-list');
         const timelineContainer = document.getElementById('history-timeline');
@@ -438,7 +429,6 @@ async function loadDashboard() {
             return;
         }
 
-        // [수정] DRAFT 상태 추가
         const activeStatuses = ['DRAFT', 'PREPARE', 'NOMINATION', 'READY', 'OPEN', 'PAUSED'];
 
         elections.forEach(el => {
@@ -461,19 +451,14 @@ async function loadDashboard() {
                 }
 
                 let controlButtons = '';
-                // 버튼 로직은 그대로 유지하되, DRAFT 일 때 표시
                 if (el.status === 'DRAFT') {
-                    controlButtons = `<button class="btn-control" style="background:#4b5563; color:white;" onclick="resumeSetup(null); event.stopPropagation(); resumeSetup(arguments[0] || ${JSON.stringify(el).replace(/"/g, "'")})">✏️ 설정 이어하기</button>`;
-                    // 위 인라인 핸들러가 복잡하니 아래처럼직접 호출 권장
                      controlButtons = `<span style="font-size:0.8rem; color:#d97706; font-weight:bold;">⚠️ 설정 미완료</span>`;
                 } else if (el.status === 'OPEN' || el.status === 'NOMINATION') {
-                    // ... (기존 코드 유지)
                     controlButtons = `
                         <button class="btn-control btn-pause" onclick="handleStatusChange(event, '${el.id}', 'PAUSED')">⏸ 일시정지</button>
                         <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
                     `;
                 } else if (el.status === 'PAUSED') {
-                     // ... (기존 코드 유지)
                     controlButtons = `
                         <button class="btn-control btn-resume" onclick="handleStatusChange(event, '${el.id}', 'OPEN')">▶️ 투표 재개</button>
                         <button class="btn-control btn-stop" onclick="handleStatusChange(event, '${el.id}', 'ENDED')">⏹ 종료</button>
@@ -485,7 +470,6 @@ async function loadDashboard() {
                 const startStr = el.vote_start_at ? new Date(el.vote_start_at).toLocaleDateString() : '미정';
                 const endStr = el.vote_end_at ? new Date(el.vote_end_at).toLocaleDateString() : '미정';
                 
-                // 뱃지 색상 처리
                 let badgeColor = '#6b7280';
                 if(el.status === 'OPEN') badgeColor = 'var(--color-primary)';
                 if(el.status === 'DRAFT') badgeColor = '#9ca3af';
@@ -504,7 +488,6 @@ async function loadDashboard() {
                 `;
                 activeContainer.appendChild(card);
             } else {
-                // ... (지난 선거 이력 코드는 기존과 동일)
                 const item = document.createElement('div');
                 item.className = 'timeline-item';
                 item.onclick = () => window.openHistoryModal(el);
@@ -520,6 +503,7 @@ async function loadDashboard() {
             }
         });
     }
+
     // [신규] 작성 중인 선거 이어하기
     window.resumeSetup = async (el) => {
         // 1. 화면 전환
@@ -536,7 +520,7 @@ async function loadDashboard() {
         document.getElementById('vote-start').value = el.vote_start_at ? el.vote_start_at.slice(0,16) : '';
         document.getElementById('vote-end').value = el.vote_end_at ? el.vote_end_at.slice(0,16) : '';
 
-        // 4. Step 2 선거구 정보 복원 (중요: createdDistricts 재매핑)
+        // 4. Step 2 선거구 정보 복원
         createdDistricts = {}; // 초기화
         document.getElementById('district-list').innerHTML = ''; // 리스트 초기화
 
@@ -601,7 +585,7 @@ async function loadDashboard() {
         window.location.reload();
     };
 
-window.handleLogin = async () => {
+    window.handleLogin = async () => {
         const email = document.getElementById('admin-email').value;
         if (!email) return window.showAlert('이메일을 입력하세요.');
 
@@ -618,7 +602,7 @@ window.handleLogin = async () => {
         document.getElementById('setup-section').style.display = 'block';
     };
 
-window.createElection = async () => {
+    window.createElection = async () => {
         const title = document.getElementById('election-title').value;
         const cS = document.getElementById('candidacy-start').value;
         const cE = document.getElementById('candidacy-end').value;
@@ -643,7 +627,7 @@ window.createElection = async () => {
     };
 
     // [Step 2 수정: 정수(Quota) 포함]
-window.addDistrict = async () => {
+    window.addDistrict = async () => {
         if(!newElectionId) return;
         const name = document.getElementById('dist-name').value.trim();
         const code = document.getElementById('dist-code').value.trim();
@@ -796,7 +780,7 @@ window.addDistrict = async () => {
         updatePreviewTable_Safe(); 
     };
 
-window.confirmUpload = async () => {
+    window.confirmUpload = async () => {
         if (pendingVoters.length === 0) return window.showAlert('저장할 데이터가 없습니다.');
         
         window.showConfirm(`총 ${pendingVoters.length}명을 등록하시겠습니까?`, async () => {
