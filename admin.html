@@ -342,7 +342,36 @@
     </div>
 </div>
     
+<div id="candidate-detail-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 800px; text-align: left; max-height: 90vh; overflow-y: auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <span class="modal-title">👤 후보자 상세 정보</span>
+            <button onclick="closeCandidateDetail()" style="border:none; background:none; cursor:pointer; font-size:1.5rem;">&times;</button>
+        </div>
 
+        <div id="cand-detail-body">
+            </div>
+
+        <div id="cand-action-area" class="modal-actions" style="border-top: 1px solid #eee; padding-top: 20px; margin-top: 20px;">
+            </div>
+    </div>
+</div>
+
+<div id="reject-reason-modal" class="modal-overlay" style="z-index: 1100;">
+    <div class="modal-content" style="max-width: 500px;">
+        <h3 class="modal-title" style="color:var(--danger-red);">⛔ 승인 반려</h3>
+        <p style="color:#666; font-size:0.9rem; margin-bottom:10px;">후보자에게 전달될 반려 사유를 입력해주세요.</p>
+        
+        <textarea id="reject-reason-input" rows="4" 
+            style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; resize:vertical;" 
+            placeholder="예: 증빙 서류 식별 불가, 경력 사항 기재 오류 등"></textarea>
+            
+        <div class="modal-actions">
+            <button onclick="closeRejectModal()" class="btn btn-outline">취소</button>
+            <button id="btn-confirm-reject" class="btn btn-danger">반려 확정</button>
+        </div>
+    </div>
+</div>
 <script type="module">
     import { AdminService } from './AdminService.js';
     import { supabase } from './ElectionService.js';
@@ -1238,8 +1267,9 @@ window.searchMembers = async () => {
     // -----------------------------------------------------------
     // [6] 기타 기존 함수 (후보, 심사, 기호 등 - 유지)
     // -----------------------------------------------------------
-    async function loadCandidates() {
+async function loadCandidates() {
         const list = await service.getCandidates(currentElectionId);
+        
         // 통계 갱신
         const stats = { total: list.length, pending: 0, approved: 0, rejected: 0 };
         list.forEach(c => {
@@ -1254,23 +1284,196 @@ window.searchMembers = async () => {
 
         const tbody = document.getElementById('candidate-list-body');
         tbody.innerHTML = '';
+        
         list.forEach(c => {
             const dName = cachedDistricts[c.district_id] || c.districts?.name || '-';
+            
+            // 상태별 뱃지 스타일
+            let statusBadge = `<span class="status-badge" style="background:#999">${c.status}</span>`;
+            if(c.status === 'PENDING') statusBadge = `<span class="status-badge" style="background:var(--warning-yellow)">대기중</span>`;
+            if(c.status === 'APPROVED') statusBadge = `<span class="status-badge" style="background:var(--success-green)">승인됨</span>`;
+            if(c.status === 'REJECTED') statusBadge = `<span class="status-badge" style="background:var(--danger-red)">반려됨</span>`;
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${dName}</td>
-                <td>${c.name}</td>
                 <td>
-                     ${c.status === 'PENDING' ? 
-                      `<button onclick="reviewCand('${c.id}', 'APPROVED', '${c.name}')" class="btn btn-sm btn-outline" style="color:blue;">승인</button> 
-                       <button onclick="reviewCand('${c.id}', 'REJECTED', '${c.name}')" class="btn btn-sm btn-outline" style="color:red;">반려</button>` 
-                      : `<span class="status-badge" style="background:${c.status === 'APPROVED' ? 'green' : 'gray'}">${c.status}</span>`}
+                    <a href="#" onclick="openCandidateDetail('${c.id}'); return false;" 
+                       style="font-weight:bold; color:var(--primary-blue); text-decoration:underline;">
+                       ${c.name}
+                    </a>
                 </td>
+                <td>${statusBadge}</td>
                 <td>${c.status === 'APPROVED' ? `<input type="text" class="input-symbol" data-id="${c.id}" value="${c.symbol || ''}" style="width:50px; text-align:center;">` : '-'}</td>
             `;
             tbody.appendChild(tr);
         });
     }
+
+    // [신규] 후보자 상세 모달 열기
+    window.openCandidateDetail = async (candidateId) => {
+        const modal = document.getElementById('candidate-detail-modal');
+        const body = document.getElementById('cand-detail-body');
+        const actionArea = document.getElementById('cand-action-area');
+        
+        body.innerHTML = '<div style="text-align:center; padding:2rem;">데이터를 불러오는 중...</div>';
+        modal.style.display = 'flex';
+
+        try {
+            // 상세 정보 조회 (AdminService에 의존하지 않고 직접 조회하여 모든 컬럼 확보)
+            const { data: c, error } = await supabase
+                .from('candidates')
+                .select('*')
+                .eq('id', candidateId)
+                .single();
+
+            if (error) throw error;
+
+            // HTML 구성
+            const photoSrc = c.photo_url || 'https://via.placeholder.com/150?text=No+Photo';
+            const proofLink = c.proof_url 
+                ? `<a href="${c.proof_url}" target="_blank" class="btn btn-sm btn-outline">📂 증빙서류 보기</a>` 
+                : `<span style="color:#999;">제출된 서류 없음</span>`;
+
+            body.innerHTML = `
+                <div style="display:flex; gap:2rem; flex-wrap:wrap;">
+                    <div style="flex:0 0 150px; text-align:center;">
+                        <img src="${photoSrc}" style="width:150px; height:150px; object-fit:cover; border-radius:12px; border:1px solid #ddd; margin-bottom:10px;">
+                        <div>${proofLink}</div>
+                    </div>
+                    <div style="flex:1;">
+                        <table style="width:100%; border-collapse:collapse; font-size:0.95rem;">
+                            <tr style="border-bottom:1px solid #eee;"><td style="padding:8px; color:#666; width:80px;">성명</td><td style="font-weight:bold;">${c.name}</td></tr>
+                            <tr style="border-bottom:1px solid #eee;"><td style="padding:8px; color:#666;">생년월일</td><td>${c.birth_date || '-'}</td></tr>
+                            <tr style="border-bottom:1px solid #eee;"><td style="padding:8px; color:#666;">연락처</td><td>${c.contact || '-'}</td></tr>
+                            <tr style="border-bottom:1px solid #eee;"><td style="padding:8px; color:#666;">주소</td><td>${c.address || '-'}</td></tr>
+                            <tr><td style="padding:8px; color:#666;">등록일</td><td>${new Date(c.created_at).toLocaleString()}</td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div style="margin-top:1.5rem;">
+                    <label style="font-weight:bold; display:block; margin-bottom:5px;">대표 이력</label>
+                    <div style="background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #eee; white-space:pre-wrap;">${c.career || '내용 없음'}</div>
+                </div>
+
+                <div style="margin-top:1rem;">
+                    <label style="font-weight:bold; display:block; margin-bottom:5px;">공약 및 출마의 변</label>
+                    <div style="background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #eee; white-space:pre-wrap;">${c.manifesto || '내용 없음'}</div>
+                </div>
+
+                ${c.status === 'REJECTED' ? `
+                    <div style="margin-top:1rem; padding:10px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; color:#dc2626;">
+                        <strong>⛔ 반려 사유:</strong> ${c.rejection_reason || '사유 미기재'}
+                    </div>
+                ` : ''}
+            `;
+
+            // 하단 버튼 구성 (상태에 따라 다르게)
+            if (c.status === 'PENDING') {
+                actionArea.innerHTML = `
+                    <button onclick="confirmApprove('${c.id}', '${c.name}')" class="btn btn-primary" style="flex:1;">✅ 승인하기</button>
+                    <button onclick="openRejectModal('${c.id}', '${c.name}')" class="btn btn-danger" style="flex:1;">⛔ 반려하기</button>
+                `;
+            } else if (c.status === 'APPROVED') {
+                actionArea.innerHTML = `
+                    <button onclick="openRejectModal('${c.id}', '${c.name}')" class="btn btn-danger" style="width:100%;">⛔ 승인 취소 및 반려</button>
+                `;
+            } else { // REJECTED
+                actionArea.innerHTML = `
+                    <button onclick="confirmApprove('${c.id}', '${c.name}')" class="btn btn-primary" style="width:100%;">🔄 재심사 (승인 처리)</button>
+                `;
+            }
+
+        } catch (e) {
+            console.error(e);
+            body.innerHTML = `<p style="color:red;">정보를 불러오지 못했습니다: ${e.message}</p>`;
+        }
+    };
+
+    window.closeCandidateDetail = () => {
+        document.getElementById('candidate-detail-modal').style.display = 'none';
+    };
+
+    // [신규] 승인 처리 로직 (직접 DB 업데이트)
+    window.confirmApprove = async (id, name) => {
+        if(!confirm(`[${name}] 후보를 정식 후보로 승인하시겠습니까?`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('candidates')
+                .update({ 
+                    status: 'APPROVED',
+                    rejection_reason: null // 승인 시 반려 사유 초기화
+                })
+                .eq('id', id);
+
+            if(error) throw error;
+
+            alert('승인되었습니다.');
+            closeCandidateDetail();
+            loadCandidates(); // 목록 갱신
+            
+            // 로그 기록
+            await service.logAction(currentElectionId, 'CANDIDATE_APPROVE', `후보 승인: ${name} (작업자: ${currentUserEmail})`);
+            loadLogs();
+
+        } catch(e) {
+            alert('승인 처리 실패: ' + e.message);
+        }
+    };
+
+    // [신규] 반려 모달 열기
+    let targetRejectId = null;
+    let targetRejectName = null;
+
+    window.openRejectModal = (id, name) => {
+        targetRejectId = id;
+        targetRejectName = name;
+        document.getElementById('reject-reason-input').value = ''; // 초기화
+        document.getElementById('reject-reason-modal').style.display = 'flex';
+    };
+
+    window.closeRejectModal = () => {
+        document.getElementById('reject-reason-modal').style.display = 'none';
+        targetRejectId = null;
+    };
+
+    // [신규] 반려 확정 로직 (사유 포함)
+    document.getElementById('btn-confirm-reject').onclick = async () => {
+        const reason = document.getElementById('reject-reason-input').value.trim();
+        
+        if(!reason) {
+            alert('반려 사유를 입력해주세요.');
+            return;
+        }
+        
+        if(!confirm(`[${targetRejectName}] 후보를 반려 처리하시겠습니까?`)) return;
+
+        try {
+            const { error } = await supabase
+                .from('candidates')
+                .update({ 
+                    status: 'REJECTED',
+                    rejection_reason: reason 
+                })
+                .eq('id', targetRejectId);
+
+            if(error) throw error;
+
+            alert('반려되었습니다.');
+            closeRejectModal();
+            closeCandidateDetail(); // 상세 창도 닫기
+            loadCandidates(); // 목록 갱신
+
+            // 로그 기록
+            await service.logAction(currentElectionId, 'CANDIDATE_REJECT', `후보 반려: ${targetRejectName} / 사유: ${reason} (작업자: ${currentUserEmail})`);
+            loadLogs();
+
+        } catch(e) {
+            alert('처리 실패: ' + e.message);
+        }
+    };
 
 window.reviewCand = async (id, decision, name) => {
         if(confirm(`${name} -> ${decision} 처리하시겠습니까?`)){
@@ -1408,7 +1611,7 @@ window.saveSymbols = async () => {
         };
         return map[s] || s;
     }
-
+window.init = init; // module scope export
     init();
 </script>
 </body>
