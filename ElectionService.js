@@ -227,5 +227,37 @@ export class ElectionService {
 
         return data.publicUrl;
     } // End of uploadCandidatePhoto
+    // [ElectionService.js 클래스 내부에 추가]
+
+    /**
+     * 증빙서류 비공개 업로드 (Private Bucket)
+     * @param {File} file 
+     * @param {string} userId 
+     */
+    async uploadProofDoc(file, userId) {
+        const BUCKET_NAME = 'candidate_proofs'; // Private Bucket
+
+        try {
+            // 파일명 난수화
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}_proof_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+            const filePath = `${userId}/${fileName}`;
+
+            const { error } = await supabase.storage
+                .from(BUCKET_NAME)
+                .upload(filePath, file, {
+                    upsert: true
+                });
+
+            if (error) throw error;
+
+            // Private 버킷은 publicUrl이 없음. 대신 저장된 경로(path)를 리턴하여 DB에 저장.
+            // 나중에 다운로드할 때 createSignedUrl(filePath)로 접근해야 함.
+            return filePath; 
+            
+        } catch (e) {
+            throw new Error('증빙서류 업로드 실패: ' + e.message);
+        }
+    }
 
 } // End of ElectionService class
