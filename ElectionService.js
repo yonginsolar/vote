@@ -1,7 +1,8 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+// 변경된 Import URL: esm.sh를 사용하여 Named Export 호환성 문제 해결
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 // 1. Supabase 클라이언트 초기화
-const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co'; 
+const SUPABASE_URL = 'https://ifdqlwxgqgsvnawmhlfc.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmZHFsd3hncWdzdm5hd21obGZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcxODQ3NDIsImV4cCI6MjA4Mjc2MDc0Mn0.UKUvMOl58KuDH24seC3oSgla7mK5lr-vXjqtpalnl6k';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -46,7 +47,7 @@ export class ElectionService {
         return this.memberProfile;
     }
 
-/**
+    /**
      * [2] 현재 활성화된 선거 정보 가져오기 (수정됨)
      * - 수정 사유: 후보 등록 기간(NOMINATION)인 선거도 조회되어야 함
      */
@@ -180,4 +181,4 @@ export class ElectionService {
         if (dbError) throw new Error('후보 등록 실패: ' + dbError.message);
     }
 
-} // <--- 🚨 [중요] 클래스 닫는 괄호는 파일의 맨 마지막에 딱 한 번만 나옵니다.
+} // End of ElectionService class
