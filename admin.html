@@ -163,16 +163,20 @@
     
     <div class="main-panel">
         
-        <div class="card">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+<div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
                 <div style="display:flex; flex-direction:column;">
                     <span style="font-size:0.85rem; color:var(--text-gray); margin-bottom:4px;">현재 관리 중인 선거</span>
                     <h3 id="election-title" style="margin:0; font-size:1.8rem;">로딩 중...</h3>
                 </div>
                 <span id="election-status" class="status-badge" style="background:#999;">-</span>
             </div>
-            <div style="color:var(--text-gray); font-size: 0.95rem;">
-                📅 전체 일정: <strong id="election-period">-</strong>
+            
+            <div style="background: #f8f9fa; border-radius: 8px; padding: 1rem; border: 1px solid #e9ecef;">
+                <h5 style="margin: 0 0 10px 0; color: #495057;">📅 선거 일정 상세</h5>
+                <div id="election-period-detail" style="font-size: 0.95rem; color: #343a40; line-height: 1.8;">
+                    로딩 중...
+                </div>
             </div>
         </div>
 
@@ -245,10 +249,13 @@
     </div>
 
     <div class="side-panel">
-        <div class="card">
+<div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <h3 style="margin:0;">👥 유권자 현황</h3>
-                <button onclick="loadVoterStats()" class="btn btn-sm btn-outline" style="font-size:0.7rem;">새로고침</button>
+                <div>
+                    <button onclick="openAddVoterModal()" class="btn btn-sm btn-success" style="font-size:0.7rem; margin-right: 5px;">+ 추가</button>
+                    <button onclick="loadVoterStats()" class="btn btn-sm btn-outline" style="font-size:0.7rem;">새로고침</button>
+                </div>
             </div>
             <div id="voter-stats-list" style="max-height:300px; overflow-y:auto;">
                 <p style="color:#999; font-size:0.8rem;">로딩 중...</p>
@@ -277,6 +284,64 @@
         </div>
     </div>
 </div>
+
+    <div id="voter-detail-modal" class="modal-overlay">
+    <div class="modal-content" style="text-align: left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <span class="modal-title">👤 유권자 상세 정보</span>
+            <button onclick="closeVoterDetailModal()" style="border:none; background:none; cursor:pointer; font-size:1.2rem;">✕</button>
+        </div>
+        
+        <div id="voter-detail-body" style="margin-bottom: 2rem;">
+            </div>
+
+        <hr style="border:0; border-top:1px solid #eee; margin: 1rem 0;">
+
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <label style="font-weight:600; font-size:0.9rem;">선거구 변경</label>
+            <div style="display:flex; gap: 10px;">
+                <select id="detail-district-select" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    </select>
+                <button id="btn-update-district" class="btn btn-primary btn-sm">변경 저장</button>
+            </div>
+            
+            <div style="margin-top: 20px; text-align: right;">
+                <button id="btn-delete-voter" class="btn btn-danger btn-sm">⛔ 명부에서 제외 (삭제)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="add-voter-modal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="modal-title">➕ 유권자 추가 (명부 등재)</span>
+        <p style="font-size:0.85rem; color:#666; margin-bottom:1rem;">
+            전체 조합원 중에서 검색하여 선거인 명부에 추가합니다.<br>
+            (이미 등록된 사람은 검색되지 않거나 표시됩니다.)
+        </p>
+        
+        <div style="display:flex; gap:10px; margin-bottom:1rem;">
+            <input type="text" id="search-member-input" placeholder="이름 또는 전화번호 뒷자리" style="flex:1; padding:10px; border:1px solid #ddd; border-radius:4px;" onkeyup="if(window.event.keyCode==13){searchMembers()}">
+            <button onclick="searchMembers()" class="btn btn-primary">검색</button>
+        </div>
+
+        <div id="search-result-area" style="height: 200px; overflow-y: auto; border:1px solid #eee; background:#f9fafb; padding:10px; text-align:left; margin-bottom:1rem;">
+            <div style="color:#999; text-align:center; padding-top:20px;">검색 결과가 여기에 표시됩니다.</div>
+        </div>
+
+        <div style="text-align:left; margin-bottom:1rem;">
+            <label style="font-weight:600; font-size:0.9rem;">배정할 선거구 선택</label>
+            <select id="add-voter-district-select" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;">
+                <option value="">-- 선거구 선택 --</option>
+                </select>
+        </div>
+
+        <div class="modal-actions">
+            <button onclick="closeAddVoterModal()" class="btn btn-outline">닫기</button>
+        </div>
+    </div>
+</div>
+    
 
 <script type="module">
     import { AdminService } from './AdminService.js';
@@ -506,22 +571,14 @@ window.openElectionGateway = async () => {
         } catch (e) { console.error(e); }
     }
 
-    // [수정] 날짜 표시 강화 및 상태별 UI 색상
+// [수정됨] 선거 정보 로드 및 상세 일정 표시
     async function loadElectionInfo() {
         const data = await service.getElectionInfo(currentElectionId);
         currentElectionData = data; 
-
+        
+        // 1. 기본 타이틀 및 상태
         document.getElementById('header-election-title').innerText = data.title;
         document.getElementById('election-title').innerText = data.title;
-        
-        // 날짜 우선순위: 세분화된 칼럼이 있으면 그것을 씀
-        const startRaw = data.candidacy_start_at || data.start_at;
-        const endRaw = data.vote_end_at || data.end_at;
-        const vStart = data.vote_start_at ? new Date(data.vote_start_at).toLocaleString() : '미정';
-
-        document.getElementById('election-period').innerHTML = 
-            `${new Date(startRaw).toLocaleDateString()} ~ ${new Date(endRaw).toLocaleDateString()} <br>` +
-            `<span style="font-size:0.8rem; color:#666;">(실투표 시작: ${vStart})</span>`;
         
         const statusEl = document.getElementById('election-status');
         statusEl.innerText = translateStatus(data.status);
@@ -531,6 +588,53 @@ window.openElectionGateway = async () => {
         else if(data.status === 'CLOSED') statusEl.style.background = 'var(--danger-red)';
         else if(data.status === 'READY') statusEl.style.background = 'var(--warning-yellow)';
         else statusEl.style.background = '#999';
+
+        // 2. 날짜 포맷팅 헬퍼 함수
+        const fmt = (ts) => ts ? new Date(ts).toLocaleString() : '<span style="color:#aaa;">미정</span>';
+        const fmtDate = (ts) => ts ? new Date(ts).toLocaleDateString() : '미정';
+
+        // 3. 기간 계산
+        // (1) 후보 등록 기간
+        const candStart = data.candidacy_start_at;
+        const candEnd = data.candidacy_end_at;
+        
+        // (2) 공고 및 선거운동 기간 (후보 등록 마감 ~ 투표 시작 전)
+        const campStart = candEnd; // 후보 등록 마감 시점부터
+        const voteStart = data.vote_start_at;
+        
+        // (3) 투표 기간
+        const voteEnd = data.vote_end_at;
+        
+        // (4) 전체 기간 (DB상 start_at / end_at)
+        const totalStart = data.start_at || candStart;
+        const totalEnd = data.end_at || voteEnd;
+
+        // 4. 상세 일정 HTML 생성
+        let scheduleHtml = `
+            <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+                <tr style="border-bottom: 1px solid #eee;">
+                    <th style="text-align:left; padding:6px; color:#666; width:120px;">📅 전체 일정</th>
+                    <td style="padding:6px; font-weight:bold;">${fmtDate(totalStart)} ~ ${fmtDate(totalEnd)}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee; background-color: #fffcf5;">
+                    <th style="text-align:left; padding:6px; color:#d97706;">1. 후보 등록</th>
+                    <td style="padding:6px;">${fmt(candStart)} ~ ${fmt(candEnd)}</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <th style="text-align:left; padding:6px; color:#4b5563;">2. 후보 공고</th>
+                    <td style="padding:6px;">
+                        ${candEnd ? fmt(candEnd) : '미정'} ~ ${voteStart ? fmt(voteStart) : '미정'}
+                        <span style="font-size:0.8rem; color:#999;">(등록마감 직후 ~ 투표시작 전)</span>
+                    </td>
+                </tr>
+                <tr style="background-color: #f0fdf4;">
+                    <th style="text-align:left; padding:6px; color:#15803d;">3. 투표 기간</th>
+                    <td style="padding:6px; font-weight:bold; color:#15803d;">${fmt(voteStart)} ~ ${fmt(voteEnd)}</td>
+                </tr>
+            </table>
+        `;
+
+        document.getElementById('election-period-detail').innerHTML = scheduleHtml;
     }
 
     // [신규] 상태별 탭 제어 (Workflow)
@@ -727,17 +831,288 @@ window.openElectionGateway = async () => {
         }
     };
 
+// [수정됨] 선거구별 유권자 목록 보기 (클릭 시 상세 모달 연결)
     window.showVoterDetail = (dName, list) => {
-        let html = `<div style="padding:10px; background:#f3f4f6; margin-bottom:10px;"><strong>${dName}</strong> 명부 (${list.length}명)</div>
-                    <div style="max-height:300px; overflow-y:auto;"><table class="voter-list-table">
-                    <thead><tr><th>번호</th><th>이름</th><th>전화</th></tr></thead><tbody>`;
+        let html = `
+            <div style="padding:10px; background:#f3f4f6; margin-bottom:10px;">
+                <strong>${dName}</strong> 명부 (${list.length}명)
+                <div style="font-size:0.8rem; color:#666; margin-top:4px;">* 이름을 클릭하면 상세 정보 조회 및 선거구 변경이 가능합니다.</div>
+            </div>
+            <div style="max-height:300px; overflow-y:auto;">
+                <table class="voter-list-table">
+                    <thead>
+                        <tr>
+                            <th>번호</th>
+                            <th>이름</th>
+                            <th>전화</th>
+                            <th>관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+        
         list.forEach(v => {
-            html += `<tr><td>${v.member_no}</td><td>${v._view_name}</td><td>${v._view_phone || '-'}</td></tr>`;
+            // v object structure: { member_no, district_id, _view_name, _view_phone }
+            // 클릭 시 openVoterInfo 함수 호출 (member_no 사용)
+            html += `
+                <tr style="cursor:pointer;" onclick="openVoterInfo('${v.member_no}', '${v.district_id}')">
+                    <td>${v.member_no}</td>
+                    <td style="font-weight:bold; color:var(--primary-blue);">${v._view_name}</td>
+                    <td>${v._view_phone || '-'}</td>
+                    <td><button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:0.7rem;">관리</button></td>
+                </tr>`;
         });
+        
         html += '</tbody></table></div>';
-        window.showModal('유권자 명부', html);
+        
+        // 기존 공통 모달 사용
+        window.showModal(`${dName} 유권자 명부`, html, null, true);
+    };
+// -----------------------------------------------------------
+    // [신규] 유권자 상세 관리 및 CRUD (추가/수정/삭제) 로직
+    // -----------------------------------------------------------
+
+    let targetVoterMemberId = null; // 현재 수정 중인 유권자 ID (coop_members.member_id)
+
+    // 1. 유권자 상세 정보 모달 열기 (정보 조회)
+    window.openVoterInfo = async (memberId, currentDistrictId) => {
+        targetVoterMemberId = memberId; // 전역 변수에 저장 (수정/삭제 시 사용)
+
+        // UI 초기화
+        const modal = document.getElementById('voter-detail-modal');
+        const body = document.getElementById('voter-detail-body');
+        const distSelect = document.getElementById('detail-district-select');
+        
+        body.innerHTML = '정보를 불러오는 중...';
+        modal.style.display = 'flex';
+
+        try {
+            // (1) 조합원 상세 정보 조회 (coop_members)
+            const { data: member, error } = await supabase
+                .from('coop_members')
+                .select('*')
+                .eq('member_id', memberId)
+                .single();
+
+            if (error) throw error;
+
+            // (2) 정보 표시
+            // 가입일, 주소, 상태, 정조합원 여부 등 표시
+            body.innerHTML = `
+                <table style="width:100%; border-collapse:collapse;">
+                    <tr><td style="color:#666; width:80px;">이름</td> <td><strong>${member.name}</strong></td></tr>
+                    <tr><td style="color:#666;">연락처</td> <td>${member.phone}</td></tr>
+                    <tr><td style="color:#666;">주소</td> <td>${member.address || '(정보 없음)'}</td></tr>
+                    <tr><td style="color:#666;">가입일</td> <td>${member.joined_at ? new Date(member.joined_at).toLocaleDateString() : '-'}</td></tr>
+                    <tr><td style="color:#666;">상태</td> <td><span class="status-badge" style="background:${member.status === 'active' ? 'green' : 'gray'}">${member.status}</span></td></tr>
+                </table>
+            `;
+
+            // (3) 선거구 Select 박스 옵션 채우기
+            distSelect.innerHTML = '';
+            for (const [id, name] of Object.entries(cachedDistricts)) {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.text = name;
+                if (String(id) === String(currentDistrictId)) opt.selected = true;
+                distSelect.appendChild(opt);
+            }
+
+            // (4) 버튼 이벤트 연결
+            document.getElementById('btn-update-district').onclick = updateVoterDistrict;
+            document.getElementById('btn-delete-voter').onclick = deleteVoter;
+
+        } catch (e) {
+            console.error(e);
+            body.innerHTML = `<p style="color:red;">정보 로드 실패: ${e.message}</p>`;
+        }
     };
 
+    window.closeVoterDetailModal = () => {
+        document.getElementById('voter-detail-modal').style.display = 'none';
+        targetVoterMemberId = null;
+    };
+
+    // 2. 선거구 변경 (Update)
+    async function updateVoterDistrict() {
+        if (!targetVoterMemberId) return;
+        const newDistrictId = document.getElementById('detail-district-select').value;
+        
+        if (!confirm('선거구를 변경하시겠습니까?')) return;
+
+        try {
+            // election_voters 테이블 업데이트 (member_no 기준)
+            const { error } = await supabase
+                .from('election_voters')
+                .update({ district_id: newDistrictId })
+                .eq('election_id', currentElectionId)
+                .eq('member_no', targetVoterMemberId); // 중요: member_no 컬럼 사용
+
+            if (error) throw error;
+
+            alert('변경되었습니다.');
+            closeVoterDetailModal();
+            window.closeModal(); // 리스트 모달도 닫기 (데이터 갱신을 위해)
+            loadVoterStats(); // 전체 명부 새로고침
+            
+            // 로그 기록
+            service.logAction(currentElectionId, 'VOTER_UPDATE', `유권자(ID:${targetVoterMemberId}) 선거구 변경`);
+
+        } catch (e) {
+            alert('변경 실패: ' + e.message);
+        }
+    }
+
+    // 3. 명부 삭제 (Delete)
+    async function deleteVoter() {
+        if (!targetVoterMemberId) return;
+
+        if (!confirm('정말 이 유권자를 명부에서 제외하시겠습니까?\n(조합원 정보는 삭제되지 않으며, 투표 권한만 사라집니다.)')) return;
+
+        try {
+            const { error } = await supabase
+                .from('election_voters')
+                .delete()
+                .eq('election_id', currentElectionId)
+                .eq('member_no', targetVoterMemberId);
+
+            if (error) throw error;
+
+            alert('삭제되었습니다.');
+            closeVoterDetailModal();
+            window.closeModal();
+            loadVoterStats();
+
+            service.logAction(currentElectionId, 'VOTER_DELETE', `유권자(ID:${targetVoterMemberId}) 명부 삭제`);
+
+        } catch (e) {
+            alert('삭제 실패: ' + e.message);
+        }
+    }
+
+    // 4. 유권자 추가 모달 열기
+    window.openAddVoterModal = () => {
+        const modal = document.getElementById('add-voter-modal');
+        const distSelect = document.getElementById('add-voter-district-select');
+        const resultArea = document.getElementById('search-result-area');
+        
+        // 초기화
+        document.getElementById('search-member-input').value = '';
+        resultArea.innerHTML = '<div style="color:#999; text-align:center; padding-top:20px;">이름을 입력하고 검색하세요.</div>';
+        
+        // 선거구 옵션 채우기
+        distSelect.innerHTML = '<option value="">-- 선거구 선택 --</option>';
+        for (const [id, name] of Object.entries(cachedDistricts)) {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.text = name;
+            distSelect.appendChild(opt);
+        }
+
+        modal.style.display = 'flex';
+    };
+
+    window.closeAddVoterModal = () => {
+        document.getElementById('add-voter-modal').style.display = 'none';
+    };
+
+    // 5. 조합원 검색 (Search)
+    window.searchMembers = async () => {
+        const keyword = document.getElementById('search-member-input').value.trim();
+        const resultArea = document.getElementById('search-result-area');
+
+        if (keyword.length < 2) {
+            alert("검색어를 2글자 이상 입력해주세요.");
+            return;
+        }
+
+        resultArea.innerHTML = '검색 중...';
+
+        try {
+            // (1) 전체 조합원에서 이름이나 전화번호로 검색
+            // Supabase의 ILIKE 사용
+            const { data: members, error } = await supabase
+                .from('coop_members')
+                .select('member_id, name, phone, address')
+                .or(`name.ilike.%${keyword}%,phone.ilike.%${keyword}%`)
+                .limit(20);
+
+            if (error) throw error;
+
+            if (!members || members.length === 0) {
+                resultArea.innerHTML = '<p style="text-align:center; color:#666;">검색 결과가 없습니다.</p>';
+                return;
+            }
+
+            // (2) 이미 등록된 유권자인지 확인하기 위해 현재 명부 데이터 체크
+            // (간이로 현재 로드된 데이터를 쓰거나, DB에서 체크해야 함. 여기서는 UX를 위해 DB체크 생략하고 UI에서 중복 등록 시도 시 에러로 처리하거나,
+            // 더 완벽하게 하려면 election_voters를 한번 조회해야 함. 성능상 Insert시 충돌 체크가 나으므로 UI 표시만 함)
+            
+            let html = '<ul style="list-style:none; padding:0; margin:0;">';
+            
+            members.forEach(m => {
+                html += `
+                    <li style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <strong>${m.name}</strong> <span style="font-size:0.8rem; color:#666;">(${m.phone || '전화없음'})</span><br>
+                            <span style="font-size:0.75rem; color:#999;">${m.address || '주소없음'}</span>
+                        </div>
+                        <button onclick="addVoterToElection('${m.member_id}', '${m.name}')" class="btn btn-sm btn-outline">선택</button>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            resultArea.innerHTML = html;
+
+        } catch (e) {
+            console.error(e);
+            resultArea.innerHTML = `<p style="color:red;">오류 발생: ${e.message}</p>`;
+        }
+    };
+
+    // 6. 명부 등재 실행 (Insert)
+    window.addVoterToElection = async (memberId, memberName) => {
+        const distSelect = document.getElementById('add-voter-district-select');
+        const districtId = distSelect.value;
+
+        if (!districtId) {
+            alert("먼저 하단의 [배정할 선거구]를 선택해주세요.");
+            distSelect.focus();
+            return;
+        }
+
+        if (!confirm(`[${memberName}] 님을 선택한 선거구로 추가하시겠습니까?`)) return;
+
+        try {
+            // election_voters에 insert
+            const { error } = await supabase
+                .from('election_voters')
+                .insert([
+                    {
+                        election_id: currentElectionId,
+                        member_no: memberId,   // coop_members.member_id -> election_voters.member_no 매핑 주의
+                        district_id: districtId
+                    }
+                ]);
+
+            if (error) {
+                // Unique constraint 위반 (이미 등록된 경우) 에러 코드: 23505
+                if (error.code === '23505') {
+                    alert("이미 이 선거의 명부에 등록된 조합원입니다.");
+                } else {
+                    throw error;
+                }
+                return;
+            }
+
+            alert(`${memberName} 님이 추가되었습니다.`);
+            closeAddVoterModal();
+            loadVoterStats(); // 명부 갱신
+            service.logAction(currentElectionId, 'VOTER_ADD', `유권자 추가: ${memberName} (ID:${memberId})`);
+
+        } catch (e) {
+            alert("추가 실패: " + e.message);
+        }
+    };
     // -----------------------------------------------------------
     // [6] 기타 기존 함수 (후보, 심사, 기호 등 - 유지)
     // -----------------------------------------------------------
