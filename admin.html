@@ -351,6 +351,8 @@
     let currentElectionId = null;
     let currentElectionData = null; 
     let cachedDistricts = {}; 
+    let districtList = []; // [신규] 선거구 전체 정보(is_common 포함) 저장용 배열
+    let currentUserEmail = ''; // [신규] 현재 작업자 이메일 저장용
 
     // -----------------------------------------------------------
     // [1] 모달 & 유틸리티 (기존 유지)
@@ -382,9 +384,7 @@
 
     window.closeModal = () => { document.getElementById('common-modal').style.display = 'none'; };
 
-// -----------------------------------------------------------
-    // [수정된 init 함수] 관리자 및 선관위원 권한 검증 로직
-    // -----------------------------------------------------------
+// [수정된 init 함수] 관리자 및 선관위원 권한 검증 로직
     async function init() {
         // [보안] 검증 시작 전까지 화면 숨김 (CSS가 없어도 JS로 강제 적용)
         document.body.style.display = 'none';
@@ -398,6 +398,10 @@
             }
 
             const userEmail = user.email;
+            
+            // [수정] 전역 변수에 현재 작업자 이메일 저장 (로그 기록을 위해)
+            currentUserEmail = userEmail;
+
             // 화면에 이메일 표시 (엘리먼트가 있을 때만)
             const emailEl = document.getElementById('admin-email');
             if (emailEl) emailEl.innerText = userEmail;
@@ -443,7 +447,7 @@
             // 3. 결과 처리
             if (isAuthorized) {
                 // [성공] 화면 공개
-                console.log(`✅ 접속 허용: ${roleName}`);
+                console.log(`✅ 접속 허용: ${roleName} (${currentUserEmail})`);
                 document.body.style.display = 'block'; 
                 
                 // URL 파라미터 확인 후 대시보드 로드
@@ -749,7 +753,7 @@ window.openElectionGateway = async () => {
     // [5] 데이터 로딩 (수정: 유권자 로드 에러 방지)
     // -----------------------------------------------------------
     
-let districtList = []; // [신규] 선거구 전체 정보(is_common 포함) 저장용 배열
+
 
     // [수정됨] 선거구 매핑 정보 로드 (is_common 포함)
     async function loadDistrictsMap() {
@@ -976,7 +980,8 @@ window.openVoterInfo = async (memberNo, currentDistrictId) => {
         targetVoterMemberId = null;
     };
 
-async function updateVoterDistrict() {
+// [수정됨] 선거구 변경 (Update Conflict 해결 및 이메일 로깅)
+    async function updateVoterDistrict() {
         // 저장해둔 상태값 가져오기
         const { memberNo, currentDistrictId } = targetVoterState;
         
@@ -996,8 +1001,7 @@ async function updateVoterDistrict() {
         if (!confirm('선거구를 변경하시겠습니까?')) return;
 
         try {
-            // [핵심 수정] district_id 조건 추가
-            // "이 사람(member_no)의 데이터 중, 현재 이 선거구(district_id)인 행만 바꿔라"
+            // [핵심] district_id 조건 추가 (동명이인이나 중복 데이터 방지)
             const { error } = await supabase
                 .from('election_voters')
                 .update({ district_id: newDistrictId })
@@ -1014,7 +1018,9 @@ async function updateVoterDistrict() {
             window.closeModal(); // 뒤에 있는 리스트 모달도 닫기
             loadVoterStats(); // 전체 명부 새로고침
             
-            service.logAction(currentElectionId, 'VOTER_UPDATE', `유권자(${memberNo}) 선거구 변경 완료`);
+            // [수정] 로그에 작업자 이메일 포함
+            await service.logAction(currentElectionId, 'VOTER_UPDATE', `유권자(${memberNo}) 선거구 변경 (작업자: ${currentUserEmail})`);
+            loadLogs();
 
         } catch (e) {
             console.error(e);
@@ -1022,7 +1028,8 @@ async function updateVoterDistrict() {
         }
     }
 
-async function deleteVoter() {
+// [수정됨] 명부 삭제 (비례 포함 전체 삭제 및 이메일 로깅)
+    async function deleteVoter() {
         const { memberNo } = targetVoterState;
         if (!memberNo) return;
 
@@ -1044,7 +1051,9 @@ async function deleteVoter() {
             window.closeModal();
             loadVoterStats();
 
-            service.logAction(currentElectionId, 'VOTER_DELETE', `유권자(${memberNo}) 명부 삭제`);
+            // [수정] 로그에 작업자 이메일 포함
+            await service.logAction(currentElectionId, 'VOTER_DELETE', `유권자(${memberNo}) 명부 삭제 (작업자: ${currentUserEmail})`);
+            loadLogs();
 
         } catch (e) {
             alert('삭제 실패: ' + e.message);
@@ -1151,7 +1160,8 @@ window.searchMembers = async () => {
         }
     };
 
-window.addVoterToElection = async (memberNo, memberName, memberUuid) => {
+// [수정됨] 명부 등재 실행 (UUID 포함 Insert 및 이메일 로깅)
+    window.addVoterToElection = async (memberNo, memberName, memberUuid) => {
         const distSelect = document.getElementById('add-voter-district-select');
         const districtId = distSelect.value;
 
@@ -1162,6 +1172,7 @@ window.addVoterToElection = async (memberNo, memberName, memberUuid) => {
         }
 
         // UUID 확인 (없으면 에러)
+        // [방어코드] 자바스크립트 undefined 문자열 체크 추가
         if (!memberUuid || memberUuid === 'undefined' || memberUuid === 'null') {
             alert("시스템 오류: 회원의 고유 ID(UUID)가 누락되었습니다.");
             return;
@@ -1214,7 +1225,9 @@ window.addVoterToElection = async (memberNo, memberName, memberUuid) => {
             window.closeAddVoterModal(); // 모달 닫기
             loadVoterStats(); // 명부 새로고침
             
-            service.logAction(currentElectionId, 'VOTER_ADD', `유권자 추가: ${memberName}(${memberNo})`);
+            // [수정] 로그에 작업자 이메일 포함
+            await service.logAction(currentElectionId, 'VOTER_ADD', `유권자 추가: ${memberName}(${memberNo}) (작업자: ${currentUserEmail})`);
+            loadLogs(); // 로그 갱신
 
         } catch (e) {
             console.error(e);
@@ -1259,15 +1272,19 @@ window.addVoterToElection = async (memberNo, memberName, memberUuid) => {
         });
     }
 
-    window.reviewCand = async (id, decision, name) => {
+window.reviewCand = async (id, decision, name) => {
         if(confirm(`${name} -> ${decision} 처리하시겠습니까?`)){
             await service.reviewCandidate(id, decision);
-            await service.logAction(currentElectionId, 'CANDIDATE_REVIEW', `${name} ${decision}`);
-            loadCandidates(); loadLogs();
+            
+            // [수정] 로그에 작업자 이메일 추가
+            await service.logAction(currentElectionId, 'CANDIDATE_REVIEW', `${name} ${decision} 처리 (작업자: ${currentUserEmail})`);
+            
+            loadCandidates(); 
+            loadLogs();
         }
     };
 
-    window.saveSymbols = async () => {
+window.saveSymbols = async () => {
         const inputs = document.querySelectorAll('.input-symbol');
         let count = 0;
         for (const input of inputs) {
@@ -1277,11 +1294,15 @@ window.addVoterToElection = async (memberNo, memberName, memberUuid) => {
             }
         }
         alert(`${count}건 저장 완료`);
-        await service.logAction(currentElectionId, 'SYMBOL_UPDATE', '기호 저장');
+        
+        // [수정] 로그에 작업자 이메일 추가
+        await service.logAction(currentElectionId, 'SYMBOL_UPDATE', `기호 ${count}건 저장 (작업자: ${currentUserEmail})`);
+        
         loadCandidates();
+        loadLogs(); // 로그 즉시 갱신을 위해 추가
     };
 
-// [수정] 액션 확인 및 실행 (시간 체크 기능 포함)
+// [수정] 액션 확인 및 실행 (시간 체크 기능 포함 + 이메일 로깅)
     window.confirmAction = (nextStatus, msg) => {
         // 1. 투표 시작(OPEN) 시도 시 시간 체크 로직
         if (nextStatus === 'OPEN') {
@@ -1321,7 +1342,11 @@ window.addVoterToElection = async (memberNo, memberName, memberUuid) => {
                 // 데이터 갱신
                 await loadElectionInfo(); // 선거 정보 다시 로드
                 updateWorkflowUI();       // 탭/UI 상태 변경
-                loadLogs();               // 로그 갱신
+                
+                // [수정] 로그 기록 시 작업자 이메일 포함
+                await service.logAction(currentElectionId, 'STATUS_CHANGE', `상태 변경: ${nextStatus} (작업자: ${currentUserEmail})`);
+                
+                loadLogs(); // 로그 갱신
                 
                 // 모달 닫기는 showModal 내부 콜백에서 처리됨
             } catch (e) {
