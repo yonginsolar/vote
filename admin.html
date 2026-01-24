@@ -770,14 +770,14 @@ let districtList = []; // [신규] 선거구 전체 정보(is_common 포함) 저
         }
     }
 
-// [수정됨] 유권자 현황 로드 (Key 변경: member_no <-> member_id)
+// [수정됨] 유권자 현황 로드 (district_id 누락 수정)
     window.loadVoterStats = async () => {
         const container = document.getElementById('voter-stats-list');
         container.innerHTML = '<p style="font-size:0.8rem;">데이터 로딩 중...</p>';
         
         try {
-            // 1. 유권자 목록 가져오기 (member_no 확보)
-            // election_voters 테이블에는 _view_name 같은 가상 칼럼이 없으므로 제외
+            // 1. 유권자 목록 가져오기
+            // [중요] 여기서 district_id를 가져오지만, 아래 grouped 루프에서 사용을 안 해서 누락됐었습니다.
             const { data: voters, error: voterError } = await supabase
                 .from('election_voters')
                 .select('member_no, district_id') 
@@ -790,19 +790,17 @@ let districtList = []; // [신규] 선거구 전체 정보(is_common 포함) 저
                 return;
             }
 
-            // 2. 조합원 정보 가져오기 (member_no 리스트를 이용해 member_id 조회)
-            // 매핑 키: election_voters.member_no === coop_members.member_id
+            // 2. 조합원 정보 가져오기
             const memberNos = voters.map(v => v.member_no);
             
             const { data: members, error: memberError } = await supabase
                 .from('coop_members')
                 .select('member_id, name, phone')
-                .in('member_id', memberNos); // 여기가 핵심 변경 사항
+                .in('member_id', memberNos);
 
             if(memberError) throw memberError;
 
-            // 3. 데이터 조립 (JS Map 활용)
-            // 검색 속도를 위해 member_id를 Key로 하는 맵 생성
+            // 3. 데이터 매핑
             const memberMap = {};
             if(members) {
                 members.forEach(m => {
@@ -810,18 +808,17 @@ let districtList = []; // [신규] 선거구 전체 정보(is_common 포함) 저
                 });
             }
 
-            // 4. 선거구별 그룹화 및 데이터 병합
+            // 4. 데이터 조립 및 렌더링
             const grouped = {};
             voters.forEach(v => {
-                // 선거구 이름 매핑
                 const dName = cachedDistricts[v.district_id] || '미지정';
-                
-                // 멤버 정보 매핑 (member_no 기준)
                 const memInfo = memberMap[v.member_no] || { name: '정보없음', phone: '-' };
 
-                // 최종 표시 데이터 구성
+                // [수정된 부분] district_id를 명시적으로 객체에 담습니다.
+                // 그래야 클릭했을 때 openVoterInfo 함수로 이 값이 전달됩니다.
                 const combinedData = {
                     member_no: v.member_no,
+                    district_id: v.district_id, // <--- 여기가 비어있어서 에러가 났습니다.
                     _view_name: memInfo.name,
                     _view_phone: memInfo.phone
                 };
@@ -830,7 +827,6 @@ let districtList = []; // [신규] 선거구 전체 정보(is_common 포함) 저
                 grouped[dName].push(combinedData);
             });
 
-            // 5. 화면 렌더링
             container.innerHTML = '';
             for(const [dName, list] of Object.entries(grouped)) {
                 const div = document.createElement('div');
