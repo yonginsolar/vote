@@ -5,41 +5,22 @@
     <title>후보자 등록 신청</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* 추가 스타일: 선거 선택 섹션 */
-        .selection-box {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        .selection-box select {
-            width: 100%;
-            padding: 10px;
-            margin: 15px 0;
-            font-size: 1rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .btn-check {
-            background-color: var(--primary-color, #10b981);
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            font-size: 1rem;
-            cursor: pointer;
-            width: 100%;
-        }
-        .btn-check:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
+        /* 스타일 추가: 동의 박스 및 상태 메시지 */
+        .info-box { background: #f8fafc; padding: 1rem; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 1.5rem; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.95rem; }
+        .label-text { font-weight: 600; color: #475569; }
+        
+        .consent-box { border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 15px; background: #fff; }
+        .terms-text { width: 100%; height: 100px; padding: 10px; background: #f9f9f9; border: 1px solid #eee; overflow-y: scroll; font-size: 0.85rem; color: #555; margin-bottom: 8px; resize: none; }
+        
+        .status-alert { padding: 1rem; border-radius: 6px; margin-bottom: 1rem; font-weight: bold; }
+        .status-rejected { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+        .status-pending { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
     </style>
 </head>
 <body>
     <div class="container active">
-        <h1>🙋‍♀️ 후보자 출마 신청</h1>
+        <h1 id="page-title">🙋‍♀️ 후보자 출마 신청</h1>
         
         <div id="selection-section" class="selection-box">
             <h3 style="margin-top:0;">출마할 선거를 선택하세요</h3>
@@ -49,51 +30,125 @@
                 <select id="election-select">
                     <option value="">선거를 선택해주세요</option>
                 </select>
-                <button id="btn-check-qual" class="btn-check">내 선거구 확인하기</button>
+                <button id="btn-check-qual" class="btn-check">내 선거구 확인 및 신청내역 조회</button>
             </div>
             <p id="no-election-msg" style="display:none; color:#666;">현재 후보 등록 기간인 선거가 없습니다.</p>
         </div>
 
         <form id="apply-form" style="display:none; margin-top:2rem;">
-            <div style="background:#f0f9ff; padding:1rem; border-radius:6px; margin-bottom:1.5rem; border:1px solid #bae6fd;">
-                <h3 style="margin:0 0 0.5rem 0; color:#0369a1;">📍 소속 선거구 확인</h3>
-                <p style="margin:0; color:#0c4a6e;">
-                    귀하는 <strong><span id="display-district-name" style="font-size:1.1rem; text-decoration:underline;"></span></strong> 선거구에 출마합니다.
-                </p>
+            
+            <div id="status-message-area"></div>
+
+            <div class="info-box">
+                <h4 style="margin:0 0 10px 0; color:#0f172a;">📅 선거 및 임기 정보</h4>
+                <div class="info-row">
+                    <span class="label-text">선거구:</span>
+                    <strong><span id="display-district-name"></span></strong>
+                </div>
+                <div class="info-row">
+                    <span class="label-text">등록 기간:</span>
+                    <span id="display-period"></span>
+                </div>
+                <div class="info-row">
+                    <span class="label-text">당선인 임기:</span>
+                    <span style="color:#2563eb;">2026.02.23 ~ 2028.02.22 (2년)</span>
+                </div>
             </div>
 
             <input type="hidden" id="district-id">
             <input type="hidden" id="election-id">
-
+            <input type="hidden" id="candidate-id"> <h3 style="border-bottom:2px solid #333; padding-bottom:10px; margin-top:30px;">1. 기본 인적사항</h3>
+            <p style="font-size:0.8rem; color:#666;">* 수정 시 회원 정보도 함께 업데이트됩니다.</p>
+            
             <div style="margin-bottom:1rem;">
-                <label><strong>후보자 명 (표기용)</strong></label>
-                <input type="text" id="cand-name" required placeholder="예: 홍길동"
-                       style="width:100%; padding:0.5rem; margin-top:0.5rem;">
+                <label>이름</label>
+                <input type="text" id="user-name" required placeholder="이름" style="width:100%; padding:0.5rem;">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label>생년월일 (YYYY-MM-DD)</label>
+                <input type="text" id="user-birth" required placeholder="예: 1980-01-01" style="width:100%; padding:0.5rem;">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label>연락처</label>
+                <input type="text" id="user-contact" required placeholder="010-0000-0000" style="width:100%; padding:0.5rem;">
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label>주소</label>
+                <input type="text" id="user-address" required placeholder="도로명 주소 전체 입력" style="width:100%; padding:0.5rem;">
+            </div>
+
+            <h3 style="border-bottom:2px solid #333; padding-bottom:10px; margin-top:30px;">2. 후보자 상세 정보</h3>
+            
+            <div style="margin-bottom:1rem;">
+                <label><strong>후보자 명 (투표 화면 표기용)</strong></label>
+                <input type="text" id="cand-name" required placeholder="예: 홍길동" style="width:100%; padding:0.5rem;">
             </div>
 
             <div style="margin-bottom:1rem;">
-                <label><strong>프로필 사진</strong></label>
-                <input type="file" id="cand-photo" accept="image/*" required
-                       style="width:100%; margin-top:0.5rem;">
-                <p style="font-size:0.8rem; color:#666;">* 정사각형 비율 권장 (5MB 이하)</p>
+                <label><strong>프로필 사진 (공개)</strong></label>
+                <div id="current-photo-area" style="display:none; margin-bottom:5px;">
+                    <img id="preview-photo" src="" style="width:100px; height:100px; object-fit:cover; border-radius:4px; border:1px solid #ccc;">
+                    <p style="font-size:0.8rem; margin:0;">현재 등록된 사진 (변경하려면 아래 파일을 선택하세요)</p>
+                </div>
+                <input type="file" id="cand-photo" accept="image/*" style="width:100%;">
             </div>
 
             <div style="margin-bottom:1rem;">
-                <label><strong>공약 및 소개</strong></label>
-                <textarea id="cand-manifesto" rows="5" required placeholder="조합원들에게 전할 메시지를 입력하세요."
-                          style="width:100%; padding:0.5rem; margin-top:0.5rem;"></textarea>
+                <label><strong>대표 이력 (주요 경력)</strong></label>
+                <textarea id="cand-career" rows="3" required placeholder="예: OO노동조합 위원장 (2020~2022)" style="width:100%; padding:0.5rem;"></textarea>
             </div>
 
-            <div style="display:flex; gap:10px;">
-                <button type="button" onclick="location.reload()" class="btn-modal" style="flex:1; background:#999; color:white;">처음으로</button>
+            <div style="margin-bottom:1rem;">
+                <label><strong>이력 증빙 서류 (비공개)</strong></label>
+                <p style="font-size:0.8rem; color:#666; margin-top:0;">* 재직증명서 등을 하나로 합쳐 PDF/이미지로 첨부 (관리자만 열람 가능)</p>
+                <div id="current-proof-area" style="display:none; margin-bottom:5px;">
+                    <span style="color:green;">✅ 증빙서류가 등록되어 있습니다.</span>
+                </div>
+                <input type="file" id="cand-proof" accept=".pdf,image/*" style="width:100%;">
+            </div>
+
+            <div style="margin-bottom:1rem;">
+                <label><strong>공약 및 출마의 변</strong></label>
+                <textarea id="cand-manifesto" rows="5" required placeholder="조합원들에게 전할 메시지" style="width:100%; padding:0.5rem;"></textarea>
+            </div>
+
+            <h3 style="border-bottom:2px solid #333; padding-bottom:10px; margin-top:30px;">3. 필수 동의</h3>
+            
+            <div class="consent-box">
+                <label><strong>개인정보 수집 및 이용 동의</strong></label>
+                <textarea class="terms-text" readonly>
+1. 수집 항목: 이름, 생년월일, 연락처, 주소, 사진, 이력, 증빙서류
+2. 수집 목적: 후보자 자격 심사, 선거인 명부 대조, 투표 화면 표출
+3. 보유 기간: 임기 만료 후 파기 (단, 법령에 따름)
+※ 동의를 거부할 권리가 있으나, 거부 시 후보 등록이 제한됩니다.
+                </textarea>
+                <label style="cursor:pointer;">
+                    <input type="checkbox" id="agree-privacy" required> 위 내용을 확인하였으며 동의합니다.
+                </label>
+            </div>
+
+            <div class="consent-box">
+                <label><strong>이해충돌 방지 서약</strong></label>
+                <textarea class="terms-text" readonly>
+본인은 후보자로서 공정한 선거 운동을 진행하며, 
+당선 시 조합원의 권익을 위해 헌신하고 사적 이익을 추구하지 않을 것을 서약합니다.
+허위 사실 기재 시 당선이 무효 처리될 수 있음을 확인합니다.
+                </textarea>
+                <label style="cursor:pointer;">
+                    <input type="checkbox" id="agree-conflict" required> 위 내용을 확인하였으며 동의합니다.
+                </label>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:2rem;">
+                <button type="button" onclick="location.reload()" class="btn-modal" style="flex:1; background:#999; color:white;">취소</button>
                 <button type="submit" id="btn-submit" class="btn-submit" style="flex:2;">신청서 제출</button>
             </div>
         </form>
 
-        <div id="already-applied" style="display:none; text-align:center; padding:2rem;">
-            <h3>✅ 이미 신청하셨습니다.</h3>
-            <p>관리자 승인을 기다려주세요.</p>
-            <button onclick="window.history.back()" class="btn-modal">돌아가기</button>
+        <div id="completed-view" style="display:none; text-align:center; padding:3rem;">
+            <h2 style="color:#10b981;">🎉 후보 등록 완료</h2>
+            <p>귀하는 <strong><span id="comp-election-name"></span></strong>의 후보자로<br>정상 등록(승인)되었습니다.</p>
+            <button onclick="location.reload()" class="btn-modal">확인</button>
         </div>
     </div>
 
@@ -102,246 +157,283 @@
             <h3 id="modal-title">알림</h3>
             <p id="modal-msg" style="white-space: pre-wrap; line-height:1.5;"></p>
             <div class="modal-buttons" id="modal-btn-area">
-                <button id="modal-btn-ok" class="btn-modal btn-confirm">확인</button>
+                <button class="btn-modal btn-confirm">확인</button>
             </div>
         </div>
     </div>
 
     <script type="module">
         import { ElectionService, supabase } from './ElectionService.js';
+        
+        // --- ElectionService 클래스 업데이트 (Private 업로드 기능 추가) ---
+        // 원래는 파일 분리가 맞으나, 편의상 여기 Override 로직을 포함하거나 
+        // 기존 ElectionService.js 파일에 아래 메서드를 반드시 추가해야 함.
+        /* [ElectionService.js 에 추가할 함수]
+           async uploadProofDoc(file, userId) {
+                // ...Private Bucket 업로드 로직...
+           }
+        */
+
         const service = new ElectionService();
         
-        // DOM 요소 캐싱
+        // DOM 요소
         const modalOverlay = document.getElementById('modal-overlay');
         const modalTitle = document.getElementById('modal-title');
         const modalMsg = document.getElementById('modal-msg');
         const modalBtnArea = document.getElementById('modal-btn-area');
 
         let currentUser = null;
+        let selectedDistrict = null; // 선택된 선거구 정보
 
         async function init() {
             try {
-                // 1. 로그인 체크 (Service 활용)
-                currentUser = await service.initialize();
+                // 1. 유저 정보 + Member 테이블 상세 정보 가져오기
+                currentUser = await service.initialize(); 
                 if (!currentUser) {
-                    showModal('알림', '로그인이 필요합니다.', () => location.href = '/login.html');
+                    alert('로그인이 필요합니다.');
+                    location.href = '/login.html';
                     return;
                 }
 
-                // 2. NOMINATION 상태인 선거 목록 가져오기
+                // 2. NOMINATION 상태인 선거 목록
                 const { data: elections, error } = await supabase
                     .from('elections')
-                    .select('id, title')
+                    .select('*') // 기간 정보 필요하므로 전체 select
                     .eq('status', 'NOMINATION')
                     .order('created_at', { ascending: false });
 
                 document.getElementById('loading-msg').style.display = 'none';
-
-                if (error) throw error;
 
                 if (!elections || elections.length === 0) {
                     document.getElementById('no-election-msg').style.display = 'block';
                     return;
                 }
 
-                // 3. 드롭다운 렌더링
                 const selectEl = document.getElementById('election-select');
                 elections.forEach(el => {
                     const option = document.createElement('option');
                     option.value = el.id;
                     option.innerText = el.title;
+                    // 기간 정보 등을 data 속성에 저장
+                    option.dataset.start = el.candidacy_start_at || '-';
+                    option.dataset.end = el.candidacy_end_at || '-';
                     selectEl.appendChild(option);
                 });
 
                 document.getElementById('select-area').style.display = 'block';
 
             } catch (e) {
-                showModal('오류', '초기화 중 오류 발생: ' + e.message);
+                showModal('오류', '초기화 실패: ' + e.message);
             }
         }
 
-// [이벤트] 자격 확인 버튼 클릭
-document.getElementById('btn-check-qual').addEventListener('click', async () => {
-    const electionSelect = document.getElementById('election-select');
-    const electionId = electionSelect.value;
-    
-    if (!electionId) {
-        showModal('알림', '출마할 선거를 선택해주세요.');
-        return;
-    }
+        // [이벤트] 확인 버튼 (자격 체크 + 기존 신청 내역 확인)
+        document.getElementById('btn-check-qual').addEventListener('click', async () => {
+            const selectEl = document.getElementById('election-select');
+            const electionId = selectEl.value;
+            if (!electionId) return showModal('알림', '선거를 선택해주세요.');
 
-    const btn = document.getElementById('btn-check-qual');
-    btn.disabled = true;
-    btn.innerText = '확인 중...';
+            const option = selectEl.options[selectEl.selectedIndex];
+            // 등록 기간 표시
+            const periodStr = `${new Date(option.dataset.start).toLocaleDateString()} ~ ${new Date(option.dataset.end).toLocaleDateString()}`;
+            document.getElementById('display-period').innerText = periodStr;
 
-    try {
-        // 1. 이미 후보 등록 했는지 체크 (기존과 동일)
-        const { data: existing, error: existError } = await supabase
-            .from('candidates')
-            .select('id')
-            .eq('election_id', electionId)
-            .eq('member_uuid', currentUser.id)
-            .limit(1)
-            .maybeSingle();
+            const btn = document.getElementById('btn-check-qual');
+            btn.disabled = true;
+            btn.innerText = '조회 중...';
 
-        if (existError) throw existError;
-        if (existing) {
-            document.getElementById('selection-section').style.display = 'none';
-            document.getElementById('already-applied').style.display = 'block';
-            return;
-        }
-
-        // ============================================================
-        // [수정된 로직 시작] 지역구(Regional)와 비례(Proportional) 구분 처리
-        // ============================================================
-
-        // 2-1. 선거인 명부에서 '모든' 소속 선거구 ID 조회 (single/maybeSingle 사용 금지)
-        const { data: voterRows, error: voterError } = await supabase
-            .from('election_voters')
-            .select('district_id')
-            .eq('election_id', electionId)
-            .eq('member_uuid', currentUser.id);
-
-        if (voterError) throw voterError;
-
-        // 명부에 아예 없는 경우
-        if (!voterRows || voterRows.length === 0) {
-            showModal('자격 없음', '귀하는 선택하신 선거의 선거인 명부에 포함되어 있지 않습니다.\n(관리자에게 문의하세요)');
-            btn.disabled = false;
-            btn.innerText = '내 선거구 확인하기';
-            return;
-        }
-
-        // 2-2. 가져온 ID들 중에서 '지역구(is_common = false)'인 곳 찾기
-        const districtIds = voterRows.map(row => row.district_id);
-
-        const { data: districtData, error: distError } = await supabase
-            .from('districts')
-            .select('id, name, vote_type')
-            .in('id', districtIds)          // 내 소속 선거구들 중에서
-            .eq('is_common', false)         // [핵심] 비례(true)는 제외하고 지역구(false)만 조회
-            .limit(1)                       // 혹시라도 지역구가 여러 개일 경우 대비
-            .maybeSingle();
-
-        if (distError) throw new Error('선거구 정보를 불러올 수 없습니다.');
-
-        // 지역구 데이터가 없는 경우 (예: 비례대표만 있는 경우 or 데이터 오류)
-        if (!districtData) {
-            showModal('알림', '출마 가능한 지역 선거구가 확인되지 않습니다.\n(비례대표 투표 권한만 있을 수 있습니다)');
-            btn.disabled = false;
-            btn.innerText = '내 선거구 확인하기';
-            return;
-        }
-
-        // ============================================================
-        // [수정된 로직 끝]
-        // ============================================================
-
-        // 3. 찬반 투표 지역인지 체크
-        if (districtData.vote_type === 'BINARY') {
-            showModal('알림', `귀하의 선거구[${districtData.name}]는 찬반 투표 대상 지역이므로\n후보자 등록이 필요하지 않습니다.`);
-            btn.disabled = false;
-            btn.innerText = '내 선거구 확인하기';
-            return;
-        }
-
-        // 4. 최종 확인 모달 띄우기
-        showConfirmModal(
-            '선거구 확인', 
-            `귀하의 소속 선거구는\n[ ${districtData.name} ] 입니다.\n\n해당 선거구로 후보 등록을 진행하시겠습니까?`,
-            () => {
-                document.getElementById('selection-section').style.display = 'none';
-                document.getElementById('apply-form').style.display = 'block';
+            try {
+                // 1. 선거구 찾기 (이전 수정 코드 적용)
+                const { data: voterRows } = await supabase.from('election_voters').select('district_id').eq('election_id', electionId).eq('member_uuid', currentUser.id);
+                if (!voterRows || voterRows.length === 0) throw new Error('선거인 명부에 귀하의 정보가 없습니다.');
                 
-                document.getElementById('display-district-name').innerText = districtData.name;
-                document.getElementById('district-id').value = districtData.id; // districtData.id 사용
-                document.getElementById('election-id').value = electionId;
-                document.getElementById('cand-name').value = currentUser.name || '';
-            }
-        );
-        
-        btn.disabled = false;
-        btn.innerText = '내 선거구 확인하기';
+                const districtIds = voterRows.map(r => r.district_id);
+                const { data: districtData } = await supabase.from('districts').select('*').in('id', districtIds).eq('is_common', false).limit(1).maybeSingle();
+                
+                if (!districtData) throw new Error('출마 가능한 지역 선거구가 없습니다. (비례대표 권한만 보유)');
+                if (districtData.vote_type === 'BINARY') throw new Error('찬반 투표 지역은 후보 등록이 불가능합니다.');
 
-    } catch (e) {
-        console.error(e);
-        showModal('오류', '확인 중 문제가 발생했습니다: ' + (e.message || '알 수 없는 오류'));
-        btn.disabled = false;
-        btn.innerText = '내 선거구 확인하기';
-    }
-}); // End of btn-check-qual event listener
+                selectedDistrict = districtData; // 전역 저장
+
+                // 2. 기존 신청 내역 조회 (상태 확인용)
+                const { data: existingApp } = await supabase
+                    .from('candidates')
+                    .select('*')
+                    .eq('election_id', electionId)
+                    .eq('member_uuid', currentUser.id)
+                    .maybeSingle();
+
+                // 3. UI 분기 처리
+                document.getElementById('selection-section').style.display = 'none';
+                
+                if (existingApp) {
+                    if (existingApp.status === 'APPROVED') {
+                        // 승인됨 -> 완료 화면
+                        document.getElementById('comp-election-name').innerText = option.innerText;
+                        document.getElementById('completed-view').style.display = 'block';
+                    } else {
+                        // 대기(PENDING) 또는 반려(REJECTED) -> 수정 폼 열기
+                        openForm(true, existingApp);
+                    }
+                } else {
+                    // 신규 신청
+                    openForm(false, null);
+                }
+
+            } catch (e) {
+                showModal('불가', e.message);
+                document.getElementById('selection-section').style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '내 선거구 확인 및 신청내역 조회';
+            }
+        });
+
+        // 폼 열기 함수 (mode: isEdit)
+        function openForm(isEdit, data) {
+            const form = document.getElementById('apply-form');
+            form.style.display = 'block';
+
+            // 기본 데이터 세팅
+            document.getElementById('display-district-name').innerText = selectedDistrict.name;
+            document.getElementById('district-id').value = selectedDistrict.id;
+            document.getElementById('election-id').value = document.getElementById('election-select').value;
+            
+            // 1. 인적사항 채우기 (Members 테이블 정보 or 기존 신청 정보)
+            // currentUser에 member 정보가 있다고 가정 (init 함수 참조)
+            document.getElementById('user-name').value = currentUser.name || '';
+            document.getElementById('user-birth').value = currentUser.birth_date || ''; // DB칼럼명 확인 필요
+            document.getElementById('user-contact').value = currentUser.contact || currentUser.phone || '';
+            document.getElementById('user-address').value = currentUser.address || '';
+
+            // 2. 상태별 메시지 및 데이터 바인딩
+            const statusArea = document.getElementById('status-message-area');
+            statusArea.innerHTML = '';
+            
+            if (isEdit && data) {
+                document.getElementById('candidate-id').value = data.id;
+                document.getElementById('cand-name').value = data.name;
+                document.getElementById('cand-career').value = data.career || '';
+                document.getElementById('cand-manifesto').value = data.manifesto;
+                document.getElementById('agree-privacy').checked = true; // 수정 시엔 이미 동의한 것으로 간주 가능
+                document.getElementById('agree-conflict').checked = true;
+
+                // 사진 미리보기
+                if (data.photo_url) {
+                    document.getElementById('current-photo-area').style.display = 'block';
+                    document.getElementById('preview-photo').src = data.photo_url;
+                }
+                // 증빙 확인
+                if (data.proof_url) {
+                    document.getElementById('current-proof-area').style.display = 'block';
+                }
+
+                if (data.status === 'REJECTED') {
+                    statusArea.innerHTML = `<div class="status-alert status-rejected">
+                        ⛔ 반려되었습니다.<br>사유: ${data.rejection_reason || '관리자 문의 필요'}<br>내용을 수정하여 다시 제출해주세요.
+                    </div>`;
+                    document.getElementById('btn-submit').innerText = '수정해서 다시 제출';
+                } else {
+                    statusArea.innerHTML = `<div class="status-alert status-pending">
+                        ⏳ 승인 대기 중입니다.<br>내용을 수정하면 관리자가 다시 검토합니다.
+                    </div>`;
+                    document.getElementById('btn-submit').innerText = '수정 내용 저장';
+                }
+            } else {
+                // 신규
+                document.getElementById('cand-name').value = currentUser.name || '';
+                document.getElementById('btn-submit').innerText = '신청서 제출';
+            }
+        }
 
         // [이벤트] 폼 제출
         document.getElementById('apply-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
             const btn = document.getElementById('btn-submit');
             btn.disabled = true;
-            btn.innerText = '제출 중...';
+            btn.innerText = '처리 중...';
 
             try {
-                const formObj = {
-                    electionId: document.getElementById('election-id').value,
-                    districtId: document.getElementById('district-id').value,
+                const userId = currentUser.id;
+                const candId = document.getElementById('candidate-id').value; // 있으면 수정
+                
+                // 1. 파일 업로드
+                const photoFile = document.getElementById('cand-photo').files[0];
+                const proofFile = document.getElementById('cand-proof').files[0];
+
+                let photoUrl = null;
+                let proofUrl = null;
+
+                // 신규인데 사진 안 올림 체크
+                if (!candId && !photoFile) throw new Error('프로필 사진은 필수입니다.');
+                // 신규인데 증빙 안 올림 체크
+                if (!candId && !proofFile) throw new Error('이력 증빙 서류는 필수입니다.');
+
+                // 업로드 수행 (Service에 함수 추가 필요)
+                if (photoFile) photoUrl = await service.uploadCandidatePhoto(photoFile, userId);
+                if (proofFile) proofUrl = await service.uploadProofDoc(proofFile, userId); // 신규 추가 함수 호출
+
+                // 2. Member 정보 업데이트 (연락처, 주소 등 현행화)
+                const updateMemberObj = {
+                    name: document.getElementById('user-name').value,
+                    birth_date: document.getElementById('user-birth').value,
+                    contact: document.getElementById('user-contact').value,
+                    address: document.getElementById('user-address').value
+                };
+                
+                const { error: memError } = await supabase.from('members').update(updateMemberObj).eq('id', userId);
+                if (memError) console.warn('회원 정보 업데이트 실패(권한 문제 가능성):', memError);
+
+                // 3. Candidate Upsert (Insert or Update)
+                const candidateObj = {
+                    election_id: document.getElementById('election-id').value,
+                    district_id: document.getElementById('district-id').value,
+                    member_uuid: userId,
                     name: document.getElementById('cand-name').value,
-                    photoFile: document.getElementById('cand-photo').files[0],
-                    manifesto: document.getElementById('cand-manifesto').value
+                    career: document.getElementById('cand-career').value,
+                    manifesto: document.getElementById('cand-manifesto').value,
+                    agreed: true, // 동의함
+                    status: 'PENDING', // 수정/제출 시 무조건 대기 상태로 리셋
+                    created_at: new Date().toISOString() // created_at 갱신 or updated_at 별도 관리
                 };
 
-                // Service의 applyCandidate 함수 재활용
-                await service.applyCandidate(formObj);
+                // 파일이 변경된 경우에만 필드 업데이트 (기존 URL 유지)
+                if (photoUrl) candidateObj.photo_url = photoUrl;
+                if (proofUrl) candidateObj.proof_url = proofUrl;
 
-                showModal('완료', '후보 등록 신청이 완료되었습니다.\n관리자 승인 후 반영됩니다.', () => location.reload());
+                // 수정(Update) vs 신규(Insert)
+                let result;
+                if (candId) {
+                    result = await supabase.from('candidates').update(candidateObj).eq('id', candId);
+                } else {
+                    result = await supabase.from('candidates').insert(candidateObj);
+                }
 
-            } catch (e) {
-                showModal('실패', '신청 실패: ' + e.message);
+                if (result.error) throw result.error;
+
+                showModal('완료', '정상적으로 제출되었습니다.\n관리자 승인을 기다려주세요.', () => location.reload());
+
+            } catch (err) {
+                console.error(err);
+                showModal('실패', err.message);
                 btn.disabled = false;
-                btn.innerText = '신청서 제출';
+                btn.innerText = '다시 제출';
             }
         });
 
-        // --- 모달 유틸리티 ---
-
-        function showModal(title, msg, onOk = null) {
+        // --- 유틸 ---
+        function showModal(title, msg, onOk) {
             modalTitle.innerText = title;
             modalMsg.innerText = msg;
-            modalBtnArea.innerHTML = '';
-            
-            const okBtn = document.createElement('button');
-            okBtn.className = 'btn-modal btn-confirm';
-            okBtn.innerText = '확인';
-            okBtn.onclick = () => {
+            modalBtnArea.innerHTML = `<button class="btn-modal btn-confirm">확인</button>`;
+            modalBtnArea.querySelector('button').onclick = () => {
                 modalOverlay.style.display = 'none';
                 if (onOk) onOk();
             };
-            modalBtnArea.appendChild(okBtn);
             modalOverlay.style.display = 'flex';
         }
-
-        function showConfirmModal(title, msg, onYes) {
-            modalTitle.innerText = title;
-            modalMsg.innerText = msg;
-            modalBtnArea.innerHTML = '';
-
-            const cancelBtn = document.createElement('button');
-            cancelBtn.className = 'btn-modal';
-            cancelBtn.style.background = '#ccc';
-            cancelBtn.style.marginRight = '10px';
-            cancelBtn.innerText = '취소';
-            cancelBtn.onclick = () => modalOverlay.style.display = 'none';
-
-            const okBtn = document.createElement('button');
-            okBtn.className = 'btn-modal btn-confirm';
-            okBtn.innerText = '등록 진행';
-            okBtn.onclick = () => {
-                modalOverlay.style.display = 'none';
-                if (onYes) onYes();
-            };
-
-            modalBtnArea.appendChild(cancelBtn);
-            modalBtnArea.appendChild(okBtn);
-            modalOverlay.style.display = 'flex';
-        }
-
+        
         init();
     </script>
 </body>
