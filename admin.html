@@ -831,30 +831,38 @@ window.openElectionGateway = async () => {
         }
     };
 
-// [수정됨] 선거구별 유권자 목록 보기 (클릭 시 상세 모달 연결)
+// [수정됨] 선거구별 유권자 목록 보기 (내부 검색 기능 추가)
     window.showVoterDetail = (dName, list) => {
+        // 모달 내부 HTML 구성
         let html = `
             <div style="padding:10px; background:#f3f4f6; margin-bottom:10px;">
-                <strong>${dName}</strong> 명부 (${list.length}명)
-                <div style="font-size:0.8rem; color:#666; margin-top:4px;">* 이름을 클릭하면 상세 정보 조회 및 선거구 변경이 가능합니다.</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <strong>${dName}</strong> 명부 (${list.length}명)
+                </div>
+                <input type="text" id="voter-list-search" placeholder="이름 또는 전화번호 검색..." 
+                       onkeyup="filterVoterList()" 
+                       style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:0.9rem;">
+                <div style="font-size:0.75rem; color:#666; margin-top:4px;">* 이름을 클릭하면 상세 정보 조회 및 이동이 가능합니다.</div>
             </div>
+            
             <div style="max-height:300px; overflow-y:auto;">
-                <table class="voter-list-table">
+                <table class="voter-list-table" id="voter-table-body">
                     <thead>
                         <tr>
-                            <th>번호</th>
+                            <th style="width:50px;">번호</th>
                             <th>이름</th>
                             <th>전화</th>
-                            <th>관리</th>
+                            <th style="width:50px;">관리</th>
                         </tr>
                     </thead>
                     <tbody>`;
         
         list.forEach(v => {
-            // v object structure: { member_no, district_id, _view_name, _view_phone }
-            // 클릭 시 openVoterInfo 함수 호출 (member_no 사용)
+            // 검색 필터링을 위해 data-search 속성에 검색 키워드(이름+전화번호) 심어둠
+            const searchKey = `${v._view_name}|${v._view_phone}`.toLowerCase();
+            
             html += `
-                <tr style="cursor:pointer;" onclick="openVoterInfo('${v.member_no}', '${v.district_id}')">
+                <tr class="voter-row" data-search="${searchKey}" style="cursor:pointer;" onclick="openVoterInfo('${v.member_no}', '${v.district_id}')">
                     <td>${v.member_no}</td>
                     <td style="font-weight:bold; color:var(--primary-blue);">${v._view_name}</td>
                     <td>${v._view_phone || '-'}</td>
@@ -864,8 +872,25 @@ window.openElectionGateway = async () => {
         
         html += '</tbody></table></div>';
         
-        // 기존 공통 모달 사용
         window.showModal(`${dName} 유권자 명부`, html, null, true);
+    };
+
+    // [신규] 명부 리스트 실시간 필터링 함수
+    window.filterVoterList = () => {
+        const input = document.getElementById('voter-list-search');
+        if(!input) return;
+        
+        const filter = input.value.toLowerCase();
+        const rows = document.querySelectorAll('.voter-row');
+
+        rows.forEach(row => {
+            const key = row.getAttribute('data-search');
+            if (key.includes(filter)) {
+                row.style.display = ''; // 보이기
+            } else {
+                row.style.display = 'none'; // 숨기기
+            }
+        });
     };
 // -----------------------------------------------------------
     // [신규] 유권자 상세 관리 및 CRUD (추가/수정/삭제) 로직
@@ -873,11 +898,9 @@ window.openElectionGateway = async () => {
 
     let targetVoterMemberId = null; // 현재 수정 중인 유권자 ID (coop_members.member_id)
 
-    // 1. 유권자 상세 정보 모달 열기 (정보 조회)
+// [수정됨] 유권자 상세 정보 모달 (선거구 선택지에서 비례 제외)
     window.openVoterInfo = async (memberId, currentDistrictId) => {
-        targetVoterMemberId = memberId; // 전역 변수에 저장 (수정/삭제 시 사용)
-
-        // UI 초기화
+        targetVoterMemberId = memberId; 
         const modal = document.getElementById('voter-detail-modal');
         const body = document.getElementById('voter-detail-body');
         const distSelect = document.getElementById('detail-district-select');
@@ -886,7 +909,7 @@ window.openElectionGateway = async () => {
         modal.style.display = 'flex';
 
         try {
-            // (1) 조합원 상세 정보 조회 (coop_members)
+            // (1) 조합원 정보 조회
             const { data: member, error } = await supabase
                 .from('coop_members')
                 .select('*')
@@ -896,28 +919,29 @@ window.openElectionGateway = async () => {
             if (error) throw error;
 
             // (2) 정보 표시
-            // 가입일, 주소, 상태, 정조합원 여부 등 표시
             body.innerHTML = `
                 <table style="width:100%; border-collapse:collapse;">
                     <tr><td style="color:#666; width:80px;">이름</td> <td><strong>${member.name}</strong></td></tr>
                     <tr><td style="color:#666;">연락처</td> <td>${member.phone}</td></tr>
                     <tr><td style="color:#666;">주소</td> <td>${member.address || '(정보 없음)'}</td></tr>
                     <tr><td style="color:#666;">가입일</td> <td>${member.joined_at ? new Date(member.joined_at).toLocaleDateString() : '-'}</td></tr>
-                    <tr><td style="color:#666;">상태</td> <td><span class="status-badge" style="background:${member.status === 'active' ? 'green' : 'gray'}">${member.status}</span></td></tr>
                 </table>
             `;
 
-            // (3) 선거구 Select 박스 옵션 채우기
+            // (3) 선거구 Select 옵션 (비례 제외 로직 추가)
             distSelect.innerHTML = '';
             for (const [id, name] of Object.entries(cachedDistricts)) {
+                // [조건] 이름에 '(비례)'가 포함되어 있으면 목록에서 제외
+                if (name.includes('(비례)')) continue;
+
                 const opt = document.createElement('option');
                 opt.value = id;
                 opt.text = name;
+                // 현재 선거구와 일치하면 선택 (단, 현재가 비례면 선택 안될 수 있음)
                 if (String(id) === String(currentDistrictId)) opt.selected = true;
                 distSelect.appendChild(opt);
             }
 
-            // (4) 버튼 이벤트 연결
             document.getElementById('btn-update-district').onclick = updateVoterDistrict;
             document.getElementById('btn-delete-voter').onclick = deleteVoter;
 
@@ -989,19 +1013,21 @@ window.openElectionGateway = async () => {
         }
     }
 
-    // 4. 유권자 추가 모달 열기
+ // [수정됨] 유권자 추가 모달 열기 (비례 제외)
     window.openAddVoterModal = () => {
         const modal = document.getElementById('add-voter-modal');
         const distSelect = document.getElementById('add-voter-district-select');
         const resultArea = document.getElementById('search-result-area');
         
-        // 초기화
         document.getElementById('search-member-input').value = '';
         resultArea.innerHTML = '<div style="color:#999; text-align:center; padding-top:20px;">이름을 입력하고 검색하세요.</div>';
         
-        // 선거구 옵션 채우기
+        // 선거구 옵션 채우기 (비례 제외)
         distSelect.innerHTML = '<option value="">-- 선거구 선택 --</option>';
         for (const [id, name] of Object.entries(cachedDistricts)) {
+            // [조건] 비례대표 선거구는 수동 선택 불가 -> 자동 추가되므로 숨김
+            if (name.includes('(비례)')) continue;
+
             const opt = document.createElement('option');
             opt.value = id;
             opt.text = name;
@@ -1011,11 +1037,7 @@ window.openElectionGateway = async () => {
         modal.style.display = 'flex';
     };
 
-    window.closeAddVoterModal = () => {
-        document.getElementById('add-voter-modal').style.display = 'none';
-    };
-
-    // 5. 조합원 검색 (Search)
+    // [수정됨] 조합원 검색 (이미 등록된 사람 표시 로직 강화)
     window.searchMembers = async () => {
         const keyword = document.getElementById('search-member-input').value.trim();
         const resultArea = document.getElementById('search-result-area');
@@ -1028,8 +1050,7 @@ window.openElectionGateway = async () => {
         resultArea.innerHTML = '검색 중...';
 
         try {
-            // (1) 전체 조합원에서 이름이나 전화번호로 검색
-            // Supabase의 ILIKE 사용
+            // 1. 조합원 검색 (이름/전화번호)
             const { data: members, error } = await supabase
                 .from('coop_members')
                 .select('member_id, name, phone, address')
@@ -1043,20 +1064,50 @@ window.openElectionGateway = async () => {
                 return;
             }
 
-            // (2) 이미 등록된 유권자인지 확인하기 위해 현재 명부 데이터 체크
-            // (간이로 현재 로드된 데이터를 쓰거나, DB에서 체크해야 함. 여기서는 UX를 위해 DB체크 생략하고 UI에서 중복 등록 시도 시 에러로 처리하거나,
-            // 더 완벽하게 하려면 election_voters를 한번 조회해야 함. 성능상 Insert시 충돌 체크가 나으므로 UI 표시만 함)
-            
+            // 2. 검색된 멤버들의 ID 추출
+            const searchedIds = members.map(m => m.member_id);
+
+            // 3. 현재 선거(election_voters)에 등록 여부 확인
+            //    검색된 ID들 중 이 선거에 등록된 내역 조회
+            const { data: registeredData, error: regError } = await supabase
+                .from('election_voters')
+                .select('member_no, district_id')
+                .eq('election_id', currentElectionId)
+                .in('member_no', searchedIds);
+
+            if(regError) throw regError;
+
+            // 4. 등록 정보를 Map으로 변환 (Key: member_no, Value: district_name)
+            //    한 사람이 여러 선거구(지역+비례)에 있을 수 있으므로, 비례가 아닌 선거구를 우선 표시하도록 처리
+            const regMap = {};
+            if(registeredData) {
+                registeredData.forEach(r => {
+                    const dName = cachedDistricts[r.district_id] || '알수없음';
+                    // 이미 값이 있는데 지금 것이 '(비례)'라면 덮어쓰지 않음 (지역구 우선 표시)
+                    if(regMap[r.member_no] && dName.includes('(비례)')) return;
+                    regMap[r.member_no] = dName;
+                });
+            }
+
+            // 5. 결과 목록 렌더링
             let html = '<ul style="list-style:none; padding:0; margin:0;">';
             
             members.forEach(m => {
+                const registeredDistrict = regMap[m.member_id]; // 등록된 선거구 이름 (없으면 undefined)
+                const isRegistered = !!registeredDistrict;
+
                 html += `
-                    <li style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
+                    <li style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:${isRegistered ? '#f9fafb' : 'white'};">
+                        <div style="opacity:${isRegistered ? 0.6 : 1}">
                             <strong>${m.name}</strong> <span style="font-size:0.8rem; color:#666;">(${m.phone || '전화없음'})</span><br>
                             <span style="font-size:0.75rem; color:#999;">${m.address || '주소없음'}</span>
                         </div>
-                        <button onclick="addVoterToElection('${m.member_id}', '${m.name}')" class="btn btn-sm btn-outline">선택</button>
+                        <div>
+                            ${isRegistered 
+                                ? `<span class="status-badge" style="background:#6b7280; font-size:0.75rem;">${registeredDistrict} 등록됨</span>` 
+                                : `<button onclick="addVoterToElection('${m.member_id}', '${m.name}')" class="btn btn-sm btn-primary">선택</button>`
+                            }
+                        </div>
                     </li>
                 `;
             });
@@ -1069,10 +1120,10 @@ window.openElectionGateway = async () => {
         }
     };
 
-    // 6. 명부 등재 실행 (Insert)
+    // [수정됨] 명부 등재 실행 (비례대표 자동 추가 로직 포함)
     window.addVoterToElection = async (memberId, memberName) => {
         const distSelect = document.getElementById('add-voter-district-select');
-        const districtId = distSelect.value;
+        const districtId = distSelect.value; // 선택한 '지역' 선거구 ID
 
         if (!districtId) {
             alert("먼저 하단의 [배정할 선거구]를 선택해주세요.");
@@ -1080,36 +1131,64 @@ window.openElectionGateway = async () => {
             return;
         }
 
-        if (!confirm(`[${memberName}] 님을 선택한 선거구로 추가하시겠습니까?`)) return;
+        if (!confirm(`[${memberName}] 님을 선택한 선거구로 추가하시겠습니까?\n('(비례)' 선거구도 자동으로 추가됩니다)`)) return;
 
         try {
-            // election_voters에 insert
+            // 1. Insert할 데이터 배열 준비
+            const rowsToInsert = [];
+
+            // (1) 선택한 지역 선거구 추가
+            rowsToInsert.push({
+                election_id: currentElectionId,
+                member_no: memberId,
+                district_id: districtId
+            });
+
+            // (2) '(비례)' 선거구 찾아서 자동 추가
+            let proportionalDistrictId = null;
+            for (const [id, name] of Object.entries(cachedDistricts)) {
+                if (name.includes('(비례)')) {
+                    proportionalDistrictId = id;
+                    break;
+                }
+            }
+
+            if (proportionalDistrictId) {
+                rowsToInsert.push({
+                    election_id: currentElectionId,
+                    member_no: memberId,
+                    district_id: proportionalDistrictId
+                });
+            }
+
+            // 2. DB Insert 실행 (한 번에 여러 행 삽입)
             const { error } = await supabase
                 .from('election_voters')
-                .insert([
-                    {
-                        election_id: currentElectionId,
-                        member_no: memberId,   // coop_members.member_id -> election_voters.member_no 매핑 주의
-                        district_id: districtId
-                    }
-                ]);
+                .insert(rowsToInsert);
 
             if (error) {
-                // Unique constraint 위반 (이미 등록된 경우) 에러 코드: 23505
+                // 중복 에러(23505)가 발생할 수 있음 (부분 실패 시 전체 롤백되거나 에러 발생)
                 if (error.code === '23505') {
-                    alert("이미 이 선거의 명부에 등록된 조합원입니다.");
+                    alert("처리 중 중복 오류가 발생했습니다. (이미 등록된 선거구)");
                 } else {
                     throw error;
                 }
                 return;
             }
 
-            alert(`${memberName} 님이 추가되었습니다.`);
+            // 3. 성공 처리
+            const msg = proportionalDistrictId 
+                ? `${memberName} 님이 2개 선거구(지역+비례)에 추가되었습니다.` 
+                : `${memberName} 님이 추가되었습니다. ((비례) 선거구 없음)`;
+                
+            alert(msg);
             closeAddVoterModal();
-            loadVoterStats(); // 명부 갱신
-            service.logAction(currentElectionId, 'VOTER_ADD', `유권자 추가: ${memberName} (ID:${memberId})`);
+            loadVoterStats(); // 전체 명부 갱신
+            
+            service.logAction(currentElectionId, 'VOTER_ADD', `유권자 추가: ${memberName} (ID:${memberId}) -> 지역+비례`);
 
         } catch (e) {
+            console.error(e);
             alert("추가 실패: " + e.message);
         }
     };
