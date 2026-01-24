@@ -895,9 +895,46 @@
         }
     };
 
-    window.finishSetup = () => {
-        window.location.reload(); // 대시보드로 복귀
-    }    
+// [수정] 선거 설정 완료 처리 (DB 상태 변경 로직 추가)
+window.finishSetup = async () => {
+    // 1. 선거 ID 존재 여부 확인
+    if (!newElectionId) return window.showAlert('진행 중인 선거 설정이 없습니다.');
+
+    // 2. 안전장치: 선거구가 1개라도 있는지 로컬 캐시(districtsCache)로 확인
+    if (!districtsCache || districtsCache.length === 0) {
+        return window.showAlert('최소 1개 이상의 선거구를 등록해야 완료할 수 있습니다.');
+    }
+
+    // 3. 사용자 확인 (Confirm)
+    window.showConfirm(
+        "선거 설정을 완료하시겠습니까?\n\n상태가 [준비 중]으로 변경되며,\n이후에는 후보자 등록 단계로 넘어갑니다.",
+        async () => {
+            try {
+                // 4. DB 상태 업데이트 (DRAFT -> PREPARE)
+                const { error } = await supabase
+                    .from('elections')
+                    .update({ status: 'PREPARE' })
+                    .eq('id', newElectionId);
+
+                if (error) throw error;
+
+                // 5. 성공 처리
+                window.showAlert("설정이 완료되었습니다! 🎉");
+                
+                // 임시 ID 제거 (더 이상 Draft가 아니므로)
+                localStorage.removeItem('draft_election_id');
+                newElectionId = null;
+
+                // 6. 대시보드로 복귀 (새로고침)
+                window.location.reload();
+
+            } catch (err) {
+                console.error(err);
+                window.showAlert('상태 변경 실패: ' + err.message);
+            }
+        }
+    );
+}; // End of function finishSetup
 
     // ----------------------------------------------------------------
     // [1] 필수 유틸리티: 모달 함수 정의
