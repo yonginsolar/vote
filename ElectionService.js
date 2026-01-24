@@ -143,42 +143,89 @@ export class ElectionService {
         return true;
     }
 
-    /**
-     * [5] 후보자 등록 신청 (여기가 수정된 위치입니다)
-     * - 반드시 클래스 내부(닫는 괄호 전)에 있어야 합니다.
-     */
-    async applyCandidate(formData) {
-        // 1. 이미지 업로드 처리
-        const file = formData.photoFile;
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${this.memberProfile.id}_${Date.now()}.${fileExt}`;
-        const filePath = `${formData.electionId}/${fileName}`;
+// ============================================================
+    // [1] 기존 applyCandidate 함수를 이걸로 통째로 교체하세요.
+    // ============================================================
+    async applyCandidate({ electionId, districtId, name, photoFile, manifesto }) {
+        // 1. 로그인된 유저 ID 가져오기
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('로그인 세션이 만료되었습니다. 다시 로그인해주세요.');
+        const userId = session.user.id;
 
-        const { error: uploadError } = await supabase.storage
-            .from('candidates')
-            .upload(filePath, file);
+        // 2. 사진 업로드 수행 (아래 uploadCandidatePhoto 함수 호출)
+        let photoUrl = null;
+        try {
+            if (photoFile) {
+                photoUrl = await this.uploadCandidatePhoto(photoFile, userId);
+            } else {
+                throw new Error('프로필 사진은 필수입니다.');
+            }
+        } catch (uploadError) {
+            // 업로드 실패 시 더 진행하지 않고 중단
+            throw new Error(uploadError.message); 
+        }
 
-        if (uploadError) throw new Error('사진 업로드 실패: ' + uploadError.message);
-
-        // 2. 공개 URL 가져오기
-        const { data: { publicUrl } } = supabase.storage
-            .from('candidates')
-            .getPublicUrl(filePath);
-
-        // 3. DB Insert
-        const { error: dbError } = await supabase
+        // 3. DB에 후보자 정보 저장
+        const { data, error } = await supabase
             .from('candidates')
             .insert({
-                election_id: formData.electionId,
-                district_id: formData.districtId,
-                member_uuid: this.memberProfile.id,
-                name: formData.name,
-                manifesto: formData.manifesto,
-                photo_url: publicUrl,
-                status: 'PENDING'
+                election_id: electionId,
+                district_id: districtId,
+                member_uuid: userId,
+                name: name,
+                photo_url: photoUrl,     // 업로드된 이미지 URL
+                manifesto: manifesto,
+                status: 'PENDING',       // 승인 대기 상태
+                created_at: new Date().toISOString()
+            })
+            .select();
+
+        if (error) {
+            console.error('DB Insert Error:', error);
+            throw new Error('신청서 저장 중 오류가 발생했습니다: ' + error.message);
+        }
+
+        return data;
+    } // End of applyCandidate
+
+
+    // ============================================================
+    // [2] 이 함수를 클래스 내부에 새로 추가하세요. (실제 업로드 로직)
+    // ============================================================
+    async uploadCandidatePhoto(file, userId) {
+        // [중요] Supabase 대시보드 > Storage에 만든 버킷 이름과 토씨 하나 틀리지 않고 똑같아야 합니다.
+        const BUCKET_NAME = 'candidates'; 
+
+        // 1. 파일명 난수화 (한글 파일명 오류 방지 및 중복 방지)
+        // 예: userId/173000123_xYz123.jpg
+        const fileExt = file.name.split('.').pop();
+        const randomStr = Math.random().toString(36).substring(2, 10);
+        const fileName = `${Date.now()}_${randomStr}.${fileExt}`;
+        const filePath = `${userId}/${fileName}`; // 유저 ID 폴더 안에 저장
+
+        // 2. Supabase Storage에 업로드
+        const { error: uploadError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
             });
 
-        if (dbError) throw new Error('후보 등록 실패: ' + dbError.message);
-    }
+        if (uploadError) {
+            console.error('Storage Upload Error:', uploadError);
+            // 버킷이 없을 때 명확한 에러 메시지 전달
+            if (uploadError.message.includes('Bucket not found') || uploadError.error === 'Bucket not found') {
+                throw new Error(`스토리지 버킷(${BUCKET_NAME})이 존재하지 않습니다. 관리자에게 문의하세요.`);
+            }
+            throw new Error('사진 업로드 실패: ' + uploadError.message);
+        }
+
+        // 3. 업로드된 파일의 공개 URL 가져오기
+        const { data } = supabase.storage
+            .from(BUCKET_NAME)
+            .getPublicUrl(filePath);
+
+        return data.publicUrl;
+    } // End of uploadCandidatePhoto
 
 } // End of ElectionService class
