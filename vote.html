@@ -49,8 +49,9 @@
         </div>
     </div>
 
-    <script type="module">
-        import { ElectionService } from './ElectionService.js';
+ <script type="module">
+        // [수정 1] supabase 클라이언트도 함께 import 해야 합니다 (DB 업데이트용)
+        import { ElectionService, supabase } from './ElectionService.js';
         
         // 서비스 인스턴스 생성
         const service = new ElectionService();
@@ -58,7 +59,7 @@
         // 상태 변수
         let currentElection = null;
         let ballotInfo = null;
-        let selectedValue = null; // 선택한 후보ID 또는 찬반값
+        let selectedValue = null; 
 
         // DOM 요소
         const loadingScreen = document.getElementById('loading-screen');
@@ -67,17 +68,47 @@
         const ballotArea = document.getElementById('ballot-area');
         const voteBtn = document.getElementById('btn-vote');
 
-        // [초기화 로직] 페이지 로드 시 실행
+        // [수정 2] 초기화 로직에 UUID 동기화 추가
         async function initPage() {
             try {
-                // 1. 사용자 정보 로드
+                // 1. 사용자 정보 로드 (Auth 정보)
                 const user = await service.initialize();
+                
                 if (!user) {
                     showModal('로그인 필요', '로그인이 필요합니다. 매직링크를 통해 다시 접속해주세요.', () => {
-                        window.location.href = '/login.html'; // 로그인 페이지로 이동
+                        window.location.href = '/login.html'; 
                     });
                     return;
                 }
+
+                // ---------------------------------------------------------------
+                // [중요] 허수 UUID 방지: 로그인 직후 DB의 UUID를 실제 Auth UUID로 동기화
+                // ---------------------------------------------------------------
+                // (1) coop_members 테이블 동기화
+                const { error: memberError } = await supabase
+                    .from('coop_members')
+                    .update({ id: user.id }) // 실제 Auth UUID로 덮어쓰기
+                    .eq('email', user.email); // 이메일이 같은 사람 찾기
+                
+                if (memberError) console.error("UUID Sync Error (Member):", memberError);
+
+                // (2) election_voters 테이블 동기화 (투표권 연결)
+                // 먼저 문자열 ID(member_id)를 알아냄
+                const { data: memberData } = await supabase
+                    .from('coop_members')
+                    .select('member_id')
+                    .eq('email', user.email)
+                    .single();
+
+                if (memberData) {
+                    const { error: voterError } = await supabase
+                        .from('election_voters')
+                        .update({ member_uuid: user.id }) // 여기도 실제 UUID로
+                        .eq('member_no', memberData.member_id); // 문자열 ID 기준
+
+                    if (voterError) console.error("UUID Sync Error (Voter):", voterError);
+                }
+                // ---------------------------------------------------------------
 
                 document.getElementById('voter-info').innerText = `${user.name} 조합원님 (${user.member_id})`;
 
@@ -89,7 +120,7 @@
                 }
                 document.getElementById('election-title').innerText = currentElection.title;
 
-                // 3. 내 투표용지(선거구) 정보 가져오기
+                // 3. 내 투표용지 정보 가져오기 (이제 UUID가 맞으므로 조회 성공)
                 ballotInfo = await service.getMyBallotInfo(currentElection.id);
 
                 // 4. 이미 투표했는지 체크
@@ -98,7 +129,7 @@
                     return;
                 }
 
-                // 5. 화면 그리기 (투표 타입에 따라 분기)
+                // 5. 화면 그리기
                 renderBallot(ballotInfo);
 
                 // 화면 전환
@@ -107,7 +138,12 @@
 
             } catch (error) {
                 console.error(error);
-                alertAndClose('오류 발생: ' + error.message);
+                // Ballot 정보를 못 가져온 경우 처리
+                if (error.message.includes('Ballot')) {
+                    alertAndClose('선거인 명부에 귀하의 정보가 없거나, 선거구가 배정되지 않았습니다.\n관리자에게 문의해주세요.');
+                } else {
+                    alertAndClose('오류 발생: ' + error.message);
+                }
             }
         }
 
