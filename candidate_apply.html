@@ -480,15 +480,27 @@
             </div>
 
         </form> 
+<div id="confirm-modal" class="modal-overlay">
+            <div class="modal-content" style="max-width:500px;">
+                <h3>📝 제출 전 확인해주세요</h3>
+                <p style="color:#666;">제출 후에는 관리자 승인 전까지 수정할 수 있습니다.</p>
+                
+                <div class="preview-list" id="preview-content">
+                    </div>
+
+                <div class="modal-buttons">
+                    <button class="btn-modal" onclick="closeConfirmModal()" style="background:#cbd5e1;">취소</button>
+                    <button class="btn-modal btn-confirm" id="btn-final-submit">확인 및 제출</button>
+                </div>
+            </div>
+        </div>
 
         <div id="completed-view" style="display:none; text-align:center; padding:3rem;">
             <h2 style="color:#10b981;">🎉 후보 등록 완료</h2>
             <p>귀하는 <strong><span id="comp-election-name"></span></strong>의 후보자로<br>정상 등록(승인)되었습니다.</p>
             <button onclick="location.reload()" class="btn-modal">확인</button>
         </div>
-    </div>
-
-    <div id="modal-overlay" class="modal-overlay">
+    </div> <div id="modal-overlay" class="modal-overlay">
         <div class="modal-content">
             <h3 id="modal-title">알림</h3>
             <p id="modal-msg" style="white-space: pre-wrap; line-height:1.5;"></p>
