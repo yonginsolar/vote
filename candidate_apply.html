@@ -305,10 +305,11 @@
             <p id="no-election-msg" style="display:none; color:#666;">현재 후보 등록 기간인 선거가 없습니다.</p>
         </div>
  
-       <form id="apply-form" style="display:none; margin-top:2rem;">
+<form id="apply-form" style="display:none; margin-top:2rem;">
             
             <div id="status-message-area"></div>
-           <div class="info-box">
+            
+            <div class="info-box">
                 <h4 style="margin:0 0 10px 0; color:#0f172a;">📅 선거 및 임기 정보</h4>
                 <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
                     <span style="color:#64748b; font-weight:600;">선거구:</span>
@@ -316,7 +317,8 @@
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
                     <span style="color:#64748b; font-weight:600;">등록 기간:</span>
-                    <span id="display-period"></span> </div>
+                    <span id="display-period"></span>
+                </div>
                 <div style="display:flex; justify-content:space-between;">
                     <span style="color:#64748b; font-weight:600;">당선인 임기:</span>
                     <span style="color:#2563eb;">2026.02.23 ~ 2028.02.22 (2년)</span>
@@ -329,7 +331,7 @@
 
             <h3 style="border-bottom:2px solid #333; padding-bottom:10px; margin-top:30px;">1. 기본 인적사항</h3>
             <div style="background:#fff7ed; padding:10px; border-radius:6px; font-size:0.85rem; color:#c2410c; margin-bottom:15px;">
-                ⚠️ 정보가 변경되었다면 <strong><a href="https://www.yonginsolar.kr/membermanage.html" target="_blank" style="text-decoration:underline; color:#c2410c;">[조합원 관리]</a></strong> 페이지에서 먼저 수정해주세요.
+                ⚠️ 정보가 변경되었다면 <strong><a href="/admin/members" target="_blank" style="text-decoration:underline; color:#c2410c;">[조합원 관리]</a></strong> 페이지에서 먼저 수정해주세요.
             </div>
             
             <div style="margin-bottom:1rem;">
@@ -362,7 +364,6 @@
                 <div id="current-photo-area" style="display:none; margin-bottom:10px;">
                     <img id="preview-photo" src="" style="width:80px; height:80px; object-fit:cover; border-radius:50%; border:2px solid #ddd;">
                 </div>
-                
                 <div class="file-upload-wrapper">
                     <input type="file" id="cand-photo" accept="image/*" class="file-upload-input">
                     <label for="cand-photo" class="file-custom-label">
@@ -382,7 +383,6 @@
                 <div id="current-proof-area" style="display:none; margin-bottom:5px; color:green; font-size:0.9rem;">
                     ✅ 저장된 증빙서류가 있습니다.
                 </div>
-                
                 <div class="file-upload-wrapper">
                     <input type="file" id="cand-proof" accept=".pdf,image/*" class="file-upload-input">
                     <label for="cand-proof" class="file-custom-label" style="border-color:#64748b; color:#64748b;">
@@ -396,27 +396,6 @@
                 <label><strong>공약 및 출마의 변</strong></label>
                 <textarea id="cand-manifesto" rows="5" required placeholder="조합원들에게 전할 메시지"></textarea>
             </div>
-
-            <div style="display:flex; gap:10px; margin-top:2rem;">
-                <button type="button" onclick="location.reload()" class="btn-modal" style="flex:1; background:#94a3b8; color:white;">취소</button>
-                <button type="button" id="btn-pre-check" class="btn-submit" style="flex:2;">신청서 제출</button>
-            </div>
-    
-
-        <div id="confirm-modal" class="modal-overlay">
-            <div class="modal-content" style="max-width:500px;">
-                <h3>📝 제출 전 확인해주세요</h3>
-                <p style="color:#666;">제출 후에는 관리자 승인 전까지 수정할 수 있습니다.</p>
-                
-                <div class="preview-list" id="preview-content">
-                    </div>
-
-                <div class="modal-buttons">
-                    <button class="btn-modal" onclick="closeConfirmModal()" style="background:#cbd5e1;">취소</button>
-                    <button class="btn-modal btn-confirm" id="btn-final-submit">확인 및 제출</button>
-                </div>
-            </div>
-        </div>
 
             <h3 style="border-bottom:2px solid #333; padding-bottom:10px; margin-top:30px;">3. 필수 동의</h3>
             
@@ -496,10 +475,11 @@
             </div>
 
             <div style="display:flex; gap:10px; margin-top:2rem;">
-                <button type="button" onclick="location.reload()" class="btn-modal" style="flex:1; background:#999; color:white;">취소</button>
-                <button type="submit" id="btn-submit" class="btn-submit" style="flex:2;">신청서 제출</button>
+                <button type="button" onclick="location.reload()" class="btn-modal" style="flex:1; background:#94a3b8; color:white;">취소</button>
+                <button type="button" id="btn-pre-check" class="btn-submit" style="flex:2;">신청서 제출</button>
             </div>
-        </form>
+
+        </form> 
 
         <div id="completed-view" style="display:none; text-align:center; padding:3rem;">
             <h2 style="color:#10b981;">🎉 후보 등록 완료</h2>
