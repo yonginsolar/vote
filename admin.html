@@ -1310,7 +1310,7 @@ async function loadCandidates() {
         });
     }
 
-    // [신규] 후보자 상세 모달 열기
+// [수정됨] 후보자 상세 모달 열기 (파일 URL 생성 로직 추가)
     window.openCandidateDetail = async (candidateId) => {
         const modal = document.getElementById('candidate-detail-modal');
         const body = document.getElementById('cand-detail-body');
@@ -1320,7 +1320,7 @@ async function loadCandidates() {
         modal.style.display = 'flex';
 
         try {
-            // 상세 정보 조회 (AdminService에 의존하지 않고 직접 조회하여 모든 컬럼 확보)
+            // 1. 후보자 정보 조회
             const { data: c, error } = await supabase
                 .from('candidates')
                 .select('*')
@@ -1329,12 +1329,52 @@ async function loadCandidates() {
 
             if (error) throw error;
 
-            // HTML 구성
-            const photoSrc = c.photo_url || 'https://via.placeholder.com/150?text=No+Photo';
-            const proofLink = c.proof_url 
-                ? `<a href="${c.proof_url}" target="_blank" class="btn btn-sm btn-outline">📂 증빙서류 보기</a>` 
-                : `<span style="color:#999;">제출된 서류 없음</span>`;
+            // -----------------------------------------------------------
+            // [핵심 수정] 파일 경로 -> 실제 접속 가능한 URL(Signed URL)로 변환
+            // -----------------------------------------------------------
+            
+            // ⚠️ 주의: 'uploads'는 Supabase Storage의 버킷 이름입니다. 실제 이름으로 변경하세요.
+            // 예: 'candidate_files', 'images' 등
+            const BUCKET_NAME = 'candidate_proofs'; 
 
+            let photoSrc = 'https://via.placeholder.com/150?text=No+Photo';
+            let proofLink = '<span style="color:#999;">제출된 서류 없음</span>';
+
+            // (1) 사진 URL 변환
+            if (c.photo_url) {
+                // 만약 DB에 이미 http로 시작하는 전체 주소가 들어있다면 그대로 사용
+                if (c.photo_url.startsWith('http')) {
+                    photoSrc = c.photo_url;
+                } else {
+                    // 경로만 있다면 서명된 URL 생성 (유효시간 1시간)
+                    const { data: photoData } = await supabase
+                        .storage
+                        .from(BUCKET_NAME)
+                        .createSignedUrl(c.photo_url, 3600);
+                    if (photoData) photoSrc = photoData.signedUrl;
+                }
+            }
+
+            // (2) 증빙서류 URL 변환
+            if (c.proof_url) {
+                let finalProofUrl = '';
+                if (c.proof_url.startsWith('http')) {
+                    finalProofUrl = c.proof_url;
+                } else {
+                    const { data: proofData } = await supabase
+                        .storage
+                        .from(BUCKET_NAME)
+                        .createSignedUrl(c.proof_url, 3600);
+                    if (proofData) finalProofUrl = proofData.signedUrl;
+                }
+
+                if (finalProofUrl) {
+                    proofLink = `<a href="${finalProofUrl}" target="_blank" class="btn btn-sm btn-outline">📂 증빙서류 다운로드/보기</a>`;
+                }
+            }
+            // -----------------------------------------------------------
+
+            // HTML 구성
             body.innerHTML = `
                 <div style="display:flex; gap:2rem; flex-wrap:wrap;">
                     <div style="flex:0 0 150px; text-align:center;">
