@@ -160,96 +160,116 @@
             }
         }
 
-        // [이벤트] 자격 확인 버튼 클릭
-        document.getElementById('btn-check-qual').addEventListener('click', async () => {
-            const electionId = document.getElementById('election-select').value;
-            if (!electionId) {
-                showModal('알림', '출마할 선거를 선택해주세요.');
-                return;
-            }
+// [이벤트] 자격 확인 버튼 클릭
+document.getElementById('btn-check-qual').addEventListener('click', async () => {
+    const electionSelect = document.getElementById('election-select');
+    const electionId = electionSelect.value;
+    
+    if (!electionId) {
+        showModal('알림', '출마할 선거를 선택해주세요.');
+        return;
+    }
 
-            const btn = document.getElementById('btn-check-qual');
-            btn.disabled = true;
-            btn.innerText = '확인 중...';
+    const btn = document.getElementById('btn-check-qual');
+    btn.disabled = true;
+    btn.innerText = '확인 중...';
 
-            try {
-                // 1. 이미 후보 등록 했는지 체크
-                const { data: existing } = await supabase
-                    .from('candidates')
-                    .select('id')
-                    .eq('election_id', electionId)
-                    .eq('member_uuid', currentUser.id)
-                    .maybeSingle();
+    try {
+        // 1. 이미 후보 등록 했는지 체크 (기존과 동일)
+        const { data: existing, error: existError } = await supabase
+            .from('candidates')
+            .select('id')
+            .eq('election_id', electionId)
+            .eq('member_uuid', currentUser.id)
+            .limit(1)
+            .maybeSingle();
 
-                if (existing) {
-                    document.getElementById('selection-section').style.display = 'none';
-                    document.getElementById('already-applied').style.display = 'block';
-                    return;
-                }
+        if (existError) throw existError;
+        if (existing) {
+            document.getElementById('selection-section').style.display = 'none';
+            document.getElementById('already-applied').style.display = 'block';
+            return;
+        }
 
-                // 2. 선거인 명부(election_voters)에서 내 선거구 조회
-                // (추측 금지: election_id, member_uuid 사용)
-                const { data: voterData, error: voterError } = await supabase
-                    .from('election_voters')
-                    .select('district_id')
-                    .eq('election_id', electionId)
-                    .eq('member_uuid', currentUser.id)
-                    .maybeSingle();
+        // ============================================================
+        // [수정된 로직 시작] 지역구(Regional)와 비례(Proportional) 구분 처리
+        // ============================================================
 
-                if (voterError) throw voterError;
+        // 2-1. 선거인 명부에서 '모든' 소속 선거구 ID 조회 (single/maybeSingle 사용 금지)
+        const { data: voterRows, error: voterError } = await supabase
+            .from('election_voters')
+            .select('district_id')
+            .eq('election_id', electionId)
+            .eq('member_uuid', currentUser.id);
 
-                if (!voterData) {
-                    showModal('자격 없음', '귀하는 선택하신 선거의 선거인 명부에 포함되어 있지 않습니다.\n(관리자에게 문의하세요)');
-                    btn.disabled = false;
-                    btn.innerText = '내 선거구 확인하기';
-                    return;
-                }
+        if (voterError) throw voterError;
 
-                // 3. 선거구 이름 조회 (districts 테이블)
-                // (안전하게 별도 쿼리로 조회)
-                const { data: districtData, error: distError } = await supabase
-                    .from('districts')
-                    .select('name, vote_type')
-                    .eq('id', voterData.district_id)
-                    .single();
+        // 명부에 아예 없는 경우
+        if (!voterRows || voterRows.length === 0) {
+            showModal('자격 없음', '귀하는 선택하신 선거의 선거인 명부에 포함되어 있지 않습니다.\n(관리자에게 문의하세요)');
+            btn.disabled = false;
+            btn.innerText = '내 선거구 확인하기';
+            return;
+        }
 
-                if (distError) throw new Error('선거구 정보를 불러올 수 없습니다.');
+        // 2-2. 가져온 ID들 중에서 '지역구(is_common = false)'인 곳 찾기
+        const districtIds = voterRows.map(row => row.district_id);
 
-                // 4. 찬반 투표 지역인지 체크 (찬반은 후보 등록 불가)
-                if (districtData.vote_type === 'BINARY') {
-                    showModal('알림', `귀하의 선거구[${districtData.name}]는 찬반 투표 대상 지역이므로\n후보자 등록이 필요하지 않습니다.`);
-                    btn.disabled = false;
-                    btn.innerText = '내 선거구 확인하기';
-                    return;
-                }
+        const { data: districtData, error: distError } = await supabase
+            .from('districts')
+            .select('id, name, vote_type')
+            .in('id', districtIds)          // 내 소속 선거구들 중에서
+            .eq('is_common', false)         // [핵심] 비례(true)는 제외하고 지역구(false)만 조회
+            .limit(1)                       // 혹시라도 지역구가 여러 개일 경우 대비
+            .maybeSingle();
 
-                // 5. 최종 확인 모달 띄우기
-                showConfirmModal(
-                    '선거구 확인', 
-                    `귀하의 소속 선거구는\n[ ${districtData.name} ] 입니다.\n\n해당 선거구로 후보 등록을 진행하시겠습니까?`,
-                    () => {
-                        // [YES] 폼 보여주기
-                        document.getElementById('selection-section').style.display = 'none';
-                        document.getElementById('apply-form').style.display = 'block';
-                        
-                        // 데이터 세팅
-                        document.getElementById('display-district-name').innerText = districtData.name;
-                        document.getElementById('district-id').value = voterData.district_id;
-                        document.getElementById('election-id').value = electionId;
-                        document.getElementById('cand-name').value = currentUser.name || '';
-                    }
-                );
+        if (distError) throw new Error('선거구 정보를 불러올 수 없습니다.');
+
+        // 지역구 데이터가 없는 경우 (예: 비례대표만 있는 경우 or 데이터 오류)
+        if (!districtData) {
+            showModal('알림', '출마 가능한 지역 선거구가 확인되지 않습니다.\n(비례대표 투표 권한만 있을 수 있습니다)');
+            btn.disabled = false;
+            btn.innerText = '내 선거구 확인하기';
+            return;
+        }
+
+        // ============================================================
+        // [수정된 로직 끝]
+        // ============================================================
+
+        // 3. 찬반 투표 지역인지 체크
+        if (districtData.vote_type === 'BINARY') {
+            showModal('알림', `귀하의 선거구[${districtData.name}]는 찬반 투표 대상 지역이므로\n후보자 등록이 필요하지 않습니다.`);
+            btn.disabled = false;
+            btn.innerText = '내 선거구 확인하기';
+            return;
+        }
+
+        // 4. 최종 확인 모달 띄우기
+        showConfirmModal(
+            '선거구 확인', 
+            `귀하의 소속 선거구는\n[ ${districtData.name} ] 입니다.\n\n해당 선거구로 후보 등록을 진행하시겠습니까?`,
+            () => {
+                document.getElementById('selection-section').style.display = 'none';
+                document.getElementById('apply-form').style.display = 'block';
                 
-                // 버튼 상태 복구 (모달 취소 시 대비)
-                btn.disabled = false;
-                btn.innerText = '내 선거구 확인하기';
-
-            } catch (e) {
-                showModal('오류', '확인 중 문제가 발생했습니다: ' + e.message);
-                btn.disabled = false;
-                btn.innerText = '내 선거구 확인하기';
+                document.getElementById('display-district-name').innerText = districtData.name;
+                document.getElementById('district-id').value = districtData.id; // districtData.id 사용
+                document.getElementById('election-id').value = electionId;
+                document.getElementById('cand-name').value = currentUser.name || '';
             }
-        });
+        );
+        
+        btn.disabled = false;
+        btn.innerText = '내 선거구 확인하기';
+
+    } catch (e) {
+        console.error(e);
+        showModal('오류', '확인 중 문제가 발생했습니다: ' + (e.message || '알 수 없는 오류'));
+        btn.disabled = false;
+        btn.innerText = '내 선거구 확인하기';
+    }
+}); // End of btn-check-qual event listener
 
         // [이벤트] 폼 제출
         document.getElementById('apply-form').addEventListener('submit', async (e) => {
