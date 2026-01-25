@@ -77,7 +77,7 @@ export class ElectionService {
             .from('election_voters')
 .select(`
     district_id,
-    districts!inner ( name, vote_type, quota )
+    districts!election_voters_district_id_fkey!inner ( name, vote_type, quota )
 `)
             .eq('election_id', electionId)
             .eq('member_uuid', this.memberProfile.id)
