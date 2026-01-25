@@ -150,6 +150,44 @@
 }
 .modal-info-label { color: #6b7280; }
 .modal-info-val { font-weight: 600; color: #111; text-align: right; }
+        /* 1. 리스트 내 썸네일 이미지: 비율 유지하며 꽉 차게 */
+.candidate-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* 잘림 방지 핵심 */
+    cursor: pointer;
+    background-color: #f0f0f0; /* 이미지 로딩 전 배경 */
+}
+
+/* 2. 원본 보기 모달 (평소엔 숨김) */
+.img-modal-overlay {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.85); /* 짙은 반투명 배경 */
+    justify-content: center;
+    align-items: center;
+}
+
+/* 모달 내부 큰 이미지 */
+.img-modal-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+
+/* 닫기 버튼 */
+.img-modal-close {
+    position: absolute;
+    top: 20px; right: 30px;
+    color: white;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+}
     </style>
 </head>
 <body>
@@ -210,6 +248,11 @@
 
         <button onclick="closeCandidateDetail()" class="btn-enter" style="margin-top: 20px; padding: 12px;">닫기</button>
     </div>
+</div>
+
+    <div id="imageModal" class="img-modal-overlay" onclick="closeImageModal()">
+    <span class="img-modal-close">&times;</span>
+    <img id="modalFullImage" class="img-modal-content">
 </div>
 
     <script type="module">
@@ -333,30 +376,29 @@
             renderCandidates(districtId);
         };
 
-// [수정] 후보자 렌더링 함수 (카드 클릭 이벤트 연결 및 HTML 구조 수정)
+// [수정됨] 후보자 리스트 렌더링 (나이 표시 + 이미지 클릭 분리 적용)
 window.renderCandidates = async (filterDistId) => {
     const container = document.getElementById('candidate-area');
-    container.innerHTML = ''; // 기존 내용 비우기
+    container.innerHTML = ''; 
 
-    // 1. 필터링 로직
+    // 1. 필터링
     let list = allCandidates;
     if (filterDistId !== 'ALL') {
         list = allCandidates.filter(c => c.district_id === filterDistId);
     }
 
-    // 2. 후보자가 없을 때 처리
     if (list.length === 0) {
         container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
         return;
     }
 
-    // 3. 카드 HTML 생성 (비동기 처리 포함)
+    // 2. 카드 HTML 생성
     const cardsHtmlPromises = list.map(async c => {
-        // 선거구 이름 찾기
+        // 선거구 이름
         const distInfo = allDistricts.find(d => d.id === c.district_id);
         const distName = distInfo ? (distInfo.is_common ? '비례대표' : distInfo.name) : '-';
 
-        // 사진 URL 처리 logic
+        // 사진 URL 처리
         let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
         if (c.photo_url) {
             if (c.photo_url.startsWith('http')) {
@@ -367,18 +409,120 @@ window.renderCandidates = async (filterDistId) => {
             }
         }
 
-        // [핵심 수정] return 문이 map 함수 내부에 올바르게 위치함
-        // div 구조: .cand-card > (img + .cand-info)
-        // .cand-info > (.cand-header + h3 + .cand-detail)
+        // 나이 계산 (새로 만든 getKoreanAge 사용)
+// ============================================================
+// [보조 함수] 전역(window)에 등록하여 HTML에서 호출 가능하게 함
+// ============================================================
+
+// 1. 만 나이 계산 (표준화 버전)
+window.getKoreanAge = (birthDateStr) => {
+    if (!birthDateStr || !birthDateStr.includes('-')) return '';
+    
+    // 파싱 (yymmdd-1******)
+    const yy = parseInt(birthDateStr.substring(0, 2));
+    const mm = parseInt(birthDateStr.substring(2, 4)) - 1;
+    const dd = parseInt(birthDateStr.substring(4, 6));
+    const gender = birthDateStr.substring(7, 8);
+
+    const century = (gender === '1' || gender === '2') ? 1900 : 2000;
+    const fullYear = century + yy;
+
+    const today = new Date();
+    let age = today.getFullYear() - fullYear;
+    
+    const currentMonth = today.getMonth();
+    const currentDate = today.getDate();
+    
+    if (currentMonth < mm || (currentMonth === mm && currentDate < dd)) {
+        age--;
+    }
+    return `만 ${age}세`;
+};
+
+// 2. 이미지 모달 열기/닫기 (window에 등록 필수)
+window.openImageModal = (url) => {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalFullImage');
+    modalImg.src = url;
+    modal.style.display = 'flex';
+};
+
+window.closeImageModal = () => {
+    const modal = document.getElementById('imageModal');
+    modal.style.display = 'none';
+    document.getElementById('modalFullImage').src = '';
+};
+
+// 3. 주소 포맷팅
+window.formatAddress = (addr) => {
+    if (!addr) return '정보 없음';
+    const match = addr.match(/.*?(읍|면|동|가)(\s|$)/);
+    if (match) return match[0].trim();
+    return addr.replace(/[0-9]/g, '*');
+};
+
+// 4. 상세 모달 열기 (기존 코드 유지하되 나이 계산 부분만 교체)
+window.openCandidateDetail = (candId) => {
+    const c = allCandidates.find(item => item.id === candId);
+    if (!c) return;
+
+    let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+    if (c.photo_url) {
+        if (c.photo_url.startsWith('http')) photoSrc = c.photo_url;
+        else {
+             const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
+             if(data) photoSrc = data.publicUrl;
+        }
+    }
+
+    const age = window.getKoreanAge(c.birth_date); // 여기도 window.getKoreanAge 사용
+    const safeAddress = window.formatAddress(c.address);
+
+    const html = `
+        <div class="modal-cand-header">
+            <img src="${photoSrc}" class="modal-cand-photo" onclick="openImageModal('${photoSrc}')"> 
+            <div>
+                <div style="font-size:0.9rem; color:#666; margin-bottom:4px;">기호 <span style="font-weight:bold; color:var(--primary); font-size:1.1rem;">${c.symbol || '-'}</span>번</div>
+                <div style="font-size:1.4rem; font-weight:800;">${c.name}</div>
+            </div>
+        </div>
+        <div class="modal-info-row">
+            <span class="modal-info-label">나이</span>
+            <span class="modal-info-val">${age}</span>
+        </div>
+        <div class="modal-info-row">
+            <span class="modal-info-label">주소</span>
+            <span class="modal-info-val">${safeAddress}</span>
+        </div>
+        <label class="modal-section-label">🎓 주요 경력</label>
+        <div class="modal-text-box">${c.career || '등록된 경력이 없습니다.'}</div>
+        <label class="modal-section-label">📢 공약 및 출마의 변</label>
+        <div class="modal-text-box" style="min-height:100px;">${c.manifesto || '등록된 공약이 없습니다.'}</div>
+    `;
+
+    document.getElementById('cand-detail-content').innerHTML = html;
+    document.getElementById('candidate-detail-modal').style.display = 'flex';
+};
+
+        // [중요] HTML 구조 변경
+        // 1. 이미지 영역: onclick="event.stopPropagation()"을 넣어 카드 클릭 이벤트가 발생하지 않게 막음 (이미지만 확대되게)
+        // 2. 정보 영역: 나이(ageText) 추가
         return `
             <div class="cand-card" onclick="openCandidateDetail('${c.id}')" style="cursor: pointer;">
-                <img src="${photoSrc}" class="cand-photo" alt="${c.name}">
+                <div style="width: 100px; min-width: 100px; height: 120px; border-right: 1px solid #eee;" onclick="event.stopPropagation()">
+                    <img 
+                        src="${photoSrc}" 
+                        class="candidate-img" 
+                        onclick="openImageModal('${photoSrc}')" 
+                        alt="${c.name}"
+                    >
+                </div>
                 <div class="cand-info">
                     <div class="cand-header">
                         <span class="cand-symbol">${c.symbol || '-'}</span>
                         <span class="cand-district">${distName}</span>
                     </div>
-                    <h3 class="cand-name">${c.name}</h3>
+                    <h3 class="cand-name">${c.name} <span style="font-size:0.8em; color:#666; font-weight:normal;">(${ageText})</span></h3>
                     <div class="cand-detail" style="color:var(--primary); font-size:0.8rem;">
                         👉 터치하여 상세 정보 보기
                     </div>
@@ -387,77 +531,11 @@ window.renderCandidates = async (filterDistId) => {
         `;
     });
 
-    // 4. 병렬 처리된 HTML 문자열을 합쳐서 화면에 삽입
     const cardsHtml = await Promise.all(cardsHtmlPromises);
     container.innerHTML = cardsHtml.join('');
 };
 
-/**
- * 1. [신규] 주민번호 포맷을 표준 날짜(YYYY-MM-DD)로 변환
- */
-function convertRRToBirthDate(rrNumberString) {
-  if (!rrNumberString || typeof rrNumberString !== 'string' || !rrNumberString.includes('-')) {
-    return null;
-  }
 
-  const parts = rrNumberString.split('-');
-  const frontPart = parts[0]; 
-  const backPart = parts[1];  
-
-  if (frontPart.length !== 6 || backPart.length < 1) return null;
-
-  const yy = frontPart.substring(0, 2);
-  const mm = frontPart.substring(2, 4);
-  const dd = frontPart.substring(4, 6);
-  const genderCode = backPart.substring(0, 1);
-
-  let centuryPrefix = '';
-  if (genderCode === '1' || genderCode === '2') {
-    centuryPrefix = '19';
-  } else if (genderCode === '3' || genderCode === '4') {
-    centuryPrefix = '20';
-  } else {
-    return null; // 외국인 등 예외 처리
-  }
-
-  return centuryPrefix + yy + '-' + mm + '-' + dd;
-} // End of convertRRToBirthDate
-
-
-/**
- * 2. [기존 유지] 만 나이 계산 함수
- * (수정 사항: birthDateStr가 null일 때 방어 로직 강화)
- */
-function calculateAge(birthDateStr) {
-    // 변환 실패 등으로 null이 들어오면 처리 불가
-    if (!birthDateStr) return '-';
-
-    const today = new Date();
-    const birthDate = new Date(birthDateStr);
-    
-    // 유효하지 않은 날짜 문자열일 경우 방어
-    if (isNaN(birthDate.getTime())) return '-';
-
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return age;
-} // End of calculateAge
-
-
-/**
- * 3. [통합 예시] 실제 사용 시 이렇게 호출하세요
- */
-function getAgeFromRR(rrNumber) {
-    // 1단계: 주민번호 -> 날짜 변환
-    const birthDateStr = convertRRToBirthDate(rrNumber);
-    
-    // 2단계: 날짜 -> 나이 계산
-    return calculateAge(birthDateStr);
-} // End of getAgeFromRR
 
 // [추가] 2. 주소 포맷팅 함수 (읍/면/동/가 기준 절사 또는 마스킹)
 function formatAddress(addr) {
@@ -621,7 +699,47 @@ window.closeCandidateDetail = () => {
                 btn.innerText = "확인";
             }
         };
+// 1. 만 나이 계산 (birth_date 포맷: "yymmdd-1******" 가정)
+function getKoreanAge(birthDateStr) {
+    // 1-1. 파싱: 하이픈(-) 위치 기준
+    const yy = parseInt(birthDateStr.substring(0, 2));
+    const mm = parseInt(birthDateStr.substring(2, 4)) - 1; // 월은 0부터 시작
+    const dd = parseInt(birthDateStr.substring(4, 6));
+    const gender = birthDateStr.substring(7, 8); // 성별 코드
 
+    // 1-2. 연도 보정 (1,2: 1900년대 / 3,4: 2000년대)
+    const century = (gender === '1' || gender === '2') ? 1900 : 2000;
+    const fullYear = century + yy;
+
+    // 1-3. 만 나이 계산
+    const today = new Date();
+    let age = today.getFullYear() - fullYear;
+    
+    // 생일이 안 지났으면 1살 차감 (월, 일 비교)
+    const currentMonth = today.getMonth();
+    const currentDate = today.getDate();
+    
+    if (currentMonth < mm || (currentMonth === mm && currentDate < dd)) {
+        age--;
+    }
+
+    return `만 ${age}세`;
+}
+
+// 2. 모달 열기 (이미지 클릭 시 호출)
+function openImageModal(url) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalFullImage');
+    
+    modalImg.src = url;
+    modal.style.display = 'flex'; // 중앙 정렬을 위해 flex 사용
+}
+
+// 3. 모달 닫기
+function closeImageModal() {
+    document.getElementById('imageModal').style.display = 'none';
+    document.getElementById('modalFullImage').src = ''; // 잔상 제거
+}
         // 모달 제어
         window.openLoginModal = () => document.getElementById('login-modal').style.display = 'flex';
         window.closeLoginModal = () => document.getElementById('login-modal').style.display = 'none';
