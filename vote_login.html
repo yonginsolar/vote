@@ -126,9 +126,15 @@
     display: flex; gap: 15px; align-items: center; 
     border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;
 }
+/* [수정] 상세 모달 사진 크기 확대 */
 .modal-cand-photo {
-    width: 80px; height: 100px; object-fit: cover; 
-    border-radius: 8px; background: #f3f4f6; border: 1px solid #e5e7eb;
+    width: 130px;        /* 기존 80px에서 확대 */
+    height: 160px;       /* 기존 100px에서 확대 */
+    object-fit: cover; 
+    border-radius: 8px; 
+    background: #f3f4f6; 
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 약간의 그림자 추가 */
 }
 .modal-section-label {
     font-size: 0.85rem; color: var(--primary); font-weight: bold; 
@@ -386,21 +392,72 @@ window.renderCandidates = async (filterDistId) => {
     container.innerHTML = cardsHtml.join('');
 };
 
-        // [추가] 1. 만 나이 계산 함수
+/**
+ * 1. [신규] 주민번호 포맷을 표준 날짜(YYYY-MM-DD)로 변환
+ */
+function convertRRToBirthDate(rrNumberString) {
+  if (!rrNumberString || typeof rrNumberString !== 'string' || !rrNumberString.includes('-')) {
+    return null;
+  }
+
+  const parts = rrNumberString.split('-');
+  const frontPart = parts[0]; 
+  const backPart = parts[1];  
+
+  if (frontPart.length !== 6 || backPart.length < 1) return null;
+
+  const yy = frontPart.substring(0, 2);
+  const mm = frontPart.substring(2, 4);
+  const dd = frontPart.substring(4, 6);
+  const genderCode = backPart.substring(0, 1);
+
+  let centuryPrefix = '';
+  if (genderCode === '1' || genderCode === '2') {
+    centuryPrefix = '19';
+  } else if (genderCode === '3' || genderCode === '4') {
+    centuryPrefix = '20';
+  } else {
+    return null; // 외국인 등 예외 처리
+  }
+
+  return centuryPrefix + yy + '-' + mm + '-' + dd;
+} // End of convertRRToBirthDate
+
+
+/**
+ * 2. [기존 유지] 만 나이 계산 함수
+ * (수정 사항: birthDateStr가 null일 때 방어 로직 강화)
+ */
 function calculateAge(birthDateStr) {
+    // 변환 실패 등으로 null이 들어오면 처리 불가
     if (!birthDateStr) return '-';
+
     const today = new Date();
     const birthDate = new Date(birthDateStr);
     
+    // 유효하지 않은 날짜 문자열일 경우 방어
+    if (isNaN(birthDate.getTime())) return '-';
+
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
     
-    // 생일이 안 지났으면 1살 뺌
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
         age--;
     }
     return age;
-}
+} // End of calculateAge
+
+
+/**
+ * 3. [통합 예시] 실제 사용 시 이렇게 호출하세요
+ */
+function getAgeFromRR(rrNumber) {
+    // 1단계: 주민번호 -> 날짜 변환
+    const birthDateStr = convertRRToBirthDate(rrNumber);
+    
+    // 2단계: 날짜 -> 나이 계산
+    return calculateAge(birthDateStr);
+} // End of getAgeFromRR
 
 // [추가] 2. 주소 포맷팅 함수 (읍/면/동/가 기준 절사 또는 마스킹)
 function formatAddress(addr) {
