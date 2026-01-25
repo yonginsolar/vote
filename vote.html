@@ -49,6 +49,16 @@
         </div>
     </div>
 
+    <div id="manifesto-modal" class="modal-overlay" style="z-index: 2000;">
+        <div class="modal-content" style="width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
+            <h3 id="manifesto-title">공약 보기</h3>
+            <div id="manifesto-body" style="margin-top: 1rem; white-space: pre-wrap; line-height: 1.6;"></div>
+            <div style="margin-top: 1.5rem; text-align: center;">
+                <button onclick="document.getElementById('manifesto-modal').style.display='none'" class="btn-modal">닫기</button>
+            </div>
+        </div>
+    </div>
+
 <script type="module">
     import { ElectionService, supabase } from './ElectionService.js';
     
