@@ -463,7 +463,8 @@
             const container = document.getElementById('district-tabs');
             let html = `<button class="tab-btn active" onclick="filterCandidates('ALL', this)">전체</button>`;
             allDistricts.forEach(d => {
-                const name = d.is_common ? '비례/찬반' : d.name;
+// DB에 있는 이름을 우선 사용하되, 만약 비어있을 때만 기본값 사용
+const name = d.name || '공통 선거구';
                 html += `<button class="tab-btn" onclick="filterCandidates('${d.id}', this)">${name}</button>`;
             });
             container.innerHTML = html;
@@ -491,7 +492,7 @@
 
             const cardsHtmlPromises = list.map(async c => {
                 const distInfo = allDistricts.find(d => d.id === c.district_id);
-                const distName = distInfo ? (distInfo.is_common ? '비례대표' : distInfo.name) : '-';
+const distName = distInfo ? distInfo.name : '-';
 
                 let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
                 if (c.photo_url) {
