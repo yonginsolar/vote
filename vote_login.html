@@ -327,74 +327,64 @@
             renderCandidates(districtId);
         };
 
-        window.renderCandidates = async (filterDistId) => {
-            const container = document.getElementById('candidate-area');
-            container.innerHTML = '';
+// [수정] 후보자 렌더링 함수 (카드 클릭 이벤트 연결 및 HTML 구조 수정)
+window.renderCandidates = async (filterDistId) => {
+    const container = document.getElementById('candidate-area');
+    container.innerHTML = ''; // 기존 내용 비우기
 
-            let list = allCandidates;
-            if (filterDistId !== 'ALL') {
-                list = allCandidates.filter(c => c.district_id === filterDistId);
+    // 1. 필터링 로직
+    let list = allCandidates;
+    if (filterDistId !== 'ALL') {
+        list = allCandidates.filter(c => c.district_id === filterDistId);
+    }
+
+    // 2. 후보자가 없을 때 처리
+    if (list.length === 0) {
+        container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
+        return;
+    }
+
+    // 3. 카드 HTML 생성 (비동기 처리 포함)
+    const cardsHtmlPromises = list.map(async c => {
+        // 선거구 이름 찾기
+        const distInfo = allDistricts.find(d => d.id === c.district_id);
+        const distName = distInfo ? (distInfo.is_common ? '비례대표' : distInfo.name) : '-';
+
+        // 사진 URL 처리 logic
+        let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+        if (c.photo_url) {
+            if (c.photo_url.startsWith('http')) {
+                photoSrc = c.photo_url;
+            } else {
+                const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
+                if(data) photoSrc = data.publicUrl;
             }
+        }
 
-            if (list.length === 0) {
-                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
-return `
-    <div class="cand-card" onclick="openCandidateDetail('${c.id}')" style="cursor: pointer;">
-        <img src="${photoSrc}" class="cand-photo" alt="${c.name}">
-        <div class="cand-info">
-            <div class="cand-header">
-                <span class="cand-symbol">${c.symbol || '-'}</span>
-                <span class="cand-district">${distName}</span>
-            </div>
-            <h3 class="cand-name">${c.name}</h3>
-            <div class="cand-detail" style="color:var(--primary); font-size:0.8rem;">
-                👉 터치하여 상세 정보 보기
-            </div>
-        </div>
-    </div>
-`;
-            }
-
-            // 사진 URL 변환을 위한 병렬 처리
-            // (후보자가 많으면 로딩이 걸릴 수 있으나, 보통 조합 선거는 규모가 작으므로 괜찮음)
-            const cardsHtmlPromises = list.map(async c => {
-                const distInfo = allDistricts.find(d => d.id === c.district_id);
-                const distName = distInfo ? (distInfo.is_common ? '비례대표' : distInfo.name) : '-';
-
-                // 사진 URL 처리 (Supabase Public URL 또는 Signed URL)
-                let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
-                if (c.photo_url) {
-                    if (c.photo_url.startsWith('http')) {
-                        photoSrc = c.photo_url;
-                    } else {
-                        // Public URL 가져오기 (버킷명이 'candidate_proofs'가 아닐 경우 수정 필요)
-                        // 보안상 Signed URL을 써야 한다면 로직 변경 필요. 여기선 Public 가정.
-                        const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
-                        if(data) photoSrc = data.publicUrl;
-                    }
-                }
-
-                return `
-                    <div class="cand-card">
-                        <img src="${photoSrc}" class="cand-photo" alt="${c.name}">
-                        <div class="cand-info">
-                            <div class="cand-header">
-                                <span class="cand-symbol">${c.symbol || '-'}</span>
-                                <span class="cand-district">${distName}</span>
-                            </div>
-                            <h3 class="cand-name">${c.name}</h3>
-                            <div class="cand-detail">
-                                ${c.manifesto ? c.manifesto.substring(0, 50) + (c.manifesto.length>50?'...':'') : '공약 상세 내용은 클릭하여 확인하세요.'}
-                            </div>
-                        </div>
+        // [핵심 수정] return 문이 map 함수 내부에 올바르게 위치함
+        // div 구조: .cand-card > (img + .cand-info)
+        // .cand-info > (.cand-header + h3 + .cand-detail)
+        return `
+            <div class="cand-card" onclick="openCandidateDetail('${c.id}')" style="cursor: pointer;">
+                <img src="${photoSrc}" class="cand-photo" alt="${c.name}">
+                <div class="cand-info">
+                    <div class="cand-header">
+                        <span class="cand-symbol">${c.symbol || '-'}</span>
+                        <span class="cand-district">${distName}</span>
                     </div>
-                `;
-            });
+                    <h3 class="cand-name">${c.name}</h3>
+                    <div class="cand-detail" style="color:var(--primary); font-size:0.8rem;">
+                        👉 터치하여 상세 정보 보기
+                    </div>
+                </div>
+            </div>
+        `;
+    });
 
-            // 모든 비동기 작업 완료 후 렌더링
-            const cardsHtml = await Promise.all(cardsHtmlPromises);
-            container.innerHTML = cardsHtml.join('');
-        };
+    // 4. 병렬 처리된 HTML 문자열을 합쳐서 화면에 삽입
+    const cardsHtml = await Promise.all(cardsHtmlPromises);
+    container.innerHTML = cardsHtml.join('');
+};
 
         // [추가] 1. 만 나이 계산 함수
 function calculateAge(birthDateStr) {
