@@ -75,10 +75,10 @@ export class ElectionService {
         // 3-1. 내가 이 선거에서 어느 선거구인지 확인
         const { data: voterData, error: voterError } = await supabase
             .from('election_voters')
-            .select(`
-                district_id,
-                districts ( name, vote_type, quota )
-            `)
+.select(`
+    district_id,
+    districts!inner ( name, vote_type, quota )
+`)
             .eq('election_id', electionId)
             .eq('member_uuid', this.memberProfile.id)
             .single();
