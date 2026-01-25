@@ -120,6 +120,30 @@
             margin-top: 15px; background: none; border: none; color: #666; 
             cursor: pointer; text-decoration: underline; font-size: 0.9rem;
         }
+
+        /* [추가] 후보자 상세 모달 스타일 */
+.modal-cand-header {
+    display: flex; gap: 15px; align-items: center; 
+    border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;
+}
+.modal-cand-photo {
+    width: 80px; height: 100px; object-fit: cover; 
+    border-radius: 8px; background: #f3f4f6; border: 1px solid #e5e7eb;
+}
+.modal-section-label {
+    font-size: 0.85rem; color: var(--primary); font-weight: bold; 
+    margin-top: 15px; margin-bottom: 6px; display: block;
+}
+.modal-text-box {
+    background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #f3f4f6;
+    font-size: 0.9rem; line-height: 1.6; color: #374151; white-space: pre-wrap; text-align: left;
+}
+.modal-info-row {
+    display: flex; justify-content: space-between; font-size: 0.9rem; 
+    padding: 6px 0; border-bottom: 1px solid #f3f4f6;
+}
+.modal-info-label { color: #6b7280; }
+.modal-info-val { font-weight: 600; color: #111; text-align: right; }
     </style>
 </head>
 <body>
@@ -169,6 +193,18 @@
             <button onclick="closeLoginModal()" class="modal-close-btn">닫기</button>
         </div>
     </div>
+    <div id="candidate-detail-modal" class="login-modal" style="z-index: 2000;">
+    <div class="login-box" style="text-align: left; max-width: 500px; max-height: 80vh; overflow-y: auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h3 style="margin:0;">👤 후보자 정보</h3>
+            <button onclick="closeCandidateDetail()" style="border:none; background:none; font-size:1.2rem; cursor:pointer;">✕</button>
+        </div>
+        
+        <div id="cand-detail-content"></div>
+
+        <button onclick="closeCandidateDetail()" class="btn-enter" style="margin-top: 20px; padding: 12px;">닫기</button>
+    </div>
+</div>
 
     <script type="module">
         import { supabase } from './ElectionService.js';
@@ -302,7 +338,21 @@
 
             if (list.length === 0) {
                 container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
-                return;
+return `
+    <div class="cand-card" onclick="openCandidateDetail('${c.id}')" style="cursor: pointer;">
+        <img src="${photoSrc}" class="cand-photo" alt="${c.name}">
+        <div class="cand-info">
+            <div class="cand-header">
+                <span class="cand-symbol">${c.symbol || '-'}</span>
+                <span class="cand-district">${distName}</span>
+            </div>
+            <h3 class="cand-name">${c.name}</h3>
+            <div class="cand-detail" style="color:var(--primary); font-size:0.8rem;">
+                👉 터치하여 상세 정보 보기
+            </div>
+        </div>
+    </div>
+`;
             }
 
             // 사진 URL 변환을 위한 병렬 처리
@@ -346,6 +396,93 @@
             container.innerHTML = cardsHtml.join('');
         };
 
+        // [추가] 1. 만 나이 계산 함수
+function calculateAge(birthDateStr) {
+    if (!birthDateStr) return '-';
+    const today = new Date();
+    const birthDate = new Date(birthDateStr);
+    
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    
+    // 생일이 안 지났으면 1살 뺌
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age;
+}
+
+// [추가] 2. 주소 포맷팅 함수 (읍/면/동/가 기준 절사 또는 마스킹)
+function formatAddress(addr) {
+    if (!addr) return '정보 없음';
+    
+    // '읍', '면', '동', '가' 중 하나가 나오고, 뒤에 공백이나 끝이 나오는 패턴 찾기
+    // 예: "포곡읍" 뒤에 공백이 있거나 문장이 끝나는 지점까지 추출
+    const match = addr.match(/.*?(읍|면|동|가)(\s|$)/);
+    
+    if (match) {
+        return match[0].trim(); // 예: "경기도 용인시 처인구 포곡읍"
+    }
+    
+    // 행정구역 단위가 없으면 숫자만 마스킹 처리 (개인정보 보호)
+    // 예: "서울시 종로구 세종로 123-4" -> "서울시 종로구 세종로 ***-*"
+    return addr.replace(/[0-9]/g, '*');
+}
+
+// [추가] 3. 상세 모달 열기 함수
+window.openCandidateDetail = (candId) => {
+    // 전역 변수 allCandidates에서 ID로 후보 찾기
+    const c = allCandidates.find(item => item.id === candId);
+    if (!c) return;
+
+    // 사진 URL 처리 (없으면 기본값)
+    let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+    if (c.photo_url) {
+        if (c.photo_url.startsWith('http')) photoSrc = c.photo_url;
+        else {
+             const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
+             if(data) photoSrc = data.publicUrl;
+        }
+    }
+
+    // 나이 및 주소 계산
+    const age = calculateAge(c.birth_date);
+    const safeAddress = formatAddress(c.address);
+
+    // HTML 구성
+    const html = `
+        <div class="modal-cand-header">
+            <img src="${photoSrc}" class="modal-cand-photo">
+            <div>
+                <div style="font-size:0.9rem; color:#666; margin-bottom:4px;">기호 <span style="font-weight:bold; color:var(--primary); font-size:1.1rem;">${c.symbol || '-'}</span>번</div>
+                <div style="font-size:1.4rem; font-weight:800;">${c.name}</div>
+            </div>
+        </div>
+
+        <div class="modal-info-row">
+            <span class="modal-info-label">나이</span>
+            <span class="modal-info-val">만 ${age}세</span>
+        </div>
+        <div class="modal-info-row">
+            <span class="modal-info-label">주소</span>
+            <span class="modal-info-val">${safeAddress}</span>
+        </div>
+
+        <label class="modal-section-label">🎓 주요 경력</label>
+        <div class="modal-text-box">${c.career || '등록된 경력이 없습니다.'}</div>
+
+        <label class="modal-section-label">📢 공약 및 출마의 변</label>
+        <div class="modal-text-box" style="min-height:100px;">${c.manifesto || '등록된 공약이 없습니다.'}</div>
+    `;
+
+    document.getElementById('cand-detail-content').innerHTML = html;
+    document.getElementById('candidate-detail-modal').style.display = 'flex';
+};
+
+// [추가] 4. 모달 닫기 함수
+window.closeCandidateDetail = () => {
+    document.getElementById('candidate-detail-modal').style.display = 'none';
+};
         // ============================================================
         // [핵심 기능] 로그인 및 투표권 검증 로직
         // ============================================================
