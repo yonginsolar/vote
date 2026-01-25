@@ -67,9 +67,9 @@ export class ElectionService {
     }
 
 /**
-     * [3] 나의 투표용지 목록 가져오기 (수정됨)
-     * - district.is_common: true 이면 리스트의 맨 뒤로 보냅니다.
-     * - 무투표 당선 여부(isUncontested)를 판별합니다.
+     * [3] 나의 투표용지 목록 가져오기 (최종 수정)
+     * - district.is_common 컬럼을 사용하여 확실하게 정렬
+     * - false(지역구) -> 앞 / true(비례/추천) -> 뒤
      */
     async getMyBallotList(electionId) {
         if (!this.memberProfile) await this.initialize();
@@ -89,7 +89,7 @@ export class ElectionService {
         const ballots = await Promise.all(voterList.map(async (voter) => {
             const districtId = voter.district_id;
 
-            // [수정] districts 테이블에서 is_common 컬럼을 추가로 가져옵니다.
+            // [중요 1] is_common 컬럼을 반드시 가져와야 정렬이 가능함
             const { data: district } = await supabase
                 .from('districts')
                 .select('name, vote_type, quota, is_common') 
@@ -98,13 +98,12 @@ export class ElectionService {
 
             // 후보자 목록 조회
             let candidates = [];
-            // [중요] BINARY 타입(찬반/추천)은 후보자 조회를 아예 하지 않음 (데이터 오염 방지)
             if (district.vote_type === 'CANDIDATE') {
                 const { data: candData } = await supabase
                     .from('candidates')
                     .select('*')
                     .eq('election_id', electionId)
-                    .eq('district_id', districtId) // 확실하게 선거구 ID로 필터링
+                    .eq('district_id', districtId) 
                     .eq('status', 'APPROVED')
                     .order('name', { ascending: true });
                 candidates = candData || [];
@@ -119,7 +118,7 @@ export class ElectionService {
                 .eq('member_uuid', this.memberProfile.id)
                 .maybeSingle();
 
-            // [요청] 무투표 당선 여부: 후보자 수 <= 선출 인원 (단, CANDIDATE 타입일 때만)
+            // 무투표 당선 여부 (후보자 수 <= 선출 인원)
             const isUncontested = district.vote_type === 'CANDIDATE' && candidates.length > 0 && candidates.length <= district.quota;
 
             return {
@@ -131,13 +130,18 @@ export class ElectionService {
             };
         }));
 
-        // [요청] 정렬 로직 수정: is_common이 true인 것을 뒤로 보냄
+        // [중요 2] 확실한 정렬 로직 (Boolean -> Number 변환)
         ballots.sort((a, b) => {
-            // 1순위: is_common (false가 앞, true가 뒤)
-            if (a.district.is_common !== b.district.is_common) {
-                return a.district.is_common ? 1 : -1;
+            // true면 1점(뒤), false나 null이면 0점(앞)
+            const scoreA = (a.district.is_common === true) ? 1 : 0;
+            const scoreB = (b.district.is_common === true) ? 1 : 0;
+
+            // 점수가 다르면 점수 차이로 정렬 (0 - 1 = -1 이므로 0이 앞으로 옴)
+            if (scoreA !== scoreB) {
+                return scoreA - scoreB;
             }
-            // 2순위: 이름 가나다순
+
+            // 점수가 같으면(둘 다 지역구거나 둘 다 비례면) 이름순 정렬
             return (a.district.name || '').localeCompare(b.district.name || '');
         });
 
