@@ -67,67 +67,81 @@ export class ElectionService {
     }
 
 /**
-     * [3] 나의 투표용지 '목록' 가져오기 (수정됨: 복수 선거구 지원)
-     * - 지역구, 비례대표 등 여러 개의 투표권이 있을 경우 모두 가져옵니다.
+     * [3] 나의 투표용지 목록 가져오기 (수정됨)
+     * - district.is_common: true 이면 리스트의 맨 뒤로 보냅니다.
+     * - 무투표 당선 여부(isUncontested)를 판별합니다.
      */
     async getMyBallotList(electionId) {
         if (!this.memberProfile) await this.initialize();
 
-        // 1. 선거인 명부에서 내 모든 선거구 ID 가져오기 (limit 제거, maybeSingle 제거)
+        // 1. 선거인 명부 조회
         const { data: voterList, error: voterError } = await supabase
             .from('election_voters')
             .select('district_id')
             .eq('election_id', electionId)
             .eq('member_uuid', this.memberProfile.id);
 
-        if (voterError) throw new Error('선거인 명부 조회 실패');
-        if (!voterList || voterList.length === 0) {
+        if (voterError || !voterList || voterList.length === 0) {
             throw new Error('귀하는 이번 선거의 선거구에 배정되지 않았습니다.');
         }
 
-        // 2. 각 선거구별 상세 정보와 후보자, 투표 여부를 병렬로 조회
-        // (Promise.all을 사용하여 속도 최적화)
+        // 2. 상세 정보 병렬 조회
         const ballots = await Promise.all(voterList.map(async (voter) => {
             const districtId = voter.district_id;
 
-            // A. 선거구 상세 정보
+            // [수정] districts 테이블에서 is_common 컬럼을 추가로 가져옵니다.
             const { data: district } = await supabase
                 .from('districts')
-                .select('name, vote_type, quota')
+                .select('name, vote_type, quota, is_common') 
                 .eq('id', districtId)
                 .single();
 
-            // B. 후보자 목록
+            // 후보자 목록 조회
             let candidates = [];
+            // [중요] BINARY 타입(찬반/추천)은 후보자 조회를 아예 하지 않음 (데이터 오염 방지)
             if (district.vote_type === 'CANDIDATE') {
                 const { data: candData } = await supabase
                     .from('candidates')
                     .select('*')
                     .eq('election_id', electionId)
-                    .eq('district_id', districtId)
+                    .eq('district_id', districtId) // 확실하게 선거구 ID로 필터링
                     .eq('status', 'APPROVED')
                     .order('name', { ascending: true });
                 candidates = candData || [];
             }
 
-            // C. 투표 여부 확인 (Logs)
+            // 투표 여부 확인
             const { data: logData } = await supabase
                 .from('vote_logs')
                 .select('id')
                 .eq('election_id', electionId)
-                .eq('district_id', districtId) // [중요] 선거구별로 투표 여부 체크
+                .eq('district_id', districtId)
                 .eq('member_uuid', this.memberProfile.id)
                 .maybeSingle();
+
+            // [요청] 무투표 당선 여부: 후보자 수 <= 선출 인원 (단, CANDIDATE 타입일 때만)
+            const isUncontested = district.vote_type === 'CANDIDATE' && candidates.length > 0 && candidates.length <= district.quota;
 
             return {
                 district_id: districtId,
                 district: district,
                 candidates: candidates,
-                hasVoted: !!logData
+                hasVoted: !!logData,
+                isUncontested: isUncontested
             };
         }));
 
-        return ballots; // 배열 반환 [{지역구...}, {비례...}]
+        // [요청] 정렬 로직 수정: is_common이 true인 것을 뒤로 보냄
+        ballots.sort((a, b) => {
+            // 1순위: is_common (false가 앞, true가 뒤)
+            if (a.district.is_common !== b.district.is_common) {
+                return a.district.is_common ? 1 : -1;
+            }
+            // 2순위: 이름 가나다순
+            return (a.district.name || '').localeCompare(b.district.name || '');
+        });
+
+        return ballots;
     }
 
     /**
