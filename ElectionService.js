@@ -66,32 +66,55 @@ export class ElectionService {
         return data || [];
     }
 
-    /**
-     * [3] 나의 선거구 및 후보자 정보 가져오기
+/**
+     * [3] 나의 선거구 및 후보자 정보 가져오기 (수정됨: 406 에러 회피를 위한 분리 호출 방식)
      */
     async getMyBallotInfo(electionId) {
         if (!this.memberProfile) await this.initialize();
 
-        // 3-1. 내가 이 선거에서 어느 선거구인지 확인
+        // ---------------------------------------------------------
+        // 단계 1: 선거인 명부에서 '나의 선거구 ID(district_id)'만 먼저 가져옴
+        // (조인을 쓰지 않으므로 406 에러가 발생하지 않음)
+        // ---------------------------------------------------------
         const { data: voterData, error: voterError } = await supabase
             .from('election_voters')
-.select(`
-    district_id,
-    districts!election_voters_district_id_fkey!inner ( name, vote_type, quota )
-`)
+            .select('district_id')  // districts 테이블 조인 제거
             .eq('election_id', electionId)
             .eq('member_uuid', this.memberProfile.id)
-            .single();
+            .maybeSingle();
 
-        if (voterError || !voterData) {
+        if (voterError) {
+            console.error("Voter Fetch Error:", voterError);
+            throw new Error('선거인 명부 조회 중 오류가 발생했습니다.');
+        }
+
+        // 데이터가 없으면 배정되지 않은 것
+        if (!voterData) {
             throw new Error('귀하는 이번 선거의 선거구에 배정되지 않았습니다. 관리자에게 문의하세요.');
         }
 
-        const districtInfo = voterData.districts;
         const districtId = voterData.district_id;
+
+        // ---------------------------------------------------------
+        // 단계 2: 가져온 ID로 선거구 상세 정보(districts) 조회
+        // ---------------------------------------------------------
+        const { data: districtInfo, error: districtError } = await supabase
+            .from('districts')
+            .select('name, vote_type, quota')
+            .eq('id', districtId)
+            .single();
+
+        if (districtError) {
+            console.error("District Fetch Error:", districtError);
+            // 여기서 에러가 난다면 100% RLS 권한 문제입니다.
+            throw new Error('선거구 정보를 불러올 수 없습니다. (권한 오류 가능성)');
+        }
+
         this.voterInfo = { ...voterData, ...districtInfo };
 
-        // 3-2. 해당 선거구의 후보자 목록 가져오기
+        // ---------------------------------------------------------
+        // 단계 3: 후보자 목록 조회 (기존 로직 유지)
+        // ---------------------------------------------------------
         let candidates = [];
         if (districtInfo.vote_type === 'CANDIDATE') {
             const { data: candData, error: candError } = await supabase
@@ -106,7 +129,9 @@ export class ElectionService {
             candidates = candData;
         }
 
-        // 3-3. 이미 투표했는지 확인
+        // ---------------------------------------------------------
+        // 단계 4: 투표 여부 확인 (기존 로직 유지)
+        // ---------------------------------------------------------
         const { data: logData } = await supabase
             .from('vote_logs')
             .select('id')
