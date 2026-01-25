@@ -54,8 +54,10 @@
     
     const service = new ElectionService();
     
+    // 상태 변수
     let currentElection = null;
-    let ballotInfo = null;
+    let pendingBallots = []; // 아직 투표 안 한 용지 목록
+    let currentBallot = null; // 현재 화면에 표시 중인 용지
     let selectedValue = null; 
 
     // DOM 요소 (기존과 동일)
@@ -68,7 +70,6 @@
 
     async function initPage() {
         try {
-            // 1. 사용자 초기화 (데이터가 맞다는 전제하에 기존 로직 사용)
             const user = await service.initialize();
             if (!user) {
                 alertAndClose('로그인 정보가 없습니다.');
@@ -76,34 +77,30 @@
             }
             document.getElementById('voter-info').innerText = `${user.name} 조합원님 (${user.member_id})`;
 
-            // 2. 활성 선거 '목록' 가져오기 (수정됨)
             const elections = await service.getActiveElections();
-
             if (!elections || elections.length === 0) {
                 alertAndClose('현재 진행 중인 선거가 없습니다.');
                 return;
             }
 
-            // 3. 선거 개수에 따른 분기 처리
             loadingScreen.style.display = 'none';
             voteContainer.classList.add('active');
 
-                renderElectionList(elections);
-
+            // 무조건 선거 목록 먼저 보여주기
+            renderElectionList(elections);
 
         } catch (error) {
-            console.error(error);
-            alertAndClose('오류 발생: ' + error.message);
+            alertAndClose('오류: ' + error.message);
         }
     }
 
-    // [신규 함수] 선거 목록을 버튼 형태로 표시
+    // 선거 목록 렌더링 (기존과 동일)
     function renderElectionList(elections) {
         titleElem.innerText = "참여할 선거를 선택해주세요";
-        document.getElementById('district-name').style.display = 'none'; // 선거구명 숨김
-        voteBtn.style.display = 'none'; // 투표 버튼 숨김 (선거 선택 전이므로)
-        
+        document.getElementById('district-name').style.display = 'none';
+        voteBtn.style.display = 'none';
         ballotArea.innerHTML = '';
+        
         const listDiv = document.createElement('div');
         listDiv.style.display = 'flex';
         listDiv.style.flexDirection = 'column';
@@ -111,68 +108,174 @@
 
         elections.forEach(election => {
             const btn = document.createElement('button');
-            btn.className = 'candidate-card'; // 기존 스타일 재활용 (카드 형태)
+            btn.className = 'candidate-card';
             btn.style.textAlign = 'left';
             btn.style.cursor = 'pointer';
             
-            // 선거 상태에 따른 뱃지 표시
+            // 상태 뱃지
             const statusBadge = election.status === 'NOMINATION' 
-                ? '<span style="color:orange; font-size:0.8em;">[후보등록기간]</span>' 
-                : '<span style="color:green; font-size:0.8em;">[투표진행중]</span>';
+                ? '<span style="color:orange;">[후보등록기간]</span>' 
+                : '<span style="color:green;">[투표진행중]</span>';
 
             btn.innerHTML = `
                 <h3 style="margin:0;">${election.title}</h3>
-                <p style="margin:0.5rem 0 0 0; color:#666;">${statusBadge} 마감일: ${election.end_date || '미정'}</p>
+                <p style="margin:0.5rem 0 0 0; color:#666;">${statusBadge}</p>
             `;
-
-            btn.onclick = () => {
-                loadElection(election); // 클릭 시 해당 선거 로딩
-            };
+            btn.onclick = () => loadElection(election);
             listDiv.appendChild(btn);
         });
-
         ballotArea.appendChild(listDiv);
     }
 
-    // [기존 로직 분리] 특정 선거를 선택했을 때 투표용지 로딩
+    // [핵심 변경] 선거 선택 시 로직: 투표할 목록을 큐(Queue)에 담음
     async function loadElection(election) {
         currentElection = election;
-        
-        // UI 업데이트
         titleElem.innerText = election.title;
-        document.getElementById('district-name').style.display = 'block';
-        document.getElementById('district-name').innerText = '선거구 확인중...';
-        voteBtn.style.display = 'block'; // 투표 버튼 다시 표시
-        
-        // 로딩 표시 (ballotArea만 비움)
-        ballotArea.innerHTML = '<div style="text-align:center; padding:2rem;">투표용지를 가져오는 중입니다...</div>';
+        ballotArea.innerHTML = '<div style="text-align:center; padding:2rem;">투표용지를 확인 중입니다...</div>';
 
         try {
-            // 해당 선거의 내 정보(선거구) 가져오기
-            ballotInfo = await service.getMyBallotInfo(election.id);
+            // 1. 모든 투표용지(지역구, 비례 등) 가져오기
+            const allBallots = await service.getMyBallotList(election.id);
 
-            // 이미 투표했는지 체크
-            if (ballotInfo.hasVoted) {
+            // 2. 이미 투표한 건 제외하고 "해야 할 투표"만 남김
+            pendingBallots = allBallots.filter(b => !b.hasVoted);
+
+            if (pendingBallots.length === 0) {
+                // 모두 투표했으면 완료 화면
                 showCompleteScreen();
                 return;
             }
 
-            // 투표 용지 그리기
-            renderBallot(ballotInfo);
+            // 3. 첫 번째 투표용지 로드
+            loadNextBallot();
 
         } catch (error) {
-            // 여기서 에러가 나면 "이 선거에는 배정되지 않음"일 확률이 큼
-            if (error.message.includes('선거구')) {
-                // alert 대신 모달로 알리고, 확인 누르면 다시 목록으로 돌아갈지 결정
-                showModal('알림', `[${election.title}]에는 투표 권한이 없거나 선거구가 배정되지 않았습니다.`, () => {
-                   // 여러 선거가 있을 때만 목록으로 복귀, 아니면 닫기
-                   initPage(); 
-                });
+            if (error.message.includes('배정되지')) {
+                 showModal('알림', `[${election.title}]에는 투표 권한이 없습니다.`, () => initPage());
             } else {
                 alertAndClose(error.message);
             }
         }
     }
+
+    // [신규] 다음 투표용지를 화면에 그리기
+    function loadNextBallot() {
+        if (pendingBallots.length === 0) {
+            showCompleteScreen();
+            return;
+        }
+
+        // 큐에서 하나 꺼냄
+        currentBallot = pendingBallots[0]; // (주의: shift()는 투표 완료 후에 함)
+        selectedValue = null; // 선택 초기화
+
+        // UI 설정
+        document.getElementById('district-name').style.display = 'block';
+        document.getElementById('district-name').innerText = currentBallot.district.name; // 예: "제1선거구", "비례대표"
+        
+        voteBtn.style.display = 'block';
+        voteBtn.disabled = true;
+        voteBtn.innerText = '투표하기'; // 초기화
+
+        // 남은 투표 수 표시 (선택사항)
+        if (pendingBallots.length > 1) {
+             titleElem.innerText = `${currentElection.title} (${pendingBallots.length}건 남음)`;
+        } else {
+             titleElem.innerText = currentElection.title;
+        }
+
+        renderBallotContent(currentBallot);
+    }
+
+    // 투표용지 내용 그리기 (renderBallot -> renderBallotContent로 이름 변경)
+    function renderBallotContent(info) {
+        ballotArea.innerHTML = ''; 
+
+        if (info.district.vote_type === 'CANDIDATE') {
+            const listDiv = document.createElement('div');
+            listDiv.className = 'candidate-list';
+
+            info.candidates.forEach(cand => {
+                const card = document.createElement('div');
+                card.className = 'candidate-card';
+                const imgUrl = cand.photo_url || 'https://via.placeholder.com/150?text=No+Image';
+                
+                card.innerHTML = `
+                    <img src="${imgUrl}" class="candidate-img" alt="${cand.name}">
+                    <h3>${cand.name}</h3>
+                    <p style="font-size:0.9rem; color:#666;">기호 ${cand.id.substring(0,4)}...</p>
+                    <button type="button" onclick="window.open('${cand.manifesto || '#'}')" style="margin-top:0.5rem; padding:0.2rem 0.5rem;">공약 보기</button>
+                `;
+                
+                card.addEventListener('click', (e) => {
+                    if(e.target.tagName === 'BUTTON') return;
+                    document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    selectedValue = cand.id;
+                    voteBtn.disabled = false;
+                    voteBtn.innerText = `'${cand.name}' 선택완료`;
+                });
+                listDiv.appendChild(card);
+            });
+            ballotArea.appendChild(listDiv);
+
+        } else {
+            // 찬반 투표
+            ballotArea.innerHTML = `
+                <div class="binary-options">
+                    <button type="button" class="btn-binary btn-yes" data-val="AGREE">찬성 (O)</button>
+                    <button type="button" class="btn-binary btn-no" data-val="DISAGREE">반대 (X)</button>
+                </div>
+                <p style="text-align:center; margin-top:1rem; color:#666;">안건에 대한 찬성/반대를 선택해주세요.</p>
+            `;
+            ballotArea.querySelectorAll('.btn-binary').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    ballotArea.querySelectorAll('.btn-binary').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedValue = btn.dataset.val;
+                    voteBtn.disabled = false;
+                    voteBtn.innerText = (selectedValue === 'AGREE' ? '찬성' : '반대') + ' 선택완료';
+                });
+            });
+        }
+    }
+
+    // 버튼 클릭 이벤트
+    voteBtn.addEventListener('click', () => {
+        if (!selectedValue) return;
+
+        const isLastVote = pendingBallots.length === 1;
+        const confirmMsg = isLastVote 
+            ? "정말 투표하시겠습니까? 투표 후에는 수정할 수 없습니다." 
+            : "이 투표를 제출하고 '다음 투표'로 이동하시겠습니까?";
+
+        showConfirm(confirmMsg, async () => {
+            try {
+                voteBtn.innerText = '처리중...';
+                voteBtn.disabled = true;
+
+                const payload = {
+                    electionId: currentElection.id,
+                    districtId: currentBallot.district_id,
+                    round: currentElection.current_round || 1,
+                    candidateId: currentBallot.district.vote_type === 'CANDIDATE' ? selectedValue : null,
+                    choice: currentBallot.district.vote_type === 'BINARY' ? selectedValue : null
+                };
+
+                // 투표 제출
+                await service.submitVote(payload);
+
+                // 성공 시 목록에서 제거하고 다음으로 이동
+                pendingBallots.shift(); // 맨 앞(방금 투표한 것) 제거
+                loadNextBallot(); // 재귀 호출 (남은게 없으면 완료화면)
+
+            } catch (e) {
+                showModal('오류', e.message);
+                voteBtn.disabled = false;
+                voteBtn.innerText = '투표하기';
+            }
+        });
+    });
 
         // [이하 renderBallot, 이벤트 리스너, 모달 함수들은 기존 코드 그대로 사용]
         function renderBallot(info) {
