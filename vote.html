@@ -88,13 +88,8 @@
             loadingScreen.style.display = 'none';
             voteContainer.classList.add('active');
 
-            if (elections.length === 1) {
-                // 선거가 1개면 바로 진입
-                loadElection(elections[0]);
-            } else {
-                // 선거가 여러 개면 선택 화면 렌더링
                 renderElectionList(elections);
-            }
+
 
         } catch (error) {
             console.error(error);
