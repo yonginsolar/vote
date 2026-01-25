@@ -217,12 +217,22 @@
 </div>
             </div>
 
-            <div id="tab-ready" class="tab-content" style="display:none;">
-                <h4>📢 후보자 확정 및 공포</h4>
+<div id="tab-ready" class="tab-content" style="display:none;">
+                <h4>📢 후보자 확정 및 공포 (준비 완료 상태)</h4>
                 <div style="background: #fff3cd; border: 1px solid #ffeeba; padding: 1.5rem; border-radius: 8px; text-align: center;">
-                    <button onclick="openVoterPreview()" class="btn btn-outline" style="margin-bottom: 1rem;">👁️ 유권자 화면 미리보기</button>
+                    <p style="color: #856404; margin-bottom: 1.5rem;">
+                        현재 선거가 <strong>준비 완료(READY)</strong> 상태입니다.<br>
+                        유권자 명부와 후보자를 최종 확인 후, 투표 시작 시간에 맞춰 아래 버튼을 누르세요.
+                    </p>
+
+                    <button onclick="openVoterPreview()" class="btn btn-outline" style="margin-bottom: 1rem;">
+                        👁️ 유권자 화면 미리보기
+                    </button>
                     <br>
-                    <button onclick="confirmAction('READY', '선거 준비 완료 상태로 변경하시겠습니까?')" class="btn btn-warning">🚀 선거 준비 완료 (READY)</button>
+                    
+                    <button onclick="confirmAction('OPEN', '투표를 시작하시겠습니까?\n(상태가 OPEN으로 변경되며 투표소가 열립니다)')" class="btn btn-success" style="padding: 1rem 2rem; font-size: 1.1rem;">
+                        ▶ 투표 시작 (OPEN)
+                    </button>
                 </div>
             </div>
 
