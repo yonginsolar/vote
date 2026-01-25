@@ -331,34 +331,45 @@
             }
         }
 
-        voteBtn.addEventListener('click', () => {
-            if (!selectedValue) return;
-            const msg = ballotInfo.district.vote_type === 'CANDIDATE' 
-                ? "선택하신 후보에게 투표하시겠습니까?" 
-                : "선택하신 내용으로 투표하시겠습니까?";
+// [수정된 투표하기 버튼 이벤트]
+    voteBtn.addEventListener('click', () => {
+        if (!selectedValue) return;
 
-            showConfirm(msg, async () => {
-                try {
-                    voteBtn.innerText = '처리중...';
-                    voteBtn.disabled = true;
+        // ballotInfo -> currentBallot 으로 변경해야 함 (여기가 오류 원인)
+        const isCandidateVote = currentBallot.district.vote_type === 'CANDIDATE';
 
-                    const payload = {
-                        electionId: currentElection.id,
-                        districtId: ballotInfo.district_id,
-                        round: currentElection.current_round,
-                        candidateId: ballotInfo.district.vote_type === 'CANDIDATE' ? selectedValue : null,
-                        choice: ballotInfo.district.vote_type === 'BINARY' ? selectedValue : null
-                    };
+        const isLastVote = pendingBallots.length === 1;
+        const confirmMsg = isLastVote 
+            ? "정말 투표하시겠습니까? 투표 후에는 수정할 수 없습니다." 
+            : "이 투표를 제출하고 '다음 투표'로 이동하시겠습니까?";
 
-                    await service.submitVote(payload);
-                    showCompleteScreen();
-                } catch (e) {
-                    showModal('오류', e.message);
-                    voteBtn.disabled = false;
-                    voteBtn.innerText = '투표하기';
-                }
-            });
+        showConfirm(confirmMsg, async () => {
+            try {
+                voteBtn.innerText = '처리중...';
+                voteBtn.disabled = true;
+
+                const payload = {
+                    electionId: currentElection.id,
+                    districtId: currentBallot.district_id, // 여기도 currentBallot 사용
+                    round: currentElection.current_round || 1,
+                    candidateId: isCandidateVote ? selectedValue : null,
+                    choice: !isCandidateVote ? selectedValue : null
+                };
+
+                // 투표 제출
+                await service.submitVote(payload);
+
+                // 성공 시 목록에서 제거하고 다음으로 이동
+                pendingBallots.shift(); 
+                loadNextBallot(); 
+
+            } catch (e) {
+                showModal('오류', e.message);
+                voteBtn.disabled = false;
+                voteBtn.innerText = '투표하기';
+            }
         });
+    });
 
         function showCompleteScreen() {
             loadingScreen.style.display = 'none';
