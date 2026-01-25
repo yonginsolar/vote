@@ -205,7 +205,13 @@
                     <thead><tr><th>선거구</th><th>이름</th><th>상태</th><th>기호</th></tr></thead>
                     <tbody id="candidate-list-body"></tbody>
                 </table>
-                <button onclick="saveSymbols()" class="btn btn-success" style="width:100%; margin-top:1.5rem;">💾 기호 저장</button>
+               <div style="margin-top: 1.5rem; display: flex; gap: 10px;">
+    <button onclick="saveSymbols()" class="btn btn-success" style="flex: 1;">💾 기호 저장</button>
+    
+    <button onclick="finalizeNomination()" class="btn btn-primary" style="flex: 1; background-color: #4f46e5;">
+        🚀 후보 확정 및 다음 단계로
+    </button>
+</div>
             </div>
 
             <div id="tab-ready" class="tab-content" style="display:none;">
@@ -1544,7 +1550,55 @@ window.saveSymbols = async () => {
         loadCandidates();
         loadLogs(); // 로그 즉시 갱신을 위해 추가
     };
+// [신규] 후보 확정 및 다음 단계(READY) 이동 로직
+window.finalizeNomination = async () => {
+    // 1. 안전장치: 대기 중인 후보가 있는지 통계 값으로 확인
+    const pendingCount = parseInt(document.getElementById('stat-pending').innerText || '0');
+    
+    if (pendingCount > 0) {
+        alert("⚠️ 아직 승인 대기(PENDING) 상태인 후보가 있습니다.\n\n모든 후보를 '승인'하거나 '반려' 처리한 뒤에만\n다음 단계로 넘어갈 수 있습니다.");
+        return;
+    }
 
+    // 2. 경고 메시지 구성 (HTML)
+    const warningMsg = `
+        <div style="text-align: left; background: #fff1f2; padding: 15px; border-radius: 8px; border: 1px solid #fecaca;">
+            <p style="color: #dc2626; font-weight: 800; font-size: 1.1rem; margin-top: 0;">⛔ 주의: 되돌릴 수 없습니다!</p>
+            <p style="margin-bottom: 5px;">현재 등록된 후보자와 기호 번호를 최종 확정하시겠습니까?</p>
+            <ul style="font-size: 0.9rem; color: #4b5563; padding-left: 20px;">
+                <li>확인 시 <strong>[READY: 준비 완료]</strong> 상태로 변경됩니다.</li>
+                <li>이후에는 <strong>후보 추가, 기호 변경이 불가능</strong>합니다.</li>
+                <li>유권자에게 후보자 명단이 공개될 수 있습니다.</li>
+            </ul>
+        </div>
+        <p style="text-align: center; margin-top: 15px; font-weight: bold;">진행하시겠습니까?</p>
+    `;
+
+    // 3. 모달 호출 및 실행
+    window.showModal('🚀 후보 확정 및 단계 이동', warningMsg, async () => {
+        try {
+            // 상태 업데이트: READY
+            await service.updateStatus(currentElectionId, 'READY');
+            
+            // 로그 기록
+            await service.logAction(
+                currentElectionId, 
+                'PHASE_CHANGE', 
+                `단계 변경: 후보확정(NOMINATION) -> 준비완료(READY) (작업자: ${currentUserEmail})`
+            );
+
+            alert("✅ 후보가 확정되었습니다.\n다음 탭(확정 및 공포)으로 이동합니다.");
+
+            // 데이터 갱신 및 UI 탭 전환
+            await loadElectionInfo();
+            updateWorkflowUI();
+
+        } catch (e) {
+            console.error(e);
+            alert("상태 변경 실패: " + e.message);
+        }
+    });
+}; // End of finalizeNomination
 // [수정] 액션 확인 및 실행 (시간 체크 기능 포함 + 이메일 로깅)
     window.confirmAction = (nextStatus, msg) => {
         // 1. 투표 시작(OPEN) 시도 시 시간 체크 로직
