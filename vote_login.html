@@ -255,7 +255,7 @@
     <img id="modalFullImage" class="img-modal-content">
 </div>
 
-    <script type="module">
+<script type="module">
         import { supabase } from './ElectionService.js';
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -266,7 +266,133 @@
         let allDistricts = [];
         let currentStatus = '';
 
-        // 초기화
+        // ==========================================
+        // [핵심] 1. 유틸리티 함수 정의 (전역 등록용)
+        // ==========================================
+
+        // (1) 만 나이 계산
+        function getKoreanAge(birthDateStr) {
+            if (!birthDateStr) return '';
+            
+            // 파싱: "yymmdd-1******" 형태 가정
+            const yy = parseInt(birthDateStr.substring(0, 2));
+            const mm = parseInt(birthDateStr.substring(2, 4)) - 1;
+            const dd = parseInt(birthDateStr.substring(4, 6));
+            const gender = birthDateStr.substring(7, 8);
+
+            const century = (gender === '1' || gender === '2') ? 1900 : 2000;
+            const fullYear = century + yy;
+
+            const today = new Date();
+            let age = today.getFullYear() - fullYear;
+            
+            const currentMonth = today.getMonth();
+            const currentDate = today.getDate();
+            
+            if (currentMonth < mm || (currentMonth === mm && currentDate < dd)) {
+                age--;
+            }
+            return `만 ${age}세`;
+        }
+
+        // (2) 주소 포맷팅
+        function formatAddress(addr) {
+            if (!addr) return '정보 없음';
+            const match = addr.match(/.*?(읍|면|동|가)(\s|$)/);
+            if (match) return match[0].trim();
+            return addr.replace(/[0-9]/g, '*');
+        }
+
+        // (3) 이미지 확대 모달 열기
+        function openImageModal(url) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalFullImage');
+            modalImg.src = url;
+            modal.style.display = 'flex';
+        }
+
+        // (4) 이미지 확대 모달 닫기
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            modal.style.display = 'none';
+            document.getElementById('modalFullImage').src = '';
+        }
+
+        // (5) 후보자 상세 정보 모달 열기
+        function openCandidateDetail(candId) {
+            const c = allCandidates.find(item => item.id === candId);
+            if (!c) return;
+
+            let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+            if (c.photo_url) {
+                if (c.photo_url.startsWith('http')) photoSrc = c.photo_url;
+                else {
+                    const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
+                    if(data) photoSrc = data.publicUrl;
+                }
+            }
+
+            // [수정] calculateAge -> getKoreanAge로 변경
+            const age = getKoreanAge(c.birth_date);
+            const safeAddress = formatAddress(c.address);
+
+            const html = `
+                <div class="modal-cand-header">
+                    <img src="${photoSrc}" class="modal-cand-photo" onclick="openImageModal('${photoSrc}')">
+                    <div>
+                        <div style="font-size:0.9rem; color:#666; margin-bottom:4px;">기호 <span style="font-weight:bold; color:var(--primary); font-size:1.1rem;">${c.symbol || '-'}</span>번</div>
+                        <div style="font-size:1.4rem; font-weight:800;">${c.name}</div>
+                    </div>
+                </div>
+
+                <div class="modal-info-row">
+                    <span class="modal-info-label">나이</span>
+                    <span class="modal-info-val">${age}</span>
+                </div>
+                <div class="modal-info-row">
+                    <span class="modal-info-label">주소</span>
+                    <span class="modal-info-val">${safeAddress}</span>
+                </div>
+
+                <label class="modal-section-label">🎓 주요 경력</label>
+                <div class="modal-text-box">${c.career || '등록된 경력이 없습니다.'}</div>
+
+                <label class="modal-section-label">📢 공약 및 출마의 변</label>
+                <div class="modal-text-box" style="min-height:100px;">${c.manifesto || '등록된 공약이 없습니다.'}</div>
+            `;
+
+            document.getElementById('cand-detail-content').innerHTML = html;
+            document.getElementById('candidate-detail-modal').style.display = 'flex';
+        }
+
+        // (6) 후보자 상세 모달 닫기
+        function closeCandidateDetail() {
+            document.getElementById('candidate-detail-modal').style.display = 'none';
+        }
+
+        // (7) 로그인 모달 제어
+        function openLoginModal() { document.getElementById('login-modal').style.display = 'flex'; }
+        function closeLoginModal() { document.getElementById('login-modal').style.display = 'none'; }
+
+
+        // ==========================================
+        // [핵심] 2. window 객체에 함수 강제 바인딩
+        // (HTML onclick에서 쓰려면 필수)
+        // ==========================================
+        window.getKoreanAge = getKoreanAge;
+        window.formatAddress = formatAddress;
+        window.openImageModal = openImageModal;
+        window.closeImageModal = closeImageModal;
+        window.openCandidateDetail = openCandidateDetail;
+        window.closeCandidateDetail = closeCandidateDetail;
+        window.openLoginModal = openLoginModal;
+        window.closeLoginModal = closeLoginModal;
+
+
+        // ==========================================
+        // 3. 메인 로직 (초기화 및 렌더링)
+        // ==========================================
+
         async function init() {
             if(!electionId) {
                 alert("잘못된 접근입니다. (선거 ID 없음)");
@@ -283,7 +409,6 @@
             }
         }
 
-        // 1. 선거 기본 정보 로드
         async function loadElectionInfo() {
             const { data, error } = await supabase
                 .from('elections')
@@ -296,9 +421,7 @@
 
             currentStatus = data.status;
 
-            // UI 업데이트
             document.getElementById('election-title').innerText = data.title;
-            
             const startStr = new Date(data.vote_start_at).toLocaleString();
             const endStr = new Date(data.vote_end_at).toLocaleString();
             document.getElementById('election-period').innerText = `투표기간: ${startStr} ~ ${endStr}`;
@@ -306,221 +429,114 @@
             const badge = document.getElementById('status-badge');
             const mainBtn = document.getElementById('btn-main-action');
 
-            // 상태별 버튼 제어
             if (data.status === 'OPEN') {
                 badge.innerText = "투표 진행 중";
-                badge.style.background = "#16a34a"; // Green
-                
+                badge.style.background = "#16a34a";
                 mainBtn.innerText = "🗳️ 투표소 입장하기";
                 mainBtn.disabled = false;
                 mainBtn.style.background = "var(--primary)";
             } else if (data.status === 'CLOSED' || data.status === 'ENDED') {
                 badge.innerText = "투표 종료";
-                badge.style.background = "#dc2626"; // Red
-                
+                badge.style.background = "#dc2626";
                 mainBtn.innerText = "⛔ 투표가 종료되었습니다";
                 mainBtn.disabled = true;
             } else {
                 badge.innerText = "준비 중";
-                badge.style.background = "#d97706"; // Orange
-                
+                badge.style.background = "#d97706";
                 mainBtn.innerText = "🔒 투표 대기 중";
                 mainBtn.disabled = true;
             }
         }
 
-        // 2. 선거구 및 후보자 로드 (조인 쿼리 대신 개별 조회 후 매핑)
         async function loadDistrictsAndCandidates() {
-            // 2-1. 선거구 로드
-            const { data: districts } = await supabase
-                .from('districts')
-                .select('*')
-                .eq('election_id', electionId)
-                .order('name');
+            const { data: districts } = await supabase.from('districts').select('*').eq('election_id', electionId).order('name');
             allDistricts = districts || [];
 
-            // 2-2. 후보자 로드
-            const { data: candidates } = await supabase
-                .from('candidates')
-                .select('*')
-                .eq('election_id', electionId)
-                .eq('status', 'APPROVED') // 승인된 후보만 표시
-                .order('symbol', { ascending: true }); // 기호순 정렬
+            const { data: candidates } = await supabase.from('candidates').select('*').eq('election_id', electionId).eq('status', 'APPROVED').order('symbol', { ascending: true });
             allCandidates = candidates || [];
 
-            // 2-3. 탭 생성
             renderTabs();
-
-            // 2-4. 전체 후보자 렌더링
             renderCandidates('ALL');
         }
 
-        // 탭 렌더링
         function renderTabs() {
             const container = document.getElementById('district-tabs');
             let html = `<button class="tab-btn active" onclick="filterCandidates('ALL', this)">전체</button>`;
-            
             allDistricts.forEach(d => {
-                // 비례대표(공통)인 경우 이름을 명확히
                 const name = d.is_common ? '비례/찬반' : d.name;
                 html += `<button class="tab-btn" onclick="filterCandidates('${d.id}', this)">${name}</button>`;
             });
             container.innerHTML = html;
         }
 
-        // 후보자 목록 렌더링 (필터링 지원)
         window.filterCandidates = (districtId, btnElement) => {
-            // 버튼 활성화 스타일 변경
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             btnElement.classList.add('active');
             renderCandidates(districtId);
         };
 
-// [수정됨] 후보자 리스트 렌더링 함수
-window.renderCandidates = async (filterDistId) => {
-    const container = document.getElementById('candidate-area');
-    container.innerHTML = ''; 
+        window.renderCandidates = async (filterDistId) => {
+            const container = document.getElementById('candidate-area');
+            container.innerHTML = ''; 
 
-    // 1. 필터링
-    let list = allCandidates;
-    if (filterDistId !== 'ALL') {
-        list = allCandidates.filter(c => c.district_id === filterDistId);
-    }
-
-    if (list.length === 0) {
-        container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
-        return;
-    }
-
-    // 2. 카드 HTML 생성
-    const cardsHtmlPromises = list.map(async c => {
-        // 선거구 이름
-        const distInfo = allDistricts.find(d => d.id === c.district_id);
-        const distName = distInfo ? (distInfo.is_common ? '비례대표' : distInfo.name) : '-';
-
-        // 사진 URL 처리
-        let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
-        if (c.photo_url) {
-            if (c.photo_url.startsWith('http')) {
-                photoSrc = c.photo_url;
-            } else {
-                const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
-                if(data) photoSrc = data.publicUrl;
+            let list = allCandidates;
+            if (filterDistId !== 'ALL') {
+                list = allCandidates.filter(c => c.district_id === filterDistId);
             }
-        }
 
-        // [수정 핵심] ageText 변수 선언 및 할당 복구
-        // 기존에 여기에 함수 정의 코드가 잘못 들어와 있었음 -> 제거하고 호출로 변경
-        // window.getKoreanAge는 스크립트 하단 전역에 정의되어 있다고 가정함
-        const ageText = window.getKoreanAge ? window.getKoreanAge(c.birth_date) : '';
+            if (list.length === 0) {
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
+                return;
+            }
 
-        // [중요] HTML 구조
-        // 1. 이미지 영역: onclick="event.stopPropagation()"을 넣어 카드 클릭 이벤트가 발생하지 않게 막음 (이미지만 확대되게)
-        // 2. 정보 영역: 나이(ageText) 추가
-        return `
-            <div class="cand-card" onclick="openCandidateDetail('${c.id}')" style="cursor: pointer;">
-                <div style="width: 100px; min-width: 100px; height: 120px; border-right: 1px solid #eee;" onclick="event.stopPropagation()">
-                    <img 
-                        src="${photoSrc}" 
-                        class="candidate-img" 
-                        onclick="openImageModal('${photoSrc}')" 
-                        alt="${c.name}"
-                    >
-                </div>
-                <div class="cand-info">
-                    <div class="cand-header">
-                        <span class="cand-symbol">${c.symbol || '-'}</span>
-                        <span class="cand-district">${distName}</span>
+            const cardsHtmlPromises = list.map(async c => {
+                const distInfo = allDistricts.find(d => d.id === c.district_id);
+                const distName = distInfo ? (distInfo.is_common ? '비례대표' : distInfo.name) : '-';
+
+                let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+                if (c.photo_url) {
+                    if (c.photo_url.startsWith('http')) {
+                        photoSrc = c.photo_url;
+                    } else {
+                        const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
+                        if(data) photoSrc = data.publicUrl;
+                    }
+                }
+
+                // [중요] 함수 호출 (정의 아님)
+                const ageText = getKoreanAge(c.birth_date);
+
+                return `
+                    <div class="cand-card" onclick="openCandidateDetail('${c.id}')" style="cursor: pointer;">
+                        <div style="width: 100px; min-width: 100px; height: 120px; border-right: 1px solid #eee;" onclick="event.stopPropagation()">
+                            <img 
+                                src="${photoSrc}" 
+                                class="candidate-img" 
+                                onclick="openImageModal('${photoSrc}')" 
+                                alt="${c.name}"
+                            >
+                        </div>
+                        <div class="cand-info">
+                            <div class="cand-header">
+                                <span class="cand-symbol">${c.symbol || '-'}</span>
+                                <span class="cand-district">${distName}</span>
+                            </div>
+                            <h3 class="cand-name">${c.name} <span style="font-size:0.8em; color:#666; font-weight:normal;">(${ageText})</span></h3>
+                            <div class="cand-detail" style="color:var(--primary); font-size:0.8rem;">
+                                👉 터치하여 상세 정보 보기
+                            </div>
+                        </div>
                     </div>
-                    <h3 class="cand-name">${c.name} <span style="font-size:0.8em; color:#666; font-weight:normal;">(${ageText})</span></h3>
-                    <div class="cand-detail" style="color:var(--primary); font-size:0.8rem;">
-                        👉 터치하여 상세 정보 보기
-                    </div>
-                </div>
-            </div>
-        `;
-    });
+                `;
+            });
 
-    const cardsHtml = await Promise.all(cardsHtmlPromises);
-    container.innerHTML = cardsHtml.join('');
-}; // End of window.renderCandidates
+            const cardsHtml = await Promise.all(cardsHtmlPromises);
+            container.innerHTML = cardsHtml.join('');
+        };
 
-
-
-// [추가] 2. 주소 포맷팅 함수 (읍/면/동/가 기준 절사 또는 마스킹)
-function formatAddress(addr) {
-    if (!addr) return '정보 없음';
-    
-    // '읍', '면', '동', '가' 중 하나가 나오고, 뒤에 공백이나 끝이 나오는 패턴 찾기
-    // 예: "포곡읍" 뒤에 공백이 있거나 문장이 끝나는 지점까지 추출
-    const match = addr.match(/.*?(읍|면|동|가)(\s|$)/);
-    
-    if (match) {
-        return match[0].trim(); // 예: "경기도 용인시 처인구 포곡읍"
-    }
-    
-    // 행정구역 단위가 없으면 숫자만 마스킹 처리 (개인정보 보호)
-    // 예: "서울시 종로구 세종로 123-4" -> "서울시 종로구 세종로 ***-*"
-    return addr.replace(/[0-9]/g, '*');
-}
-
-// [추가] 3. 상세 모달 열기 함수
-window.openCandidateDetail = (candId) => {
-    // 전역 변수 allCandidates에서 ID로 후보 찾기
-    const c = allCandidates.find(item => item.id === candId);
-    if (!c) return;
-
-    // 사진 URL 처리 (없으면 기본값)
-    let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
-    if (c.photo_url) {
-        if (c.photo_url.startsWith('http')) photoSrc = c.photo_url;
-        else {
-             const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
-             if(data) photoSrc = data.publicUrl;
-        }
-    }
-
-    // 나이 및 주소 계산
-    const age = calculateAge(c.birth_date);
-    const safeAddress = formatAddress(c.address);
-
-    // HTML 구성
-    const html = `
-        <div class="modal-cand-header">
-            <img src="${photoSrc}" class="modal-cand-photo">
-            <div>
-                <div style="font-size:0.9rem; color:#666; margin-bottom:4px;">기호 <span style="font-weight:bold; color:var(--primary); font-size:1.1rem;">${c.symbol || '-'}</span>번</div>
-                <div style="font-size:1.4rem; font-weight:800;">${c.name}</div>
-            </div>
-        </div>
-
-        <div class="modal-info-row">
-            <span class="modal-info-label">나이</span>
-            <span class="modal-info-val">만 ${age}세</span>
-        </div>
-        <div class="modal-info-row">
-            <span class="modal-info-label">주소</span>
-            <span class="modal-info-val">${safeAddress}</span>
-        </div>
-
-        <label class="modal-section-label">🎓 주요 경력</label>
-        <div class="modal-text-box">${c.career || '등록된 경력이 없습니다.'}</div>
-
-        <label class="modal-section-label">📢 공약 및 출마의 변</label>
-        <div class="modal-text-box" style="min-height:100px;">${c.manifesto || '등록된 공약이 없습니다.'}</div>
-    `;
-
-    document.getElementById('cand-detail-content').innerHTML = html;
-    document.getElementById('candidate-detail-modal').style.display = 'flex';
-};
-
-// [추가] 4. 모달 닫기 함수
-window.closeCandidateDetail = () => {
-    document.getElementById('candidate-detail-modal').style.display = 'none';
-};
-        // ============================================================
-        // [핵심 기능] 로그인 및 투표권 검증 로직
-        // ============================================================
+        // ==========================================
+        // 4. 로그인 프로세스 (window에 등록)
+        // ==========================================
         window.processLogin = async () => {
             const nameInput = document.getElementById('input-name').value.trim();
             const phoneInput = document.getElementById('input-phone').value.trim();
@@ -535,11 +551,10 @@ window.closeCandidateDetail = () => {
             btn.innerText = "확인 중...";
 
             try {
-                // 1. coop_members에서 이름으로 검색
                 const { data: members, error: memError } = await supabase
                     .from('coop_members')
                     .select('member_id, name, phone')
-                    .eq('name', nameInput); // 동명이인 고려하여 list로 받음
+                    .eq('name', nameInput);
 
                 if (memError) throw memError;
 
@@ -548,10 +563,8 @@ window.closeCandidateDetail = () => {
                     throw new Error("Member not found");
                 }
 
-                // 2. JS에서 전화번호 뒷자리 매칭 (DB 부하 감소 및 유연성)
                 const matchedMember = members.find(m => {
                     if (!m.phone) return false;
-                    // DB에 저장된 번호의 공백/하이픈 제거 후 뒤 4자리 비교
                     const cleanPhone = m.phone.replace(/[^0-9]/g, ''); 
                     return cleanPhone.endsWith(phoneInput);
                 });
@@ -561,18 +574,12 @@ window.closeCandidateDetail = () => {
                     throw new Error("Phone mismatch");
                 }
 
-                // 3. election_voters에서 투표권 및 투표 여부 확인
                 const { data: voterData, error: voteError } = await supabase
                     .from('election_voters')
                     .select('member_no, is_voted, district_id')
                     .eq('election_id', electionId)
                     .eq('member_no', matchedMember.member_id)
-                    .limit(1); // 한 선거에 한 사람이 여러 표를 가질 일은 없다고 가정 (있다면 로직 수정 필요)
-
-                // [중요] 비례대표(common) 때문에 row가 2개 나올 수 있음 (지역구 1 + 비례 1)
-                // 하지만 '입장' 자체는 한 번만 하면 되므로, 아무 데이터나 하나 있으면 통과.
-                // 단, is_voted 검사는 '모두' 했는지, '하나라도' 했는지 정책에 따름.
-                // 보통은 '투표소 입장' 시점에는 is_voted가 모두 false여야 함.
+                    .limit(1);
                 
                 if (voteError) throw voteError;
 
@@ -581,15 +588,12 @@ window.closeCandidateDetail = () => {
                     throw new Error("Not a voter");
                 }
 
-                // 4. 이미 투표했는지 체크 (배열 중 하나라도 true면 투표한 것으로 간주)
                 const hasVoted = voterData.some(v => v.is_voted === true);
                 if (hasVoted) {
                     alert("이미 투표를 완료하셨습니다.\n(중복 투표 불가)");
                     throw new Error("Already voted");
                 }
 
-                // 5. 로그인 성공 처리
-                // 세션 스토리지에 인증 정보 저장 (브라우저 닫으면 삭제됨 - 보안 유리)
                 const sessionData = {
                     memberId: matchedMember.member_id,
                     memberName: matchedMember.name,
@@ -599,8 +603,6 @@ window.closeCandidateDetail = () => {
                 sessionStorage.setItem('vote_auth', JSON.stringify(sessionData));
 
                 alert(`${matchedMember.name}님, 인증되었습니다.\n투표소로 이동합니다.`);
-                
-                // 투표 페이지로 이동
                 window.location.href = `vote.html?id=${electionId}`;
 
             } catch (e) {
@@ -609,50 +611,6 @@ window.closeCandidateDetail = () => {
                 btn.innerText = "확인";
             }
         };
-// 1. 만 나이 계산 (birth_date 포맷: "yymmdd-1******" 가정)
-function getKoreanAge(birthDateStr) {
-    // 1-1. 파싱: 하이픈(-) 위치 기준
-    const yy = parseInt(birthDateStr.substring(0, 2));
-    const mm = parseInt(birthDateStr.substring(2, 4)) - 1; // 월은 0부터 시작
-    const dd = parseInt(birthDateStr.substring(4, 6));
-    const gender = birthDateStr.substring(7, 8); // 성별 코드
-
-    // 1-2. 연도 보정 (1,2: 1900년대 / 3,4: 2000년대)
-    const century = (gender === '1' || gender === '2') ? 1900 : 2000;
-    const fullYear = century + yy;
-
-    // 1-3. 만 나이 계산
-    const today = new Date();
-    let age = today.getFullYear() - fullYear;
-    
-    // 생일이 안 지났으면 1살 차감 (월, 일 비교)
-    const currentMonth = today.getMonth();
-    const currentDate = today.getDate();
-    
-    if (currentMonth < mm || (currentMonth === mm && currentDate < dd)) {
-        age--;
-    }
-
-    return `만 ${age}세`;
-}
-
-// 2. 모달 열기 (이미지 클릭 시 호출)
-function openImageModal(url) {
-    const modal = document.getElementById('imageModal');
-    const modalImg = document.getElementById('modalFullImage');
-    
-    modalImg.src = url;
-    modal.style.display = 'flex'; // 중앙 정렬을 위해 flex 사용
-}
-
-// 3. 모달 닫기
-function closeImageModal() {
-    document.getElementById('imageModal').style.display = 'none';
-    document.getElementById('modalFullImage').src = ''; // 잔상 제거
-}
-        // 모달 제어
-        window.openLoginModal = () => document.getElementById('login-modal').style.display = 'flex';
-        window.closeLoginModal = () => document.getElementById('login-modal').style.display = 'none';
 
         // 앱 시작
         init();
