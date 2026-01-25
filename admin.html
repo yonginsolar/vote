@@ -206,6 +206,9 @@
                     <tbody id="candidate-list-body"></tbody>
                 </table>
                <div style="margin-top: 1.5rem; display: flex; gap: 10px;">
+                   <button onclick="assignRandomSymbols()" class="btn btn-warning" style="margin-right: 5px;">
+    🎲 기호 자동 추첨 (미리보기)
+</button>
     <button onclick="saveSymbols()" class="btn btn-success" style="flex: 1;">💾 기호 저장</button>
     
     <button onclick="finalizeNomination()" class="btn btn-primary" style="flex: 1; background-color: #4f46e5;">
@@ -1440,7 +1443,73 @@ async function loadCandidates() {
     window.closeCandidateDetail = () => {
         document.getElementById('candidate-detail-modal').style.display = 'none';
     };
+// [신규] 기호 랜덤 추첨 및 화면 반영 함수 (DB 저장 안함, 프리뷰 용도)
+window.assignRandomSymbols = async () => {
+    // 1. 사전 경고
+    if (!confirm("비례대표(찬/반)를 제외한 모든 지역구 후보의 기호를\n무작위로 추첨하여 화면에 표시하시겠습니까?\n\n(주의: 기존에 입력된 기호가 덮어씌워집니다. 저장은 되지 않습니다.)")) {
+        return;
+    }
 
+    try {
+        // 2. 현재 등록된 후보자 전체 가져오기 (데이터 정확성을 위해 재조회)
+        const candidates = await service.getCandidates(currentElectionId);
+
+        // 3. 비례대표(is_common=true) 선거구 ID 찾기
+        // (districtList는 init 함수 실행 시 로드된 전역 변수를 활용)
+        const commonDistrictIds = districtList
+            .filter(d => d.is_common === true)
+            .map(d => d.id);
+
+        // 4. 지역구별로 후보자 그룹화 (Grouping)
+        const groups = {};
+        
+        candidates.forEach(c => {
+            // (1) 승인된 후보만 대상
+            if (c.status !== 'APPROVED') return;
+            // (2) 비례대표 선거구 소속이면 제외
+            if (commonDistrictIds.includes(c.district_id)) return;
+
+            if (!groups[c.district_id]) {
+                groups[c.district_id] = [];
+            }
+            groups[c.district_id].push(c);
+        });
+
+        // 5. 그룹별 셔플 및 번호 부여 (Fisher-Yates Shuffle)
+        let totalAssigned = 0;
+
+        for (const [distId, list] of Object.entries(groups)) {
+            // 무작위 섞기
+            for (let i = list.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [list[i], list[j]] = [list[j], list[i]];
+            }
+
+            // 섞인 순서대로 화면의 input 값 변경
+            list.forEach((c, index) => {
+                const symbolNum = index + 1; // 1번부터 시작
+                
+                // 화면에 있는 해당 후보의 입력창 찾기 (data-id 속성 활용)
+                const inputEl = document.querySelector(`.input-symbol[data-id="${c.id}"]`);
+                
+                if (inputEl) {
+                    inputEl.value = symbolNum;
+                    // 변경됨을 시각적으로 알림 (노란색 배경 깜빡임 효과 등)
+                    inputEl.style.backgroundColor = '#fff3cd'; 
+                    inputEl.style.transition = 'background 0.5s';
+                    totalAssigned++;
+                }
+            });
+        }
+
+        alert(`총 ${totalAssigned}명의 후보에게 랜덤 기호가 배정되었습니다.\n\n결과를 확인하고 반드시 [기호 저장] 버튼을 눌러 확정해주세요.`);
+
+    } catch (e) {
+        console.error(e);
+        alert("기호 추첨 중 오류가 발생했습니다: " + e.message);
+    }
+}; // End of assignRandomSymbols
+    
     // [신규] 승인 처리 로직 (직접 DB 업데이트)
     window.confirmApprove = async (id, name) => {
         if(!confirm(`[${name}] 후보를 정식 후보로 승인하시겠습니까?`)) return;
