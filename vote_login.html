@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>선거인 명부 확인 및 투표소 입장</title>
+    <style>
+        /* [모바일 친화적 디자인 시스템] */
+        :root {
+            --primary: #2563eb;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-sub: #6b7280;
+            --danger: #dc2626;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding-bottom: 100px; /* 하단 버튼 공간 확보 */
+        }
+
+        /* 상단 헤더 */
+        .header {
+            background: white;
+            padding: 1.5rem 1rem;
+            text-align: center;
+            border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .header h1 { margin: 0; font-size: 1.4rem; color: var(--primary); font-weight: 800; }
+        .header p { margin: 8px 0 0; font-size: 0.9rem; color: var(--text-sub); }
+        .status-badge {
+            display: inline-block; padding: 4px 10px; border-radius: 12px; 
+            font-size: 0.8rem; font-weight: bold; color: white; margin-top: 5px;
+        }
+
+        /* 메인 컨테이너 */
+        .container {
+            max-width: 600px; 
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        /* 탭 메뉴 */
+        .district-tabs {
+            display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 1rem;
+            -webkit-overflow-scrolling: touch; scrollbar-width: none;
+        }
+        .district-tabs::-webkit-scrollbar { display: none; }
+        
+        .tab-btn {
+            background: white; border: 1px solid #d1d5db; padding: 8px 14px; border-radius: 20px;
+            font-size: 0.9rem; white-space: nowrap; cursor: pointer; color: var(--text-sub); transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--primary); color: white; border-color: var(--primary); font-weight: bold; box-shadow: 0 2px 4px rgba(37,99,235,0.3);
+        }
+
+        /* 후보자 카드 */
+        .candidate-list { display: flex; flex-direction: column; gap: 1rem; }
+        
+        .cand-card {
+            background: var(--card-bg); border-radius: 12px; overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; border: 1px solid #e5e7eb;
+        }
+        .cand-photo {
+            width: 100px; min-height: 120px; background-color: #f3f4f6; object-fit: cover;
+            border-right: 1px solid #eee;
+        }
+        .cand-info { padding: 1rem; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        
+        .cand-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .cand-symbol {
+            background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%;
+            text-align: center; line-height: 24px; font-size: 0.85rem; font-weight: bold; flex-shrink: 0;
+        }
+        .cand-name { font-size: 1.15rem; font-weight: 800; color: #111; margin: 0; }
+        .cand-district { font-size: 0.8rem; color: var(--primary); font-weight: 600; background: #eff6ff; padding: 2px 6px; border-radius: 4px; }
+        
+        .cand-detail { font-size: 0.85rem; color: #4b5563; line-height: 1.5; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+        /* 하단 고정 버튼 */
+        .bottom-action {
+            position: fixed; bottom: 0; left: 0; width: 100%; background: white;
+            padding: 1rem; box-shadow: 0 -2px 15px rgba(0,0,0,0.1); box-sizing: border-box; text-align: center; z-index: 100;
+        }
+        .btn-enter {
+            width: 100%; max-width: 580px; padding: 16px; background: var(--primary);
+            color: white; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 800;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .btn-enter:disabled { background: #9ca3af; cursor: not-allowed; }
+        .btn-enter:active { transform: scale(0.98); }
+
+        /* 로그인 모달 */
+        .login-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000;
+            backdrop-filter: blur(2px);
+        }
+        .login-box {
+            background: white; width: 85%; max-width: 320px; padding: 2rem 1.5rem;
+            border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        .login-input {
+            width: 100%; padding: 14px; margin-bottom: 12px; border: 1px solid #d1d5db;
+            border-radius: 8px; font-size: 1rem; box-sizing: border-box; outline: none;
+            transition: border-color 0.2s;
+        }
+        .login-input:focus { border-color: var(--primary); }
+
+        .modal-close-btn {
+            margin-top: 15px; background: none; border: none; color: #666; 
+            cursor: pointer; text-decoration: underline; font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h1 id="election-title">선거 정보를 불러오는 중...</h1>
+        <span id="status-badge" class="status-badge" style="background: #9ca3af;">-</span>
+        <p id="election-period"></p>
+    </header>
+
+    <div class="container">
+        
+        <div class="district-tabs" id="district-tabs">
+            </div>
+
+        <div id="candidate-area" class="candidate-list">
+            <div style="padding: 40px 0; text-align: center; color: #999;">
+                <div class="loader"></div>
+                잠시만 기다려주세요...
+            </div>
+        </div>
+
+        <div id="info-box" style="margin-top: 2rem; padding: 1rem; background: #f0f9ff; border-radius: 8px; font-size: 0.9rem; color: #0c4a6e; border: 1px solid #bae6fd;">
+            ℹ️ <strong>안내:</strong><br>
+            현재는 후보자 정보를 열람할 수 있습니다.<br>
+            투표가 시작되면 하단의 <strong>[투표소 입장]</strong> 버튼이 활성화됩니다.
+        </div>
+    </div>
+
+    <div class="bottom-action">
+        <button id="btn-main-action" class="btn-enter" disabled onclick="openLoginModal()">
+            🔒 투표 준비 중
+        </button>
+    </div>
+
+    <div id="login-modal" class="login-modal">
+        <div class="login-box">
+            <h3 style="margin-top: 0; margin-bottom: 5px;">🗳️ 본인 인증</h3>
+            <p style="font-size: 0.85rem; color: #666; margin-bottom: 1.5rem; line-height: 1.4;">
+                선거인 명부 확인을 위해<br>성함과 전화번호 뒷자리를 입력해주세요.
+            </p>
+            
+            <input type="text" id="input-name" class="login-input" placeholder="이름 (예: 홍길동)">
+            <input type="tel" id="input-phone" class="login-input" placeholder="전화번호 뒷자리 4자리" maxlength="4" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0,4);">
+            
+            <button onclick="processLogin()" id="btn-login-submit" class="btn-enter" style="padding: 12px; margin-top: 5px;">확인</button>
+            <button onclick="closeLoginModal()" class="modal-close-btn">닫기</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { supabase } from './ElectionService.js';
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const electionId = urlParams.get('id');
+        
+        // 전역 데이터 저장소
+        let allCandidates = [];
+        let allDistricts = [];
+        let currentStatus = '';
+
+        // 초기화
+        async function init() {
+            if(!electionId) {
+                alert("잘못된 접근입니다. (선거 ID 없음)");
+                document.body.innerHTML = '<div style="padding:20px; text-align:center;">잘못된 접근입니다.</div>';
+                return;
+            }
+
+            try {
+                await loadElectionInfo();
+                await loadDistrictsAndCandidates();
+            } catch (e) {
+                console.error(e);
+                alert("데이터 로드 중 오류가 발생했습니다.");
+            }
+        }
+
+        // 1. 선거 기본 정보 로드
+        async function loadElectionInfo() {
+            const { data, error } = await supabase
+                .from('elections')
+                .select('*')
+                .eq('id', electionId)
+                .single();
+
+            if (error) throw error;
+            if (!data) throw new Error("선거 정보가 없습니다.");
+
+            currentStatus = data.status;
+
+            // UI 업데이트
+            document.getElementById('election-title').innerText = data.title;
+            
+            const startStr = new Date(data.vote_start_at).toLocaleString();
+            const endStr = new Date(data.vote_end_at).toLocaleString();
+            document.getElementById('election-period').innerText = `투표기간: ${startStr} ~ ${endStr}`;
+
+            const badge = document.getElementById('status-badge');
+            const mainBtn = document.getElementById('btn-main-action');
+
+            // 상태별 버튼 제어
+            if (data.status === 'OPEN') {
+                badge.innerText = "투표 진행 중";
+                badge.style.background = "#16a34a"; // Green
+                
+                mainBtn.innerText = "🗳️ 투표소 입장하기";
+                mainBtn.disabled = false;
+                mainBtn.style.background = "var(--primary)";
+            } else if (data.status === 'CLOSED' || data.status === 'ENDED') {
+                badge.innerText = "투표 종료";
+                badge.style.background = "#dc2626"; // Red
+                
+                mainBtn.innerText = "⛔ 투표가 종료되었습니다";
+                mainBtn.disabled = true;
+            } else {
+                badge.innerText = "준비 중";
+                badge.style.background = "#d97706"; // Orange
+                
+                mainBtn.innerText = "🔒 투표 대기 중";
+                mainBtn.disabled = true;
+            }
+        }
+
+        // 2. 선거구 및 후보자 로드 (조인 쿼리 대신 개별 조회 후 매핑)
+        async function loadDistrictsAndCandidates() {
+            // 2-1. 선거구 로드
+            const { data: districts } = await supabase
+                .from('districts')
+                .select('*')
+                .eq('election_id', electionId)
+                .order('name');
+            allDistricts = districts || [];
+
+            // 2-2. 후보자 로드
+            const { data: candidates } = await supabase
+                .from('candidates')
+                .select('*')
+                .eq('election_id', electionId)
+                .eq('status', 'APPROVED') // 승인된 후보만 표시
+                .order('symbol', { ascending: true }); // 기호순 정렬
+            allCandidates = candidates || [];
+
+            // 2-3. 탭 생성
+            renderTabs();
+
+            // 2-4. 전체 후보자 렌더링
+            renderCandidates('ALL');
+        }
+
+        // 탭 렌더링
+        function renderTabs() {
+            const container = document.getElementById('district-tabs');
+            let html = `<button class="tab-btn active" onclick="filterCandidates('ALL', this)">전체</button>`;
+            
+            allDistricts.forEach(d => {
+                // 비례대표(공통)인 경우 이름을 명확히
+                const name = d.is_common ? '비례/찬반' : d.name;
+                html += `<button class="tab-btn" onclick="filterCandidates('${d.id}', this)">${name}</button>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // 후보자 목록 렌더링 (필터링 지원)
+        window.filterCandidates = (districtId, btnElement) => {
+            // 버튼 활성화 스타일 변경
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btnElement.classList.add('active');
+            renderCandidates(districtId);
+        };
+
+        window.renderCandidates = async (filterDistId) => {
+            const container = document.getElementById('candidate-area');
+            container.innerHTML = '';
+
+            let list = allCandidates;
+            if (filterDistId !== 'ALL') {
+                list = allCandidates.filter(c => c.district_id === filterDistId);
+            }
+
+            if (list.length === 0) {
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
+                return;
+            }
+
+            // 사진 URL 변환을 위한 병렬 처리
+            // (후보자가 많으면 로딩이 걸릴 수 있으나, 보통 조합 선거는 규모가 작으므로 괜찮음)
+            const cardsHtmlPromises = list.map(async c => {
+                const distInfo = allDistricts.find(d => d.id === c.district_id);
+                const distName = distInfo ? (distInfo.is_common ? '비례대표' : distInfo.name) : '-';
+
+                // 사진 URL 처리 (Supabase Public URL 또는 Signed URL)
+                let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+                if (c.photo_url) {
+                    if (c.photo_url.startsWith('http')) {
+                        photoSrc = c.photo_url;
+                    } else {
+                        // Public URL 가져오기 (버킷명이 'candidate_proofs'가 아닐 경우 수정 필요)
+                        // 보안상 Signed URL을 써야 한다면 로직 변경 필요. 여기선 Public 가정.
+                        const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
+                        if(data) photoSrc = data.publicUrl;
+                    }
+                }
+
+                return `
+                    <div class="cand-card">
+                        <img src="${photoSrc}" class="cand-photo" alt="${c.name}">
+                        <div class="cand-info">
+                            <div class="cand-header">
+                                <span class="cand-symbol">${c.symbol || '-'}</span>
+                                <span class="cand-district">${distName}</span>
+                            </div>
+                            <h3 class="cand-name">${c.name}</h3>
+                            <div class="cand-detail">
+                                ${c.manifesto ? c.manifesto.substring(0, 50) + (c.manifesto.length>50?'...':'') : '공약 상세 내용은 클릭하여 확인하세요.'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // 모든 비동기 작업 완료 후 렌더링
+            const cardsHtml = await Promise.all(cardsHtmlPromises);
+            container.innerHTML = cardsHtml.join('');
+        };
+
+        // ============================================================
+        // [핵심 기능] 로그인 및 투표권 검증 로직
+        // ============================================================
+        window.processLogin = async () => {
+            const nameInput = document.getElementById('input-name').value.trim();
+            const phoneInput = document.getElementById('input-phone').value.trim();
+            const btn = document.getElementById('btn-login-submit');
+
+            if (!nameInput || phoneInput.length < 4) {
+                alert("이름과 전화번호 뒷 4자리를 정확히 입력해주세요.");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "확인 중...";
+
+            try {
+                // 1. coop_members에서 이름으로 검색
+                const { data: members, error: memError } = await supabase
+                    .from('coop_members')
+                    .select('member_id, name, phone')
+                    .eq('name', nameInput); // 동명이인 고려하여 list로 받음
+
+                if (memError) throw memError;
+
+                if (!members || members.length === 0) {
+                    alert("일치하는 조합원 정보를 찾을 수 없습니다.\n(이름을 확인해주세요)");
+                    throw new Error("Member not found");
+                }
+
+                // 2. JS에서 전화번호 뒷자리 매칭 (DB 부하 감소 및 유연성)
+                const matchedMember = members.find(m => {
+                    if (!m.phone) return false;
+                    // DB에 저장된 번호의 공백/하이픈 제거 후 뒤 4자리 비교
+                    const cleanPhone = m.phone.replace(/[^0-9]/g, ''); 
+                    return cleanPhone.endsWith(phoneInput);
+                });
+
+                if (!matchedMember) {
+                    alert("전화번호가 일치하지 않습니다.\n(뒷자리를 확인해주세요)");
+                    throw new Error("Phone mismatch");
+                }
+
+                // 3. election_voters에서 투표권 및 투표 여부 확인
+                const { data: voterData, error: voteError } = await supabase
+                    .from('election_voters')
+                    .select('member_no, is_voted, district_id')
+                    .eq('election_id', electionId)
+                    .eq('member_no', matchedMember.member_id)
+                    .limit(1); // 한 선거에 한 사람이 여러 표를 가질 일은 없다고 가정 (있다면 로직 수정 필요)
+
+                // [중요] 비례대표(common) 때문에 row가 2개 나올 수 있음 (지역구 1 + 비례 1)
+                // 하지만 '입장' 자체는 한 번만 하면 되므로, 아무 데이터나 하나 있으면 통과.
+                // 단, is_voted 검사는 '모두' 했는지, '하나라도' 했는지 정책에 따름.
+                // 보통은 '투표소 입장' 시점에는 is_voted가 모두 false여야 함.
+                
+                if (voteError) throw voteError;
+
+                if (!voterData || voterData.length === 0) {
+                    alert("귀하는 이번 선거의 투표 대상자가 아닙니다.\n(선거인 명부를 확인해주세요)");
+                    throw new Error("Not a voter");
+                }
+
+                // 4. 이미 투표했는지 체크 (배열 중 하나라도 true면 투표한 것으로 간주)
+                const hasVoted = voterData.some(v => v.is_voted === true);
+                if (hasVoted) {
+                    alert("이미 투표를 완료하셨습니다.\n(중복 투표 불가)");
+                    throw new Error("Already voted");
+                }
+
+                // 5. 로그인 성공 처리
+                // 세션 스토리지에 인증 정보 저장 (브라우저 닫으면 삭제됨 - 보안 유리)
+                const sessionData = {
+                    memberId: matchedMember.member_id,
+                    memberName: matchedMember.name,
+                    electionId: electionId,
+                    timestamp: new Date().getTime()
+                };
+                sessionStorage.setItem('vote_auth', JSON.stringify(sessionData));
+
+                alert(`${matchedMember.name}님, 인증되었습니다.\n투표소로 이동합니다.`);
+                
+                // 투표 페이지로 이동
+                window.location.href = `vote.html?id=${electionId}`;
+
+            } catch (e) {
+                console.warn(e.message);
+                btn.disabled = false;
+                btn.innerText = "확인";
+            }
+        };
+
+        // 모달 제어
+        window.openLoginModal = () => document.getElementById('login-modal').style.display = 'flex';
+        window.closeLoginModal = () => document.getElementById('login-modal').style.display = 'none';
+
+        // 앱 시작
+        init();
+    </script>
+</body>
+</html>
