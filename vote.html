@@ -138,28 +138,43 @@
     }
 
     // [핵심 변경] 선거 선택 시 로직: 투표할 목록을 큐(Queue)에 담음
-    async function loadElection(election) {
+async function loadElection(election) {
         currentElection = election;
         titleElem.innerText = election.title;
         ballotArea.innerHTML = '<div style="text-align:center; padding:2rem;">투표용지를 확인 중입니다...</div>';
 
         try {
-            // 1. 모든 투표용지(지역구, 비례 등) 가져오기
             const allBallots = await service.getMyBallotList(election.id);
 
-            // 2. 이미 투표한 건 제외하고 "해야 할 투표"만 남김
-            pendingBallots = allBallots.filter(b => !b.hasVoted);
+            // [필터링 로직 수정]
+            // 1. 이미 투표한 것 제외 (!hasVoted)
+            // 2. 무투표 당선인 것 제외 (!isUncontested) -> 투표할 필요 없음
+            pendingBallots = allBallots.filter(b => !b.hasVoted && !b.isUncontested);
 
+            // 투표할 것이 없는 경우 (이미 다 했거나, 무투표 당선이거나)
             if (pendingBallots.length === 0) {
-                // 모두 투표했으면 완료 화면
-                showCompleteScreen();
+                // 무투표 당선 때문에 남은 게 없는지 확인
+                const unvotedButUncontested = allBallots.some(b => !b.hasVoted && b.isUncontested);
+                
+                if (unvotedButUncontested) {
+                    // 무투표 당선 안내
+                    showModal('안내', '해당 선거구는 후보자 수가 선출 인원 이내이므로 무투표 당선 확정되었습니다.\n별도의 투표 절차 없이 종료됩니다.', () => {
+                        showCompleteScreen(true); // true: 무투표 메시지 표시
+                    });
+                } else {
+                    // 일반 완료 안내
+                    showModal('알림', '이미 모든 투표를 완료하셨습니다.', () => {
+                        showCompleteScreen(false);
+                    });
+                }
                 return;
             }
 
-            // 3. 첫 번째 투표용지 로드
+            // 첫 번째 투표용지 로드
             loadNextBallot();
 
         } catch (error) {
+            console.error(error);
             if (error.message.includes('배정되지')) {
                  showModal('알림', `[${election.title}]에는 투표 권한이 없습니다.`, () => initPage());
             } else {
@@ -198,12 +213,18 @@
     }
 
     // 투표용지 내용 그리기 (renderBallot -> renderBallotContent로 이름 변경)
-    function renderBallotContent(info) {
+function renderBallotContent(info) {
         ballotArea.innerHTML = ''; 
 
         if (info.district.vote_type === 'CANDIDATE') {
             const listDiv = document.createElement('div');
             listDiv.className = 'candidate-list';
+
+            // [안전장치] 후보자 투표인데 후보가 0명이면 표시
+            if (!info.candidates || info.candidates.length === 0) {
+                ballotArea.innerHTML = '<div style="text-align:center; padding:3rem; color:#666;">등록된 후보자가 없습니다.</div>';
+                return;
+            }
 
             info.candidates.forEach(cand => {
                 const card = document.createElement('div');
@@ -213,12 +234,20 @@
                 card.innerHTML = `
                     <img src="${imgUrl}" class="candidate-img" alt="${cand.name}">
                     <h3>${cand.name}</h3>
-                    <p style="font-size:0.9rem; color:#666;">기호 ${cand.id.substring(0,4)}...</p>
-                    <button type="button" onclick="window.open('${cand.manifesto || '#'}')" style="margin-top:0.5rem; padding:0.2rem 0.5rem;">공약 보기</button>
+                    <p style="font-size:0.9rem; color:#666;">기호 ${cand.symbol || '-'}번</p>
+                    <button type="button" class="btn-manifesto" style="margin-top:0.5rem; padding:0.2rem 0.5rem; cursor:pointer;">공약 보기</button>
                 `;
                 
+                // 공약 보기 버튼 클릭 이벤트 (버블링 방지)
+                const manifestoBtn = card.querySelector('.btn-manifesto');
+                manifestoBtn.onclick = (e) => {
+                    e.stopPropagation(); 
+                    showManifesto(cand.name, cand.manifesto);
+                };
+
+                // 카드 클릭 이벤트 (후보 선택)
                 card.addEventListener('click', (e) => {
-                    if(e.target.tagName === 'BUTTON') return;
+                    if(e.target === manifestoBtn) return; // 공약 버튼 클릭 시 선택 안 함
                     document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
                     card.classList.add('selected');
                     selectedValue = cand.id;
@@ -230,7 +259,7 @@
             ballotArea.appendChild(listDiv);
 
         } else {
-            // 찬반 투표
+            // [BINARY 타입 - 찬반/추천]
             ballotArea.innerHTML = `
                 <div class="binary-options">
                     <button type="button" class="btn-binary btn-yes" data-val="AGREE">찬성 (O)</button>
