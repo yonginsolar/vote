@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2026 대의원 온라인 투표소</title>
+    <title>용인모두의햇빛협동조합 조합원 투표소</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
 
     <div id="vote-container" class="container">
         <header>
-            <h1 id="election-title">선거 정보 로딩중</h1>
+            <h1 id="election-title">용인모두의햇빛협동조합 조합원 투표소</h1>
             <p id="voter-info" style="color: #666; text-align: center;">회원 확인중...</p>
             <div style="background: #f0fdf4; color: #166534; padding: 0.5rem; text-align: center; border-radius: 4px; margin-top: 0.5rem;">
                 <strong id="district-name">선거구 확인중</strong>
@@ -50,66 +50,34 @@
     </div>
 
  <script type="module">
-        // [수정 1] supabase 클라이언트도 함께 import 해야 합니다 (DB 업데이트용)
         import { ElectionService, supabase } from './ElectionService.js';
         
-        // 서비스 인스턴스 생성
         const service = new ElectionService();
         
-        // 상태 변수
         let currentElection = null;
         let ballotInfo = null;
         let selectedValue = null; 
 
-        // DOM 요소
         const loadingScreen = document.getElementById('loading-screen');
         const voteContainer = document.getElementById('vote-container');
         const completeContainer = document.getElementById('complete-container');
         const ballotArea = document.getElementById('ballot-area');
         const voteBtn = document.getElementById('btn-vote');
 
-        // [수정 2] 초기화 로직에 UUID 동기화 추가
+        // [수정] 불필요한 DB 업데이트 로직을 제거하고, 순수하게 조회만 수행
         async function initPage() {
             try {
-                // 1. 사용자 정보 로드 (Auth 정보)
+                // 1. 사용자 정보 로드
                 const user = await service.initialize();
                 
                 if (!user) {
-                    showModal('로그인 필요', '로그인이 필요합니다. 매직링크를 통해 다시 접속해주세요.', () => {
-                        window.location.href = '/login.html'; 
+                    showModal('로그인 필요', '로그인 정보가 없습니다. 다시 접속해주세요.', () => {
+                        window.close(); 
                     });
                     return;
                 }
 
-                // ---------------------------------------------------------------
-                // [중요] 허수 UUID 방지: 로그인 직후 DB의 UUID를 실제 Auth UUID로 동기화
-                // ---------------------------------------------------------------
-                // (1) coop_members 테이블 동기화
-                const { error: memberError } = await supabase
-                    .from('coop_members')
-                    .update({ id: user.id }) // 실제 Auth UUID로 덮어쓰기
-                    .eq('email', user.email); // 이메일이 같은 사람 찾기
-                
-                if (memberError) console.error("UUID Sync Error (Member):", memberError);
-
-                // (2) election_voters 테이블 동기화 (투표권 연결)
-                // 먼저 문자열 ID(member_id)를 알아냄
-                const { data: memberData } = await supabase
-                    .from('coop_members')
-                    .select('member_id')
-                    .eq('email', user.email)
-                    .single();
-
-                if (memberData) {
-                    const { error: voterError } = await supabase
-                        .from('election_voters')
-                        .update({ member_uuid: user.id }) // 여기도 실제 UUID로
-                        .eq('member_no', memberData.member_id); // 문자열 ID 기준
-
-                    if (voterError) console.error("UUID Sync Error (Voter):", voterError);
-                }
-                // ---------------------------------------------------------------
-
+                // UI에 이름 표시
                 document.getElementById('voter-info').innerText = `${user.name} 조합원님 (${user.member_id})`;
 
                 // 2. 활성 선거 찾기
@@ -118,9 +86,12 @@
                     alertAndClose('현재 진행 중인 선거가 없습니다.');
                     return;
                 }
+                
+                // 제목 업데이트 (기본 제목이 있지만, 선거명으로 덮어씌움)
                 document.getElementById('election-title').innerText = currentElection.title;
 
-                // 3. 내 투표용지 정보 가져오기 (이제 UUID가 맞으므로 조회 성공)
+                // 3. 내 투표용지 정보 가져오기
+                // (UUID가 이미 DB와 일치하므로 바로 조회)
                 ballotInfo = await service.getMyBallotInfo(currentElection.id);
 
                 // 4. 이미 투표했는지 체크
@@ -132,35 +103,31 @@
                 // 5. 화면 그리기
                 renderBallot(ballotInfo);
 
-                // 화면 전환
                 loadingScreen.style.display = 'none';
                 voteContainer.classList.add('active');
 
             } catch (error) {
                 console.error(error);
-                // Ballot 정보를 못 가져온 경우 처리
-                if (error.message.includes('Ballot')) {
-                    alertAndClose('선거인 명부에 귀하의 정보가 없거나, 선거구가 배정되지 않았습니다.\n관리자에게 문의해주세요.');
+                if (error.message.includes('Ballot') || error.message.includes('선거구')) {
+                    alertAndClose('오류: 귀하는 이번 선거(' + (currentElection ? currentElection.title : '확인불가') + ')의 선거구에 배정되지 않았습니다.\n관리자에게 문의해주세요.');
                 } else {
                     alertAndClose('오류 발생: ' + error.message);
                 }
             }
         }
 
-        // [UI 렌더링] 투표 용지 그리기
+        // [이하 renderBallot, 이벤트 리스너, 모달 함수들은 기존 코드 그대로 사용]
         function renderBallot(info) {
             document.getElementById('district-name').innerText = info.district.name;
-            ballotArea.innerHTML = ''; // 초기화
+            ballotArea.innerHTML = ''; 
 
             if (info.district.vote_type === 'CANDIDATE') {
-                // A. 후보자 투표 UI
                 const listDiv = document.createElement('div');
                 listDiv.className = 'candidate-list';
 
                 info.candidates.forEach(cand => {
                     const card = document.createElement('div');
                     card.className = 'candidate-card';
-                    // 이미지 처리 (없으면 기본 이미지)
                     const imgUrl = cand.photo_url || 'https://via.placeholder.com/150?text=No+Image';
                     
                     card.innerHTML = `
@@ -170,14 +137,10 @@
                         <button type="button" onclick="window.open('${cand.manifesto || '#'}')" style="margin-top:0.5rem; padding:0.2rem 0.5rem;">공약 보기</button>
                     `;
                     
-                    // 클릭 이벤트
                     card.addEventListener('click', (e) => {
-                        if(e.target.tagName === 'BUTTON') return; // 공약보기 버튼 클릭 시 선택 방지
-                        
-                        // 기존 선택 해제 및 신규 선택 UI 적용
+                        if(e.target.tagName === 'BUTTON') return;
                         document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
                         card.classList.add('selected');
-                        
                         selectedValue = cand.id;
                         voteBtn.disabled = false;
                         voteBtn.innerText = `'${cand.name}' 후보 선택완료`;
@@ -188,7 +151,6 @@
                 ballotArea.appendChild(listDiv);
 
             } else {
-                // B. 찬반 투표 UI
                 ballotArea.innerHTML = `
                     <div class="binary-options">
                         <button type="button" class="btn-binary btn-yes" data-val="AGREE">찬성 (O)</button>
@@ -196,13 +158,10 @@
                     </div>
                     <p style="text-align:center; margin-top:1rem; color:#666;">안건에 대한 찬성/반대를 선택해주세요.</p>
                 `;
-
-                // 이벤트 위임
                 ballotArea.querySelectorAll('.btn-binary').forEach(btn => {
                     btn.addEventListener('click', () => {
                         ballotArea.querySelectorAll('.btn-binary').forEach(b => b.classList.remove('selected'));
                         btn.classList.add('selected');
-                        
                         selectedValue = btn.dataset.val;
                         voteBtn.disabled = false;
                         voteBtn.innerText = (selectedValue === 'AGREE' ? '찬성' : '반대') + ' 선택완료';
@@ -211,21 +170,17 @@
             }
         }
 
-        // [이벤트] 투표하기 버튼 클릭
         voteBtn.addEventListener('click', () => {
             if (!selectedValue) return;
-
             const msg = ballotInfo.district.vote_type === 'CANDIDATE' 
                 ? "선택하신 후보에게 투표하시겠습니까?" 
                 : "선택하신 내용으로 투표하시겠습니까?";
 
             showConfirm(msg, async () => {
                 try {
-                    // 로딩 표시
                     voteBtn.innerText = '처리중...';
                     voteBtn.disabled = true;
 
-                    // 제출 데이터 구성
                     const payload = {
                         electionId: currentElection.id,
                         districtId: ballotInfo.district_id,
@@ -234,12 +189,8 @@
                         choice: ballotInfo.district.vote_type === 'BINARY' ? selectedValue : null
                     };
 
-                    // 서비스 호출
                     await service.submitVote(payload);
-
-                    // 성공 화면
                     showCompleteScreen();
-
                 } catch (e) {
                     showModal('오류', e.message);
                     voteBtn.disabled = false;
@@ -250,11 +201,10 @@
 
         function showCompleteScreen() {
             loadingScreen.style.display = 'none';
-            voteContainer.style.display = 'none'; // remove 대신 hide
+            voteContainer.style.display = 'none';
             completeContainer.classList.add('active');
         }
 
-        /* --- 모달 유틸리티 (Alert 금지 정책 준수) --- */
         const modalOverlay = document.getElementById('modal-overlay');
         const modalTitle = document.getElementById('modal-title');
         const modalMsg = document.getElementById('modal-msg');
@@ -264,11 +214,9 @@
         function showModal(title, msg, onOk = null) {
             modalTitle.innerText = title;
             modalMsg.innerText = msg;
-            btnCancel.style.display = 'none'; // 알림창은 취소버튼 숨김
+            btnCancel.style.display = 'none';
             btnOk.innerText = '확인';
-            
             modalOverlay.style.display = 'flex';
-            
             btnOk.onclick = () => {
                 modalOverlay.style.display = 'none';
                 if (onOk) onOk();
@@ -280,9 +228,7 @@
             modalMsg.innerText = msg;
             btnCancel.style.display = 'inline-block';
             btnOk.innerText = '네, 투표합니다';
-            
             modalOverlay.style.display = 'flex';
-            
             btnOk.onclick = () => {
                 modalOverlay.style.display = 'none';
                 onConfirm();
@@ -295,12 +241,10 @@
         function alertAndClose(msg) {
             loadingScreen.style.display = 'none';
             showModal('알림', msg, () => {
-                // 창 닫기 시도 (팝업인 경우)
                 window.close(); 
             });
         }
-
-        // 실행
+        
         initPage();
     </script>
 </body>
