@@ -1317,61 +1317,97 @@ window.filterVoterList = () => {
         memberNo: null, 
         currentDistrictId: null 
     };
+// [수정됨] 유권자 상세 정보 모달 열기 (투표 완료 시 수정 잠금 기능 추가)
 window.openVoterInfo = async (memberNo, currentDistrictId) => {
-        // [핵심] 현재 수정하려는 대상의 ID와 '현재 선거구 ID'를 같이 저장
-        targetVoterState = { memberNo: memberNo, currentDistrictId: currentDistrictId };
+    // 상태 저장
+    targetVoterState = { memberNo: memberNo, currentDistrictId: currentDistrictId };
 
-        const modal = document.getElementById('voter-detail-modal');
-        const body = document.getElementById('voter-detail-body');
-        const distSelect = document.getElementById('detail-district-select');
-        
-        body.innerHTML = '정보를 불러오는 중...';
-        modal.style.display = 'flex';
+    const modal = document.getElementById('voter-detail-modal');
+    const body = document.getElementById('voter-detail-body');
+    const distSelect = document.getElementById('detail-district-select');
+    const btnUpdate = document.getElementById('btn-update-district'); // 변경 버튼
+    const btnDelete = document.getElementById('btn-delete-voter');   // 삭제 버튼
+    
+    body.innerHTML = '정보를 불러오는 중...';
+    modal.style.display = 'flex';
 
-        try {
-            // 1. 조합원 상세 정보 조회
-            const { data: member, error } = await supabase
-                .from('coop_members')
-                .select('*')
-                .eq('member_id', memberNo)
-                .single();
+    // 초기화: 버튼과 셀렉트 박스 일단 활성화
+    distSelect.disabled = false;
+    btnUpdate.disabled = false;
+    btnDelete.disabled = false;
+    btnUpdate.innerText = '변경 저장';
+    btnUpdate.className = 'btn btn-primary btn-sm';
 
-            if (error) throw error;
+    try {
+        // 1. 조합원 정보 + UUID 조회
+        const { data: member, error } = await supabase
+            .from('coop_members')
+            .select('*')
+            .eq('member_id', memberNo)
+            .single();
 
-            // 2. 정보 표시
-            body.innerHTML = `
-                <table style="width:100%; border-collapse:collapse;">
-                    <tr><td style="color:#666; width:80px;">이름</td> <td><strong>${member.name}</strong></td></tr>
-                    <tr><td style="color:#666;">연락처</td> <td>${member.phone}</td></tr>
-                    <tr><td style="color:#666;">주소</td> <td>${member.address || '(정보 없음)'}</td></tr>
-                    <tr><td style="color:#666;">상태</td> <td><span class="status-badge" style="background:${member.status === 'active' ? 'green' : 'gray'}">${member.status}</span></td></tr>
-                </table>
+        if (error) throw error;
+
+        // 2. [핵심] 투표 여부 확인 (vote_logs 조회)
+        // member.id는 회원의 UUID입니다.
+        const { count, error: logError } = await supabase
+            .from('vote_logs')
+            .select('*', { count: 'exact', head: true }) // 데이터 없이 개수만 조회
+            .eq('election_id', currentElectionId)
+            .eq('member_uuid', member.id);
+
+        if (logError) throw logError;
+
+        const hasVoted = count > 0; // 0보다 크면 투표한 것임
+
+        // 3. UI 렌더링
+        let alertHtml = '';
+        if (hasVoted) {
+            // 투표한 경우: 경고 메시지 표시 및 UI 잠금 준비
+            alertHtml = `
+                <div style="background:#fff1f2; color:#dc2626; padding:10px; border-radius:6px; margin-bottom:15px; border:1px solid #fecaca; font-weight:bold;">
+                    ⛔ 이미 투표를 완료한 유권자입니다.<br>
+                    <span style="font-size:0.85rem; font-weight:normal;">(선거구 변경 및 명부 삭제가 불가능합니다.)</span>
+                </div>
             `;
-
-            // 3. 선거구 Select 옵션 생성 (비례대표는 변경 대상에서 제외)
-            distSelect.innerHTML = '';
-            districtList.forEach(d => {
-                // 비례대표(is_common)는 수동으로 선택하거나 바꿀 수 없으므로 숨김
-                if (d.is_common) return;
-
-                const opt = document.createElement('option');
-                opt.value = d.id;
-                opt.text = d.name;
-                
-                // 현재 선거구와 일치하면 선택됨
-                if (String(d.id) === String(currentDistrictId)) opt.selected = true;
-                distSelect.appendChild(opt);
-            });
-
-            // 4. 버튼 이벤트 연결
-            document.getElementById('btn-update-district').onclick = updateVoterDistrict;
-            document.getElementById('btn-delete-voter').onclick = deleteVoter;
-
-        } catch (e) {
-            console.error(e);
-            body.innerHTML = `<p style="color:red;">정보 로드 실패: ${e.message}</p>`;
+            
+            // 컨트롤 잠금
+            distSelect.disabled = true;
+            btnUpdate.disabled = true;
+            btnDelete.disabled = true;
+            btnUpdate.innerText = '수정 불가';
+            btnUpdate.className = 'btn btn-outline btn-sm'; // 회색 스타일로 변경
         }
-    };
+
+        body.innerHTML = `
+            ${alertHtml}
+            <table style="width:100%; border-collapse:collapse;">
+                <tr><td style="color:#666; width:80px;">이름</td> <td><strong>${member.name}</strong></td></tr>
+                <tr><td style="color:#666;">연락처</td> <td>${member.phone}</td></tr>
+                <tr><td style="color:#666;">주소</td> <td>${member.address || '(정보 없음)'}</td></tr>
+                <tr><td style="color:#666;">UUID</td> <td style="font-size:0.8rem; color:#999;">${member.id}</td></tr> </table>
+        `;
+
+        // 4. 선거구 Select 옵션 생성
+        distSelect.innerHTML = '';
+        districtList.forEach(d => {
+            if (d.is_common) return; // 비례대표 제외
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.text = d.name;
+            if (String(d.id) === String(currentDistrictId)) opt.selected = true;
+            distSelect.appendChild(opt);
+        });
+
+        // 이벤트 연결
+        btnUpdate.onclick = updateVoterDistrict;
+        btnDelete.onclick = deleteVoter;
+
+    } catch (e) {
+        console.error(e);
+        body.innerHTML = `<p style="color:red;">정보 로드 실패: ${e.message}</p>`;
+    }
+};
 
     window.closeVoterDetailModal = () => {
         document.getElementById('voter-detail-modal').style.display = 'none';
@@ -1379,52 +1415,66 @@ window.openVoterInfo = async (memberNo, currentDistrictId) => {
     };
 
 // [수정됨] 선거구 변경 (Update Conflict 해결 및 이메일 로깅)
-    async function updateVoterDistrict() {
-        // 저장해둔 상태값 가져오기
-        const { memberNo, currentDistrictId } = targetVoterState;
-        
-        if (!memberNo || !currentDistrictId) {
-            alert("수정할 대상 정보가 없습니다.");
-            return;
-        }
+// [수정됨] 선거구 변경 실행 (투표 여부 더블 체크 포함)
+async function updateVoterDistrict() {
+    const { memberNo, currentDistrictId } = targetVoterState;
+    if (!memberNo || !currentDistrictId) return;
 
-        const newDistrictId = document.getElementById('detail-district-select').value;
-        
-        // 변경된 게 없으면 중단
-        if (String(newDistrictId) === String(currentDistrictId)) {
-            alert("변경된 사항이 없습니다.");
-            return;
-        }
-
-        if (!confirm('선거구를 변경하시겠습니까?')) return;
-
-        try {
-            // [핵심] district_id 조건 추가 (동명이인이나 중복 데이터 방지)
-            const { error } = await supabase
-                .from('election_voters')
-                .update({ district_id: newDistrictId })
-                .eq('election_id', currentElectionId)
-                .eq('member_no', memberNo)
-                .eq('district_id', currentDistrictId); 
-
-            if (error) throw error;
-
-            alert('변경되었습니다.');
-            
-            // 모달 닫기 및 초기화
-            document.getElementById('voter-detail-modal').style.display = 'none';
-            window.closeModal(); // 뒤에 있는 리스트 모달도 닫기
-            loadVoterStats(); // 전체 명부 새로고침
-            
-            // [수정] 로그에 작업자 이메일 포함
-            await service.logAction(currentElectionId, 'VOTER_UPDATE', `유권자(${memberNo}) 선거구 변경 (작업자: ${currentUserEmail})`);
-            loadLogs();
-
-        } catch (e) {
-            console.error(e);
-            alert('변경 실패: ' + e.message);
-        }
+    const newDistrictId = document.getElementById('detail-district-select').value;
+    if (String(newDistrictId) === String(currentDistrictId)) {
+        alert("변경된 사항이 없습니다.");
+        return;
     }
+
+    if (!confirm('선거구를 변경하시겠습니까?')) return;
+
+    try {
+        // [안전장치] 변경 전, 투표 여부를 다시 확인 (Backend Guard)
+        // 1. member_no로 member_uuid 찾기
+        const { data: memData } = await supabase
+            .from('coop_members')
+            .select('id')
+            .eq('member_id', memberNo)
+            .single();
+
+        if (memData) {
+            const { count } = await supabase
+                .from('vote_logs')
+                .select('*', { count: 'exact', head: true })
+                .eq('election_id', currentElectionId)
+                .eq('member_uuid', memData.id);
+
+            if (count > 0) {
+                alert("⛔ 오류: 이미 투표를 완료한 사용자는 수정할 수 없습니다.");
+                window.openVoterInfo(memberNo, currentDistrictId); // 모달 상태 새로고침 (잠금 처리됨)
+                return;
+            }
+        }
+
+        // 2. 실제 업데이트 실행
+        const { error } = await supabase
+            .from('election_voters')
+            .update({ district_id: newDistrictId })
+            .eq('election_id', currentElectionId)
+            .eq('member_no', memberNo)
+            .eq('district_id', currentDistrictId);
+
+        if (error) throw error;
+
+        alert('변경되었습니다.');
+        
+        document.getElementById('voter-detail-modal').style.display = 'none';
+        window.closeModal(); // 리스트 모달 닫기
+        loadVoterStats(); // 전체 현황 갱신
+        
+        await service.logAction(currentElectionId, 'VOTER_UPDATE', `유권자(${memberNo}) 선거구 변경 (작업자: ${currentUserEmail})`);
+        loadLogs();
+
+    } catch (e) {
+        console.error(e);
+        alert('변경 실패: ' + e.message);
+    }
+}
 
 // [수정됨] 명부 삭제 (비례 포함 전체 삭제 및 이메일 로깅)
     async function deleteVoter() {
