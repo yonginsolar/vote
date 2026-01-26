@@ -5,6 +5,155 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>용인모두의햇빛협동조합 조합원 투표소</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        
+        :root {
+    --primary-color: #2563eb; /* 모던한 블루 */
+    --primary-hover: #1d4ed8;
+    --success-color: #059669; /* 세련된 그린 */
+    --danger-color: #dc2626;
+    --bg-light: #f3f4f6;
+    --text-dark: #1f2937;
+    --text-gray: #6b7280;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+}
+
+* { box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: var(--bg-light);
+    color: var(--text-dark);
+    line-height: 1.5;
+}
+
+/* 컨테이너 디자인 개선 */
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 2rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    display: none; /* 초기엔 숨김 */
+}
+.container.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+header { text-align: center; margin-bottom: 2.5rem; }
+h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
+#district-name-box { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 0.5rem 1.5rem; border-radius: 2rem; font-weight: 600; margin-top: 1rem; }
+
+/* 후보자 리스트 그리드 */
+.candidate-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* 반응형 그리드 */
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* 후보자 카드 모던 디자인 */
+.candidate-card {
+    background: #fff;
+    border: 2px solid transparent;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+}
+.candidate-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.candidate-card.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2); /* 강조 효과 */
+}
+
+/* [중요] 사진 원본 비율 유지 및 크기 확대 */
+.candidate-img {
+    width: 100%;
+    height: 280px; /* 사진 영역 높이 고정 */
+    object-fit: contain; /* 사진이 잘리지 않고 전체가 다 보이도록 설정 */
+    background-color: #f9fafb; /* 빈 공간은 연한 회색 처리 */
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.card-content { padding: 1.5rem; text-align: center; flex-grow: 1; display: flex; flex-direction: column; }
+.card-content h3 { margin: 0.5rem 0; font-size: 1.3rem; }
+.card-content p { color: var(--text-gray); margin-bottom: 1rem; }
+
+/* 공약 보기 버튼 */
+.btn-manifesto {
+    margin-top: auto; /* 카드 하단으로 밀기 */
+    background: #fff;
+    border: 1px solid var(--text-gray);
+    color: var(--text-dark);
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background 0.2s;
+    width: 100%;
+    font-weight: 500;
+}
+.btn-manifesto:hover { background: var(--bg-light); }
+
+/* 찬반 투표 버튼 */
+.binary-options { display: flex; gap: 1rem; margin: 2rem 0; }
+.btn-binary {
+    flex: 1; padding: 1.5rem; font-size: 1.2rem; border: 2px solid #e5e7eb;
+    background: #fff; border-radius: var(--radius-lg); cursor: pointer; font-weight: bold; transition: all 0.2s;
+    color: var(--text-gray);
+}
+.btn-binary.btn-yes.selected { background: #ecfdf5; border-color: var(--success-color); color: var(--success-color); }
+.btn-binary.btn-no.selected { background: #fef2f2; border-color: var(--danger-color); color: var(--danger-color); }
+
+/* 하단 액션 영역 */
+.action-area { text-align: center; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb; }
+.btn-submit {
+    background: var(--primary-color); color: white; border: none; padding: 1rem 3rem;
+    font-size: 1.1rem; border-radius: 2rem; cursor: pointer; font-weight: bold;
+    box-shadow: var(--shadow-md); transition: background 0.2s; width: 100%; max-width: 400px;
+}
+.btn-submit:hover { background: var(--primary-hover); }
+.btn-submit:disabled { background: #9ca3af; cursor: not-allowed; box-shadow: none; }
+
+/* 모달 공통 스타일 */
+.modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); /* 배경 블러 효과 */
+    justify-content: center; align-items: center; z-index: 1000;
+}
+.modal-content {
+    background: white; padding: 0; border-radius: var(--radius-lg);
+    width: 90%; max-width: 500px; box-shadow: var(--shadow-lg); overflow: hidden;
+    animation: slideUp 0.3s ease-out;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.modal-header { padding: 1.5rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+.modal-header h3 { margin: 0; font-size: 1.2rem; }
+.btn-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-gray); }
+.modal-body { padding: 1.5rem; max-height: 60vh; overflow-y: auto; line-height: 1.7; color: var(--text-dark); white-space: pre-wrap; }
+.modal-footer { padding: 1rem 1.5rem; background: var(--bg-light); text-align: right; border-top: 1px solid #e5e7eb; }
+
+.btn-modal {
+    padding: 0.7rem 1.5rem; border: 1px solid #d1d5db; background: white;
+    border-radius: var(--radius-md); cursor: pointer; font-weight: 500; transition: background 0.2s;
+}
+.btn-modal:hover { background: var(--bg-light); }
+.btn-confirm { background: var(--primary-color); color: white; border: none; margin-left: 0.5rem; }
+.btn-confirm:hover { background: var(--primary-hover); }
+
+/* 공약 모달 특화 */
+.manifesto-content { max-width: 700px; } /* 공약 모달은 좀 더 넓게 */
+#manifesto-body img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
+    </style>
 </head>
 <body>
 
@@ -58,6 +207,22 @@
             </div>
         </div>
     </div>
+    <div id="manifesto-modal" class="modal-overlay" style="z-index: 2000;">
+        <div class="modal-content manifesto-content">
+            <div class="modal-header">
+                <h3 id="manifesto-title">공약 보기</h3>
+                <button onclick="document.getElementById('manifesto-modal').style.display='none'" class="btn-close">&times;</button>
+            </div>
+            <div id="manifesto-body" class="modal-body">
+                </div>
+             <div class="modal-footer">
+                <button onclick="document.getElementById('manifesto-modal').style.display='none'" class="btn-modal">닫기</button>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+// ... 스크립트 시작 ...
 
 <script type="module">
     import { ElectionService, supabase } from './ElectionService.js';
@@ -213,21 +378,16 @@ function loadNextBallot() {
     } // End of loadNextBallot
 
     // 투표용지 내용 그리기 (renderBallot -> renderBallotContent로 이름 변경)
-function renderBallotContent(info) {
+// [수정된 함수] 공약 보기 모달 적용 및 카드 구조 변경
+    function renderBallotContent(info) {
         ballotArea.innerHTML = ''; 
 
-        // [수정] 무투표 당선일 경우 상단에 안내 메시지 표시
+        // 무투표 당선 안내 (기존 코드 유지)
         if (info.isUncontested) {
+            // ... (이전 단계에서 드린 무투표 안내 HTML 코드 그대로 유지) ...
             const noticeDiv = document.createElement('div');
             noticeDiv.style.cssText = 'background:#f0fdf4; padding:1rem; margin-bottom:1rem; border-radius:8px; text-align:center; color:#166534; border:1px solid #bbf7d0;';
-            noticeDiv.innerHTML = `
-                <strong style="font-size:1.1rem;">🎉 무투표 당선 안내</strong><br>
-                <span style="font-size:0.9rem; color:#374151;">
-                    후보자 수(${info.candidates.length}명)가 선출 인원(${info.district.quota}명) 이내이므로<br>
-                    투표 절차 없이 당선이 확정되었습니다.<br>
-                    아래 후보자를 확인하시고 <strong>[확인]</strong> 버튼을 눌러주세요.
-                </span>
-            `;
+            noticeDiv.innerHTML = `<strong style="font-size:1.1rem;">🎉 무투표 당선 안내</strong><br><span style="font-size:0.9rem; color:#374151;">후보자 수(${info.candidates.length}명)가 선출 인원(${info.district.quota}명) 이내이므로<br>투표 절차 없이 당선이 확정되었습니다.<br>아래 후보자를 확인하시고 <strong>[확인]</strong> 버튼을 눌러주세요.</span>`;
             ballotArea.appendChild(noticeDiv);
         }
 
@@ -244,31 +404,32 @@ function renderBallotContent(info) {
                 const card = document.createElement('div');
                 card.className = 'candidate-card';
                 
-                // [수정] 무투표일 경우 카드 스타일 변경 (선택된 느낌)
                 if (info.isUncontested) {
-                    card.style.cursor = 'default'; // 클릭 커서 제거
-                    card.style.borderColor = '#22c55e'; // 초록색 테두리
-                    card.style.backgroundColor = '#f0fdf4'; // 연한 초록 배경
+                    card.style.cursor = 'default';
+                    card.style.borderColor = '#22c55e';
+                    card.style.backgroundColor = '#f0fdf4';
                     card.style.boxShadow = 'none';
                 }
 
                 const imgUrl = cand.photo_url || 'https://via.placeholder.com/150?text=No+Image';
                 
+                // [HTML 구조 변경] 사진과 내용을 분리하고 공약 버튼에 클래스 추가
                 card.innerHTML = `
                     <img src="${imgUrl}" class="candidate-img" alt="${cand.name}">
-                    <h3>${cand.name}</h3>
-                    <p style="font-size:0.9rem; color:#666;">기호 ${cand.symbol || '-'}번</p>
-                    <button type="button" class="btn-manifesto" style="margin-top:0.5rem; padding:0.2rem 0.5rem; cursor:pointer;">공약 보기</button>
+                    <div class="card-content">
+                        <h3>${cand.name}</h3>
+                        <p>기호 ${cand.symbol || '-'}번</p>
+                        <button type="button" class="btn-manifesto">공약 보기</button>
+                    </div>
                 `;
                 
-                // 공약 보기 버튼 이벤트
+                // [중요 변경점] 공약 보기 클릭 시 모달 띄우기
                 const manifestoBtn = card.querySelector('.btn-manifesto');
                 manifestoBtn.onclick = (e) => {
-                    e.stopPropagation(); 
-                    showManifesto(cand.name, cand.manifesto);
+                    e.stopPropagation(); // 카드 선택 방지
+                    showManifesto(cand.name, cand.manifesto); // 모달 호출 함수 실행
                 };
 
-                // [수정] 무투표 당선이 '아닐 때만' 선택 기능 활성화
                 if (!info.isUncontested) {
                     card.addEventListener('click', (e) => {
                         if(e.target === manifestoBtn) return;
@@ -285,8 +446,8 @@ function renderBallotContent(info) {
             ballotArea.appendChild(listDiv);
 
         } else {
-            // [기존 코드 유지] 찬반 투표 (BINARY)
-            ballotArea.innerHTML = `
+            // (찬반 투표 로직은 기존과 동일)
+             ballotArea.innerHTML = `
                 <div class="binary-options">
                     <button type="button" class="btn-binary btn-yes" data-val="AGREE">찬성 (O)</button>
                     <button type="button" class="btn-binary btn-no" data-val="DISAGREE">반대 (X)</button>
@@ -303,7 +464,7 @@ function renderBallotContent(info) {
                 });
             });
         }
-    } // End of renderBallotContent
+    }
 
     // 버튼 클릭 이벤트
 voteBtn.addEventListener('click', () => {
