@@ -5,24 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>용인모두의햇빛협동조합 조합원 투표소</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        
-        :root {
-    --primary-color: #2563eb; /* 모던한 블루 */
+   <style>
+/* =========================================
+   1. 기본 설정 (Variables & Reset)
+   ========================================= */
+:root {
+    --primary-color: #2563eb;
     --primary-hover: #1d4ed8;
-    --success-color: #059669; /* 세련된 그린 */
+    --success-color: #059669;
     --danger-color: #dc2626;
     --bg-light: #f3f4f6;
     --text-dark: #1f2937;
     --text-gray: #6b7280;
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --radius-md: 0.5rem;
     --radius-lg: 0.75rem;
 }
 
 * { box-sizing: border-box; }
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     margin: 0;
@@ -31,90 +32,15 @@ body {
     color: var(--text-dark);
     line-height: 1.5;
 }
-  
-/* [수정 1] 하단 버튼 영역: 가로로 꽉 채우거나 중앙 정렬 */
-.action-area {
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #e5e7eb;
-    display: flex;
-    justify-content: center; /* 중앙 정렬 */
-    align-items: center;
-    width: 100%;
+
+header { text-align: center; margin-bottom: 2.5rem; }
+h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
+#district-name-box { 
+    display: inline-block; background: #e0f2fe; color: #0369a1; 
+    padding: 0.5rem 1.5rem; border-radius: 2rem; font-weight: 600; margin-top: 1rem; 
 }
 
-/* [수정 2] 버튼 크기 조정 (모바일 친화적) */
-.btn-submit {
-    width: 100%;           /* 가로로 꽉 채우기 */
-    max-width: 100%;       /* 모바일 꽉 채움 */
-    /* PC에서 너무 넓으면 max-width: 500px; 등으로 조절 가능 */
-    margin: 0 auto;
-    display: block;
-    box-sizing: border-box; /* 패딩 포함 크기 계산 */
-}
-/* [수정] 무투표 당선 확인 버튼: 둥글고 입체감 있는 모던 스타일 */
-.btn-uncontested {
-    background: linear-gradient(135deg, #10b981 0%, #047857 100%); /* 고급스러운 녹색 그라데이션 */
-    color: white;
-    border: none;
-    padding: 1rem 2rem;
-    font-size: 1.1rem;
-    border-radius: 50px; /* 완전 둥근 캡슐형 */
-    cursor: pointer;
-    font-weight: 800;
-    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); /* 부드러운 빛번짐 그림자 */
-    transition: all 0.2s ease;
-    width: 100%;
-    max-width: 400px; /* 너무 길어지지 않게 제한 */
-    display: block;
-    margin: 0 auto;   /* 중앙 정렬 */
-    letter-spacing: -0.5px;
-}
-
-.btn-uncontested:hover {
-    transform: translateY(-2px); /* 살짝 떠오르는 효과 */
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
-    filter: brightness(1.1);
-}
-
-.btn-uncontested:active {
-    transform: translateY(1px);
-    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
-}
-
-/* [수정 3] 모달 내용 여백 확보 (답답함 해소) */
-.modal-body {
-    padding: 1.5rem 1.5rem 3rem 1.5rem; /* 하단 패딩을 3rem으로 늘림 */
-    max-height: 70vh;      /* 높이도 조금 더 확보 */
-    overflow-y: auto;
-    line-height: 1.7;
-    color: var(--text-dark);
-    white-space: pre-wrap;
-}
-
-/* [추가] 후보자 정보 테이블 스타일 (공약 모달용) */
-.profile-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1.5rem;
-    font-size: 0.95rem;
-}
-.profile-table th {
-    text-align: left;
-    padding: 0.8rem 0.5rem;
-    background: #f9fafb;
-    border-bottom: 1px solid #e5e7eb;
-    width: 90px; /* 라벨 너비 고정 */
-    color: #6b7280;
-    font-weight: 600;
-}
-.profile-table td {
-    padding: 0.8rem 0.5rem;
-    border-bottom: 1px solid #e5e7eb;
-    color: #1f2937;
-}
-
-/* 컨테이너 디자인 개선 */
+/* 컨테이너 */
 .container {
     max-width: 800px;
     margin: 0 auto;
@@ -122,73 +48,72 @@ body {
     padding: 2rem;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
-    display: none; /* 초기엔 숨김 */
+    display: none;
 }
 .container.active { display: block; animation: fadeIn 0.3s ease-in-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-header { text-align: center; margin-bottom: 2.5rem; }
-h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
-#district-name-box { display: inline-block; background: #e0f2fe; color: #0369a1; padding: 0.5rem 1.5rem; border-radius: 2rem; font-weight: 600; margin-top: 1rem; }
 
-/* 후보자 리스트 그리드 */
+/* =========================================
+   2. 후보자 리스트 & 카드 디자인
+   ========================================= */
 .candidate-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* 반응형 그리드 */
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
 }
 
-/* 후보자 카드 모던 디자인 */
-/* [수정 1] 후보자 카드 디자인 강화 (테두리 + 그림자) */
 .candidate-card {
     background: #fff;
-    border: 1px solid #e5e7eb; /* 연한 테두리 추가 */
+    border: 1px solid #e5e7eb;
     border-radius: var(--radius-lg);
     overflow: hidden;
-    /* 그림자를 더 진하게 수정하여 잘 보이게 함 */
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     transition: all 0.2s ease;
     cursor: pointer;
     display: flex;
     flex-direction: column;
 }
+
 .candidate-card:hover {
     border-color: var(--primary-color);
-    /* 마우스 올렸을 때 더 떠오르는 효과 */
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.1); 
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15); 
     transform: translateY(-3px);
 }
 
-/* [수정 2] 무투표 당선 확인 버튼 디자인 (모던 스타일) */
-
-
 .candidate-card.selected {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2); /* 강조 효과 */
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2);
 }
 
-/* [중요] 사진 원본 비율 유지 및 크기 확대 */
 .candidate-img {
     width: 100%;
-    height: 280px; /* 사진 영역 높이 고정 */
-    object-fit: contain; /* 사진이 잘리지 않고 전체가 다 보이도록 설정 */
-    background-color: #f9fafb; /* 빈 공간은 연한 회색 처리 */
+    height: 280px;
+    object-fit: contain;
+    background-color: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
 }
 
-.card-content { padding: 1.5rem; text-align: center; flex-grow: 1; display: flex; flex-direction: column; }
+.card-content { 
+    padding: 1.5rem; text-align: center; flex-grow: 1; 
+    display: flex; flex-direction: column; 
+}
 .card-content h3 { margin: 0.5rem 0; font-size: 1.3rem; }
 .card-content p { color: var(--text-gray); margin-bottom: 1rem; }
 
+
+/* =========================================
+   3. 버튼 스타일 (Buttons)
+   ========================================= */
 /* 공약 보기 버튼 */
 .btn-manifesto {
-    margin-top: auto; /* 카드 하단으로 밀기 */
+    margin-top: auto;
     background: #fff;
     border: 1px solid var(--text-gray);
     color: var(--text-dark);
     padding: 0.5rem 1rem;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     cursor: pointer;
     transition: background 0.2s;
     width: 100%;
@@ -207,118 +132,126 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 .btn-binary.btn-no.selected { background: #fef2f2; border-color: var(--danger-color); color: var(--danger-color); }
 
 /* 하단 액션 영역 */
+.action-area {
+    margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;
+    display: flex; justify-content: center; align-items: center; width: 100%;
+}
 
-
+/* 투표하기 버튼 */
+.btn-submit {
+    width: 100%; max-width: 100%; margin: 0 auto; display: block;
+    background: var(--primary-color); color: white; border: none; padding: 1rem 3rem;
+    font-size: 1.1rem; border-radius: 2rem; cursor: pointer; font-weight: bold;
+    box-shadow: var(--shadow-md); transition: background 0.2s;
+}
 .btn-submit:hover { background: var(--primary-hover); }
 .btn-submit:disabled { background: #9ca3af; cursor: not-allowed; box-shadow: none; }
 
-/* 모달 공통 스타일 */
+/* 무투표 당선 버튼 */
+.btn-uncontested {
+    background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+    color: white; border: none; padding: 1rem 2rem; font-size: 1.1rem;
+    border-radius: 50px; cursor: pointer; font-weight: 800;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+    transition: all 0.2s ease;
+    width: 100%; max-width: 400px; display: block; margin: 0 auto;
+}
+.btn-uncontested:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5); filter: brightness(1.1); }
+.btn-uncontested:active { transform: translateY(1px); box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3); }
+
+
+/* =========================================
+   4. 모달 스타일 (Modals) - 충돌 해결됨
+   ========================================= */
 .modal-overlay {
     display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); /* 배경 블러 효과 */
+    background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);
     justify-content: center; align-items: center; z-index: 1000;
 }
-/* [수정] 모달 컨텐츠 박스: 하단 여백 확보 */
+
+/* 기본 모달 박스 (알림창 등) */
 .modal-content {
-    background: white; 
-    padding: 0; 
-    border-radius: 16px; /* 모서리를 더 둥글게 */
-    width: 90%; 
-    max-width: 400px; /* 알림창은 너무 넓지 않게 */
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    overflow: hidden; /* 내부 넘침 방지 */
-    animation: slideUp 0.3s ease-out;
-    display: flex;        /* 내부 요소 정렬을 위해 Flex 사용 */
-    flex-direction: column;
+    background: white; padding: 0; border-radius: 16px;
+    width: 90%; max-width: 400px; /* 기본은 좁게 */
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    overflow: hidden; animation: slideUp 0.3s ease-out;
+    display: flex; flex-direction: column;
 }
 
-/* [수정] 모달 메시지 영역 */
+/* 공약 모달용 넓은 박스 (덮어쓰기) */
+.manifesto-content { 
+    max-width: 700px !important; /* 공약은 넓게 */
+    height: auto; max-height: 85vh; 
+}
+
+/* 모달 내부 스크롤 영역 */
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    max-height: 70vh;
+    color: var(--text-dark);
+}
+
+/* 알림창 메시지 (줄바꿈 허용) */
 #modal-msg {
-    padding: 2rem 1.5rem 1rem 1.5rem; /* 상단 여백 넉넉히 */
-    margin: 0;
-    font-size: 1rem;
-    color: #374151;
-    line-height: 1.6;
-    text-align: center;
-    white-space: pre-wrap; /* 줄바꿈 적용 */
+    padding: 2rem 1.5rem 1rem 1.5rem;
+    text-align: center; white-space: pre-wrap; margin: 0;
 }
 
-/* [핵심 수정] 모달 버튼 영역: 하단 패딩을 줘서 버튼을 위로 띄움 */
+/* 알림창 버튼 영역 */
 .modal-buttons {
-    padding: 0 1.5rem 2rem 1.5rem; /* 하단(3번째 값)에 2rem(약 32px) 여백 추가 */
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    width: 100%;
-    box-sizing: border-box;
+    padding: 0 1.5rem 2rem 1.5rem;
+    display: flex; gap: 10px; justify-content: center; width: 100%;
 }
-
-/* 모달 버튼 스타일 (확인/취소) */
 .modal-buttons button {
-    flex: 1; /* 버튼끼리 너비 똑같이 */
-    padding: 12px 0;
-    border-radius: 12px;
-    font-size: 1rem;
-    font-weight: 600;
+    flex: 1; padding: 12px 0; border-radius: 12px; font-size: 1rem; font-weight: 600;
 }
-@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 .modal-header { padding: 1.5rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
 .modal-header h3 { margin: 0; font-size: 1.2rem; }
 .btn-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-gray); }
 
 .modal-footer { padding: 1rem 1.5rem; background: var(--bg-light); text-align: right; border-top: 1px solid #e5e7eb; }
+.btn-modal { padding: 0.7rem 1.5rem; border: 1px solid #d1d5db; background: white; border-radius: var(--radius-lg); cursor: pointer; font-weight: 500; }
+.btn-confirm { background: var(--primary-color); color: white; border: none; }
 
-.btn-modal {
-    padding: 0.7rem 1.5rem; border: 1px solid #d1d5db; background: white;
-    border-radius: var(--radius-md); cursor: pointer; font-weight: 500; transition: background 0.2s;
+
+/* =========================================
+   5. 공약 모달 내부 디자인 (깨짐 방지)
+   ========================================= */
+/* 프로필 테이블 */
+.profile-table {
+    width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 0.95rem;
 }
-.btn-modal:hover { background: var(--bg-light); }
-.btn-confirm { background: var(--primary-color); color: white; border: none; margin-left: 0.5rem; }
-.btn-confirm:hover { background: var(--primary-hover); }
+.profile-table th {
+    text-align: left; padding: 0.8rem 0.5rem; background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb; width: 90px; color: #6b7280; font-weight: 600;
+}
+.profile-table td {
+    padding: 0.8rem 0.5rem; border-bottom: 1px solid #e5e7eb; color: #1f2937;
+}
 
-/* 공약 모달 특화 */
-.manifesto-content { max-width: 700px; } /* 공약 모달은 좀 더 넓게 */
-#manifesto-body img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
-
-        /* [신규] 공약 내용을 감싸는 통합 박스 */
+/* 공약 박스 */
 .manifesto-box {
-    background-color: #f8fafc; /* 아주 연한 회색/블루톤 */
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;       /* 둥근 모서리 */
-    padding: 1.5rem;           /* 내부 여백 넉넉히 */
-    margin-top: 1.5rem;        /* 프로필 테이블과의 거리 */
-    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.03); /* 안쪽으로 살짝 그림자 */
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 1.5rem; margin-top: 1.5rem;
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.03);
 }
 
-/* 박스 내부 제목 스타일 */
 .manifesto-title {
-    font-size: 1.1rem;
-    font-weight: 800;
-    color: #2563eb;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #e2e8f0; /* 제목 아래 밑줄 */
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-size: 1.1rem; font-weight: 800; color: #2563eb;
+    margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #e2e8f0;
+    display: flex; align-items: center; gap: 8px;
 }
 
-/* 박스 내부 텍스트 스타일 */
 .manifesto-text {
-    font-size: 0.95rem;
-    line-height: 1.7;
-    color: #334155;
+    font-size: 0.95rem; line-height: 1.7; color: #334155;
     white-space: pre-wrap; /* 줄바꿈 유지 */
 }
 
-/* 모달 내용 여백 최적화 (기존 것 덮어쓰기) */
-.modal-body {
-    padding: 1.5rem; /* 상하좌우 동일하게 */
-    overflow-y: auto;
-    max-height: 70vh; /* 높이 제한 */
-}
-    </style>
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+</style>
 </head>
 <body>
 
