@@ -158,87 +158,6 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 }
 .btn-uncontested:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5); filter: brightness(1.1); }
 .btn-uncontested:active { transform: translateY(1px); box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3); }
-
-
-/* =========================================
-   4. 모달 스타일 (Modals) - 충돌 해결됨
-   ========================================= */
-.modal-overlay {
-    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);
-    justify-content: center; align-items: center; z-index: 1000;
-}
-
-/* 기본 모달 박스 (알림창 등) */
-.modal-content {
-    background: white; padding: 0; border-radius: 16px;
-    width: 90%; max-width: 400px; /* 기본은 좁게 */
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-    overflow: hidden; animation: slideUp 0.3s ease-out;
-    display: flex; flex-direction: column;
-}
-
-/* 공약 모달용 넓은 박스 (덮어쓰기) */
-.manifesto-content { 
-    max-width: 700px !important; /* 공약은 넓게 */
-    height: auto; max-height: 85vh; 
-}
-
-/* 모달 내부 스크롤 영역 */
-.modal-body {
-    padding: 1.5rem;
-    overflow-y: auto;
-    max-height: 70vh;
-    color: var(--text-dark);
-}
-
-/* 알림창 메시지 (줄바꿈 허용) */
-#modal-msg {
-    padding: 2rem 1.5rem 1rem 1.5rem;
-    text-align: center; white-space: pre-wrap; margin: 0;
-}
-
-/* 알림창 버튼 영역 */
-.modal-buttons {
-    padding: 0 1.5rem 2rem 1.5rem;
-    display: flex; gap: 10px; justify-content: center; width: 100%;
-}
-.modal-buttons button {
-    flex: 1; padding: 12px 0; border-radius: 12px; font-size: 1rem; font-weight: 600;
-}
-
-.modal-header { padding: 1.5rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
-.modal-header h3 { margin: 0; font-size: 1.2rem; }
-.btn-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-gray); }
-
-.modal-footer { padding: 1rem 1.5rem; background: var(--bg-light); text-align: right; border-top: 1px solid #e5e7eb; }
-.btn-modal { padding: 0.7rem 1.5rem; border: 1px solid #d1d5db; background: white; border-radius: var(--radius-lg); cursor: pointer; font-weight: 500; }
-.btn-confirm { background: var(--primary-color); color: white; border: none; }
-
-
-/* =========================================
-   5. 공약 모달 내부 디자인 (깨짐 방지)
-   ========================================= */
-/* 프로필 테이블 */
-.profile-table {
-    width: 100%; border-collapse: collapse; margin-bottom: 0; font-size: 0.95rem;
-}
-.profile-table th {
-    text-align: left; padding: 0.8rem 0.5rem; background: #f9fafb;
-    border-bottom: 1px solid #e5e7eb; width: 90px; color: #6b7280; font-weight: 600;
-}
-.profile-table td {
-    padding: 0.8rem 0.5rem; border-bottom: 1px solid #e5e7eb; color: #1f2937;
-}
-
-/* 공약 박스 */
-.manifesto-box {
-    background-color: #f8fafc;
-    border: 1px solid #e2e8f0; border-radius: 12px;
-    padding: 1.5rem; margin-top: 1.5rem;
-    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.03);
-}
-
 .manifesto-title {
     font-size: 1.1rem; font-weight: 800; color: #2563eb;
     margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #e2e8f0;
@@ -251,6 +170,152 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 }
 
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+       /* =================================================================
+   [제로베이스 리뉴얼] 공약 보기 모달 전용 스타일
+   ================================================================= */
+
+/* 1. 모달 배경 (Overlay) */
+.modal-overlay {
+    display: none; /* JS로 제어 */
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); /* 짙은 반투명 */
+    backdrop-filter: blur(4px); /* 배경 블러 처리 */
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 2. 모달 컨텐츠 박스 (뼈대) */
+.modal-content {
+    background: #fff;
+    width: 90%;
+    max-width: 600px; /* 공약 보기는 넓게 */
+    height: 85vh;     /* 화면 높이의 85% 차지 */
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    display: flex;    /* Flexbox로 상/중/하 분리 */
+    flex-direction: column;
+    overflow: hidden; /* 둥근 모서리 유지 */
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* 3. [상단] 헤더 (고정) */
+.modal-header {
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fff;
+    z-index: 10;
+}
+.modal-header h3 { margin: 0; font-size: 1.25rem; color: #1f2937; font-weight: 700; }
+.btn-close-icon {
+    background: none; border: none; font-size: 1.5rem; color: #9ca3af;
+    cursor: pointer; transition: color 0.2s; padding: 0; line-height: 1;
+}
+.btn-close-icon:hover { color: #dc2626; }
+
+/* 4. [중단] 본문 (스크롤 영역) */
+.modal-body-scroll {
+    flex: 1;              /* 남은 공간 모두 차지 */
+    overflow-y: auto;     /* 내용 넘치면 스크롤 */
+    padding: 1.5rem;
+    background-color: #fff;
+}
+
+/* 5. [하단] 푸터 (고정) */
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e5e7eb;
+    background-color: #f9fafb;
+    text-align: right;
+}
+.btn-close-modal {
+    background-color: #fff;
+    border: 1px solid #d1d5db;
+    color: #374151;
+    padding: 0.6rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-close-modal:hover { background-color: #f3f4f6; border-color: #9ca3af; }
+
+
+/* =================================================================
+   [내부 디자인] 프로필 테이블 & 공약 박스
+   ================================================================= */
+
+/* 프로필 테이블 */
+.profile-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+}
+.profile-table th {
+    text-align: left;
+    padding: 12px 8px;
+    color: #6b7280;
+    font-weight: 600;
+    width: 80px;
+    border-bottom: 1px solid #f3f4f6;
+}
+.profile-table td {
+    padding: 12px 8px;
+    color: #111827;
+    font-weight: 500;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+/* 공약 박스 (Manifesto Box) */
+.manifesto-box {
+    background-color: #f8fafc; /* 아주 연한 블루그레이 */
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.5rem;
+    position: relative;
+}
+
+/* 박스 제목 (Badge 스타일) */
+.manifesto-badge {
+    display: inline-block;
+    background-color: #2563eb;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 20px;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+/* 공약 내용 텍스트 */
+.manifesto-content-text {
+    font-size: 1rem;
+    line-height: 1.75;
+    color: #334155;
+    white-space: pre-wrap; /* 줄바꿈 유지 */
+}
+
+/* 공약 이미지 */
+.manifesto-img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    display: block;
+}
 </style>
 </head>
 <body>
@@ -296,25 +361,18 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
         </div>
     </div>
 
-    <div id="manifesto-modal" class="modal-overlay" style="z-index: 2000;">
-        <div class="modal-content" style="width: 90%; max-width: 600px; max-height: 80vh; overflow-y: auto;">
-            <h3 id="manifesto-title">공약 보기</h3>
-            <div id="manifesto-body" style="margin-top: 1rem; white-space: pre-wrap; line-height: 1.6;"></div>
-            <div style="margin-top: 1.5rem; text-align: center;">
-                <button onclick="document.getElementById('manifesto-modal').style.display='none'" class="btn-modal">닫기</button>
-            </div>
-        </div>
-    </div>
-    <div id="manifesto-modal" class="modal-overlay" style="z-index: 2000;">
-        <div class="modal-content manifesto-content">
+<div id="manifesto-modal" class="modal-overlay">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3 id="manifesto-title">공약 보기</h3>
-                <button onclick="document.getElementById('manifesto-modal').style.display='none'" class="btn-close">&times;</button>
+                <h3 id="manifesto-title">후보자 정보</h3>
+                <button onclick="closeManifestoModal()" class="btn-close-icon">&times;</button>
             </div>
-            <div id="manifesto-body" class="modal-body">
+
+            <div id="manifesto-body" class="modal-body-scroll">
                 </div>
-             <div class="modal-footer">
-                <button onclick="document.getElementById('manifesto-modal').style.display='none'" class="btn-modal">닫기</button>
+
+            <div class="modal-footer">
+                <button onclick="closeManifestoModal()" class="btn-close-modal">닫기</button>
             </div>
         </div>
     </div>
@@ -792,22 +850,34 @@ voteBtn.addEventListener('click', () => {
         return addr.replace(/[0-9]/g, '*');
     }
 
-// [수정] 공약 모달 표시 함수 (박스형 디자인 적용)
-    function showManifesto(cand) {
+// [1] 모달 닫기 함수 (Window 전역 등록)
+    window.closeManifestoModal = function() {
+        document.getElementById('manifesto-modal').style.display = 'none';
+    };
+
+    // [2] 공약 모달 표시 함수 (리뉴얼 디자인 적용)
+    window.showManifesto = function(cand) { // window에 등록하여 안전하게 호출
         const modal = document.getElementById('manifesto-modal');
         const title = document.getElementById('manifesto-title');
         const body = document.getElementById('manifesto-body');
 
-        // 모달 상단 제목
-        title.innerText = `${cand.name} 후보 정보`;
+        // 1. 헤더 제목 설정
+        title.innerText = `${cand.name} 후보 상세정보`;
         
-        // 데이터 변환
+        // 2. 데이터 가공
         const age = getKoreanAge(cand.birth_date);
         const shortAddress = formatAddress(cand.address);
-        
-        // 1. 상단: 프로필 정보 테이블
-        let profileHtml = `
-            <table class="profile-table" style="margin-bottom:0;">
+
+        // 3. 내용 구성 (프로필 테이블 + 공약 카드)
+        let contentHtml = '';
+
+        // (A) 프로필 섹션
+        contentHtml += `
+            <table class="profile-table">
+                <colgroup>
+                    <col style="width: 30%;">
+                    <col style="width: 70%;">
+                </colgroup>
                 <tr>
                     <th>나이</th>
                     <td>${age}</td>
@@ -823,32 +893,29 @@ voteBtn.addEventListener('click', () => {
             </table>
         `;
 
-        // 2. 하단: 공약 내용 (박스로 감싸기)
-        let contentHtml = '';
-        const content = cand.manifesto;
-        
-        // 이미지인지 텍스트인지 확인
+        // (B) 공약 섹션 (카드 디자인)
+        const manifestoText = cand.manifesto;
         let innerContent = '';
-        if (content && (content.startsWith('http') || content.startsWith('/'))) {
-             innerContent = `<img src="${content}" style="width:100%; height:auto; border-radius:8px; border:1px solid #ddd;">`;
+
+        if (manifestoText && (manifestoText.startsWith('http') || manifestoText.startsWith('/'))) {
+             // 이미지인 경우
+             innerContent = `<img src="${manifestoText}" class="manifesto-img" alt="공약 이미지">`;
         } else {
-             innerContent = `<div class="manifesto-text">${content || "등록된 공약 내용이 없습니다."}</div>`;
+             // 텍스트인 경우
+             innerContent = `<div class="manifesto-content-text">${manifestoText || "등록된 공약 내용이 없습니다."}</div>`;
         }
 
-        // [핵심] 제목과 내용을 하나의 박스(.manifesto-box)에 담음
-        const boxHtml = `
+        contentHtml += `
             <div class="manifesto-box">
-                <div class="manifesto-title">
-                    📢 출마의 변 및 공약
-                </div>
+                <div class="manifesto-badge">📢 출마의 변 및 공약</div>
                 ${innerContent}
             </div>
         `;
 
-        // 3. 최종 결합
-        body.innerHTML = profileHtml + boxHtml;
+        // 4. 렌더링 및 모달 열기
+        body.innerHTML = contentHtml;
         modal.style.display = 'flex';
-    }
+    };
     // [신규] 강력한 창 닫기 시도 및 실패 시 안내 화면 처리
     function tryCloseWindow() {
         // 1. 창 닫기 시도
