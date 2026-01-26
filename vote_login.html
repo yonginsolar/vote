@@ -424,30 +424,40 @@
         // 3. 메인 로직 (초기화 및 렌더링)
         // ==========================================
 
-// [수정됨] 초기화 함수 (ID 이름 매칭 수정: page-title -> election-title)
+// [수정됨] 초기화 함수 (화면 겹침 방지 로직 추가)
     async function init() {
-        // HTML 요소가 로딩되기 전에 호출되는 것을 방지
+        // 1. 방어 코드: HTML이 로드되지 않았으면 중단
         if (!document.getElementById('election-title')) return;
 
+        // [핵심 수정] 2. '클린 슬레이트' 초기화
+        // 시작할 때 모든 화면 영역과 모달을 강제로 숨깁니다.
+        // 이렇게 해야 목록과 모달이 동시에 뜨는 겹침 현상이 사라집니다.
+        document.getElementById('election-list-view').style.display = 'none';
+        document.getElementById('detail-view').style.display = 'none';
+        document.getElementById('login-modal').style.display = 'none'; 
+        document.getElementById('candidate-detail-modal').style.display = 'none';
+        
+        // 하단 버튼바도 일단 숨김
+        const bottomBar = document.querySelector('.bottom-action') || document.getElementById('bottom-bar');
+        if(bottomBar) bottomBar.style.display = 'none';
+
+        // 3. 로직 분기 (ID 유무에 따라 하나만 켬)
         if (!electionId) {
-            // ID가 없으면 목록 화면 표시
+            // [CASE A] ID 없음 -> 선거 목록 화면만 표시
             document.getElementById('election-list-view').style.display = 'block';
             
-            // [수정 포인트] HTML에 있는 ID 'election-title'을 사용
-            const titleEl = document.getElementById('election-title') || document.getElementById('page-title');
+            // 헤더 텍스트 정리
+            const titleEl = document.getElementById('election-title');
             if(titleEl) titleEl.innerText = "선거 목록";
+            document.getElementById('election-period').innerText = "";
 
-            // [수정 포인트] 뱃지가 없을 수도 있으므로 예외 처리
-            const badgeEl = document.getElementById('status-badge') || document.getElementById('header-badge');
+            // 뱃지 숨김
+            const badgeEl = document.getElementById('status-badge');
             if(badgeEl) badgeEl.style.display = 'none';
 
-            // 하단 버튼 숨김
-            const bottomBar = document.getElementById('bottom-bar') || document.querySelector('.bottom-action');
-            if(bottomBar) bottomBar.style.display = 'none';
-            
             await loadElectionList();
         } else {
-            // ID가 있으면 상세 화면 표시
+            // [CASE B] ID 있음 -> 상세 화면만 표시
             document.getElementById('detail-view').style.display = 'block';
             try {
                 await loadElectionInfo();
