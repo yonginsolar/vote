@@ -772,7 +772,56 @@ voteBtn.addEventListener('click', () => {
             tryCloseWindow(); // window.close() 대신 사용
         });
     }
-// [수정] 공약 모달: 상세 정보 표시 기능 강화
+// [1] 만 나이 계산 함수 (YYMMDD-1... 형식 파싱)
+    function getKoreanAge(birthDateStr) {
+        if (!birthDateStr || birthDateStr.length < 6) return '-';
+        
+        // 1. 생년월일 파싱
+        const yy = parseInt(birthDateStr.substring(0, 2));
+        const mm = parseInt(birthDateStr.substring(2, 4)) - 1; // 월은 0부터 시작
+        const dd = parseInt(birthDateStr.substring(4, 6));
+        
+        // 2. 성별코드(7번째 자리)로 1900년대/2000년대 구분
+        // (하이픈이 있거나 없거나 대응)
+        const genderChar = birthDateStr.includes('-') 
+            ? birthDateStr.split('-')[1].charAt(0) 
+            : birthDateStr.charAt(6);
+            
+        const century = (genderChar === '1' || genderChar === '2') ? 1900 : 2000;
+        const fullYear = century + yy;
+
+        // 3. 만 나이 계산
+        const today = new Date();
+        let age = today.getFullYear() - fullYear;
+        
+        const currentMonth = today.getMonth();
+        const currentDate = today.getDate();
+
+        // 생일이 안 지났으면 1살 차감
+        if (currentMonth < mm || (currentMonth === mm && currentDate < dd)) {
+            age--;
+        }
+        
+        return `만 ${age}세`;
+    }
+
+    // [2] 주소 포맷팅 함수 (읍/면/동/가 까지만 표시)
+    function formatAddress(addr) {
+        if (!addr) return '정보 없음';
+        
+        // 정규식: '무슨동', '무슨읍', '무슨면', '무슨가' 패턴을 찾음
+        const match = addr.match(/.*?(읍|면|동|가)(\s|$)/);
+        
+        if (match) {
+            // 찾았으면 거기까지만 보여줌 (예: 경기 용인시 처인구 포곡읍)
+            return match[0].trim();
+        }
+        
+        // 못 찾았으면(도로명 등) 뒤에 숫자들을 마스킹 처리 (예: 포곡로 123 -> 포곡로 ***)
+        return addr.replace(/[0-9]/g, '*');
+    }
+
+    // [3] 공약 모달 표시 함수 (수정됨: 나이/주소 변환 및 디자인 개선)
     function showManifesto(cand) {
         const modal = document.getElementById('manifesto-modal');
         const title = document.getElementById('manifesto-title');
@@ -780,25 +829,31 @@ voteBtn.addEventListener('click', () => {
 
         title.innerText = `${cand.name} 후보 정보`;
         
+        // 데이터 변환 실행
+        const age = getKoreanAge(cand.birth_date);
+        const shortAddress = formatAddress(cand.address);
+        
         // 1. 상세 정보 테이블 생성
-        // (DB 컬럼: birth_date, address, career)
+        // [수정] 생년월일 -> 나이, 주소 -> 간소화 주소
         let profileHtml = `
             <table class="profile-table">
                 <tr>
-                    <th>생년월일</th>
-                    <td>${cand.birth_date || '-'}</td>
+                    <th>나이</th>
+                    <td>${age}</td>
                 </tr>
                 <tr>
                     <th>주소</th>
-                    <td>${cand.address || '-'}</td>
+                    <td>${shortAddress}</td>
                 </tr>
                 <tr>
                     <th>주요경력</th>
                     <td>${cand.career ? cand.career.replace(/\n/g, '<br>') : '-'}</td>
                 </tr>
             </table>
-            <div style="border-top:1px solid #eee; margin: 1rem 0;"></div>
-            <h4 style="margin: 0 0 0.5rem 0; color:#2563eb;">📢 출마의 변 및 공약</h4>
+            
+            <div style="margin-top: 1.5rem; margin-bottom: 0.8rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem;">
+                <span style="font-size: 1.1rem; font-weight: bold; color: #2563eb;">📢 출마의 변 및 공약</span>
+            </div>
         `;
 
         // 2. 공약 내용 처리
@@ -807,10 +862,10 @@ voteBtn.addEventListener('click', () => {
         
         if (content && (content.startsWith('http') || content.startsWith('/'))) {
              // 이미지인 경우
-             contentHtml = `<img src="${content}" style="max-width:100%; height:auto; border-radius:8px; margin-top:0.5rem;">`;
+             contentHtml = `<img src="${content}" style="max-width:100%; height:auto; border-radius:8px; display:block;">`;
         } else {
              // 텍스트인 경우
-             contentHtml = `<div style="background:#f9fafb; padding:1rem; border-radius:8px; margin-top:0.5rem; min-height:100px;">${content || "등록된 공약 내용이 없습니다."}</div>`;
+             contentHtml = `<div style="background:#f9fafb; padding:1rem; border-radius:8px; line-height:1.6; min-height:100px;">${content || "등록된 공약 내용이 없습니다."}</div>`;
         }
 
         body.innerHTML = profileHtml + contentHtml;
