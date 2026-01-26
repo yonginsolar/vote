@@ -174,17 +174,25 @@
     </style>
 </head>
 <body>
-    <div id="login-overlay" class="login-wrapper">
+<div id="login-overlay" class="login-wrapper">
     <div class="login-box">
         <div class="login-title">Admin Console</div>
-        <div class="login-subtitle">선거 관리 시스템 접속</div>
+        <div class="login-subtitle">선거 관리 시스템 접속 (매직링크)</div>
         
-        <input type="email" id="login-email" class="login-input" placeholder="이메일 (admin@example.com)" onkeyup="if(window.event.keyCode==13){document.getElementById('login-pw').focus();}">
-        <input type="password" id="login-pw" class="login-input" placeholder="비밀번호" onkeyup="if(window.event.keyCode==13){tryLogin();}">
+        <div style="text-align:left; margin-bottom:5px; font-size:0.9rem; color:#4b5563; font-weight:600;">이메일 주소</div>
+        <input type="email" id="login-email" class="login-input" 
+               placeholder="등록된 이메일을 입력하세요" 
+               onkeyup="if(window.event.keyCode==13){tryLogin();}">
         
-        <button onclick="tryLogin()" class="login-btn" id="btn-login-action">로그인</button>
+        <button onclick="tryLogin()" class="login-btn" id="btn-login-action">
+            📧 인증 메일 보내기
+        </button>
         
         <p id="login-msg" style="color:#dc2626; font-size:0.9rem; margin-top:15px; display:none;"></p>
+        <p id="login-info" style="color:#2563eb; font-size:0.9rem; margin-top:15px; display:none; line-height:1.4;">
+            📩 입력하신 메일로 <strong>로그인 링크</strong>가 발송되었습니다.<br>
+            메일함을 확인해주세요.
+        </p>
     </div>
     <div class="login-footer">
         Unauthorized access is strictly prohibited.<br>
@@ -660,6 +668,107 @@ window.openElectionGateway = async () => {
         alert("목록을 불러오지 못했습니다.");
     }
 };
+    // -----------------------------------------------------------
+    // [수정됨] 로그인 처리: DB 권한 조회 -> 매직링크 발송
+    // -----------------------------------------------------------
+    window.tryLogin = async () => {
+        const emailInput = document.getElementById('login-email');
+        const email = emailInput.value.trim();
+        const msgBox = document.getElementById('login-msg');
+        const infoBox = document.getElementById('login-info');
+        const btn = document.getElementById('btn-login-action');
+
+        // 초기화
+        msgBox.style.display = 'none';
+        infoBox.style.display = 'none';
+
+        if (!email) {
+            msgBox.style.display = 'block';
+            msgBox.innerText = "이메일을 입력해주세요.";
+            return;
+        }
+
+        // 간단한 이메일 형식 검사
+        if (!email.includes('@')) {
+             msgBox.style.display = 'block';
+             msgBox.innerText = "올바른 이메일 형식이 아닙니다.";
+             return;
+        }
+
+        try {
+            btn.innerText = "권한 확인 중...";
+            btn.disabled = true;
+
+            // -------------------------------------------------------
+            // 1단계: DB에서 권한이 있는지 '먼저' 확인 (Pre-check)
+            // -------------------------------------------------------
+            
+            // 1-1. 조합원 테이블 조회
+            const { data: memberData, error: memError } = await supabase
+                .from('coop_members')
+                .select('role, member_id')
+                .eq('email', email)
+                .maybeSingle();
+
+            if (memError) throw memError;
+
+            let isAuthorized = false;
+
+            if (memberData) {
+                // (A) 관리자(admin)라면 OK
+                if (memberData.role === 'admin') {
+                    isAuthorized = true;
+                } 
+                // (B) 관리자가 아니면 선관위원 테이블 확인
+                else if (memberData.member_id) {
+                    const { data: officialData } = await supabase
+                        .from('coop_officials')
+                        .select('id')
+                        .eq('member_id', memberData.member_id)
+                        .eq('category', 'election_comm')
+                        .eq('status', 'active')
+                        .maybeSingle();
+                    
+                    if (officialData) isAuthorized = true;
+                }
+            }
+
+            // -------------------------------------------------------
+            // 2단계: 권한 결과에 따른 처리
+            // -------------------------------------------------------
+            if (!isAuthorized) {
+                // 권한 없음: 에러 표시 후 중단
+                throw new Error("등록된 관리자나 선관위원이 아닙니다.");
+            }
+
+            // 권한 있음: 매직링크 발송 시작
+            btn.innerText = "메일 발송 중...";
+
+            // Supabase 매직링크 발송 (현재 페이지로 리다이렉트)
+            const { error: authError } = await supabase.auth.signInWithOtp({
+                email: email,
+                options: {
+                    emailRedirectTo: window.location.href // 로그인 후 현재 페이지로 복귀
+                }
+            });
+
+            if (authError) throw authError;
+
+            // 성공 UI 처리
+            btn.style.display = 'none'; // 버튼 숨김
+            emailInput.disabled = true; // 입력창 잠금
+            infoBox.style.display = 'block'; // 안내 메시지 표시
+
+        } catch (e) {
+            console.error(e);
+            msgBox.style.display = 'block';
+            msgBox.innerText = "오류: " + e.message;
+            
+            // 버튼 원상복구
+            btn.innerText = "📧 인증 메일 보내기";
+            btn.disabled = false;
+        }
+    };
 
     // -----------------------------------------------------------
     // [4] 대시보드 로드
