@@ -31,6 +31,59 @@ body {
     color: var(--text-dark);
     line-height: 1.5;
 }
+        /* [수정 2] 하단 액션 영역: 버튼을 가로로 꽉 채우거나 가운데 정렬 */
+.action-area {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e5e7eb;
+    /* Flexbox로 중앙 정렬 및 꽉 채우기 제어 */
+    display: flex;
+    justify-content: center; 
+    align-items: center;
+    width: 100%;
+}
+
+/* 버튼 공통 스타일 (투표하기 & 무투표확인) */
+.btn-submit, .btn-uncontested {
+    /* 기존 스타일 유지하면서 가로폭 제어 추가 */
+    width: 100%;           /* 가로로 꽉 채우기 */
+    max-width: 100%;       /* 모바일에서는 꽉 차게 */
+    /* PC에서 너무 넓은 게 싫으면 max-width: 400px; 로 제한 가능 */
+    margin: 0 auto;        /* 중앙 정렬 안전장치 */
+    display: block;
+}
+
+/* [수정 3] 모달 내용 여백 확보 */
+.modal-body {
+    padding: 1.5rem 1.5rem 3rem 1.5rem; /* 하단 패딩(3rem)을 늘려서 답답함 해소 */
+    max-height: 60vh;
+    overflow-y: auto;
+    line-height: 1.7;
+    color: var(--text-dark);
+    white-space: pre-wrap;
+}
+
+/* 후보자 프로필 테이블 스타일 (공약 모달용) */
+.profile-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+.profile-table th {
+    text-align: left;
+    padding: 0.5rem;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    width: 80px;
+    color: #6b7280;
+    font-weight: 600;
+}
+.profile-table td {
+    padding: 0.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    color: #1f2937;
+}
 
 /* 컨테이너 디자인 개선 */
 .container {
@@ -79,22 +132,7 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 }
 
 /* [수정 2] 무투표 당선 확인 버튼 디자인 (모던 스타일) */
-.btn-uncontested {
-    /* 그라데이션 적용으로 올드한 느낌 제거 */
-    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-    color: white;
-    border: none;
-    padding: 1rem 3rem;
-    font-size: 1.1rem;
-    border-radius: 2rem;
-    cursor: pointer;
-    font-weight: bold;
-    /* 버튼 자체에 빛나는 효과(Glow) 추가 */
-    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-    transition: transform 0.2s, box-shadow 0.2s;
-    width: 100%;
-    max-width: 400px;
-}
+
 .btn-uncontested:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
@@ -143,12 +181,8 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 .btn-binary.btn-no.selected { background: #fef2f2; border-color: var(--danger-color); color: var(--danger-color); }
 
 /* 하단 액션 영역 */
-.action-area { text-align: center; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb; }
-.btn-submit {
-    background: var(--primary-color); color: white; border: none; padding: 1rem 3rem;
-    font-size: 1.1rem; border-radius: 2rem; cursor: pointer; font-weight: bold;
-    box-shadow: var(--shadow-md); transition: background 0.2s; width: 100%; max-width: 400px;
-}
+
+
 .btn-submit:hover { background: var(--primary-hover); }
 .btn-submit:disabled { background: #9ca3af; cursor: not-allowed; box-shadow: none; }
 
@@ -168,7 +202,7 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 .modal-header { padding: 1.5rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
 .modal-header h3 { margin: 0; font-size: 1.2rem; }
 .btn-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-gray); }
-.modal-body { padding: 1.5rem; max-height: 60vh; overflow-y: auto; line-height: 1.7; color: var(--text-dark); white-space: pre-wrap; }
+
 .modal-footer { padding: 1rem 1.5rem; background: var(--bg-light); text-align: right; border-top: 1px solid #e5e7eb; }
 
 .btn-modal {
@@ -446,11 +480,11 @@ function loadNextBallot() {
                     </div>
                 `;
                 
-                // [중요 변경점] 공약 보기 클릭 시 모달 띄우기
+// [중요 변경] 공약 보기 클릭 시 후보자 객체 전체(cand)를 전달
                 const manifestoBtn = card.querySelector('.btn-manifesto');
                 manifestoBtn.onclick = (e) => {
                     e.stopPropagation(); // 카드 선택 방지
-                    showManifesto(cand.name, cand.manifesto); // 모달 호출 함수 실행
+                    showManifesto(cand); // (이름, 내용) 대신 (cand 객체) 전달
                 };
 
                 if (!info.isUncontested) {
@@ -674,19 +708,47 @@ voteBtn.addEventListener('click', () => {
             });
         }
         // [추가] 공약 보기 모달 띄우기 함수
-    function showManifesto(name, content) {
+// [수정] 공약 모달: 상세 정보(나이, 주소, 이력 등) 모두 표시
+    function showManifesto(cand) {
         const modal = document.getElementById('manifesto-modal');
         const title = document.getElementById('manifesto-title');
         const body = document.getElementById('manifesto-body');
 
-        title.innerText = `${name} 후보 공약`;
+        title.innerText = `${cand.name} 후보 정보`;
         
-        // 내용이 이미지 URL인지 텍스트인지 판단
+        // 1. 프로필 정보 HTML 생성 (테이블 형태)
+        // DB에 있는 필드: birth_date, address, career, manifesto
+        let profileHtml = `
+            <table class="profile-table">
+                <tr>
+                    <th>생년월일</th>
+                    <td>${cand.birth_date || '-'}</td>
+                </tr>
+                <tr>
+                    <th>주소</th>
+                    <td>${cand.address || '-'}</td>
+                </tr>
+                <tr>
+                    <th>주요경력</th>
+                    <td>${cand.career || '-'}</td>
+                </tr>
+            </table>
+            <h4 style="margin: 0 0 0.5rem 0; color:#2563eb;">출마의 변 및 공약</h4>
+        `;
+
+        // 2. 공약 내용 처리 (이미지 vs 텍스트)
+        let contentHtml = '';
+        const content = cand.manifesto;
+        
         if (content && (content.startsWith('http') || content.startsWith('/'))) {
-             body.innerHTML = `<img src="${content}" style="max-width:100%; height:auto; border-radius:8px;">`;
+             contentHtml = `<img src="${content}" style="max-width:100%; height:auto; border-radius:8px; margin-top:0.5rem;">`;
         } else {
-             body.innerText = content || "등록된 공약 내용이 없습니다.";
+             // 텍스트 줄바꿈 처리
+             contentHtml = `<div style="background:#f9fafb; padding:1rem; border-radius:8px; margin-top:0.5rem;">${content || "등록된 공약 내용이 없습니다."}</div>`;
         }
+
+        // 3. 합쳐서 넣기
+        body.innerHTML = profileHtml + contentHtml;
         
         modal.style.display = 'flex';
     }
