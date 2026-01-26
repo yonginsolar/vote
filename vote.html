@@ -429,36 +429,36 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 async function loadElection(election) {
         currentElection = election;
         titleElem.innerText = election.title;
-        ballotArea.innerHTML = '<div style="text-align:center; padding:2rem;">투표용지를 확인 중입니다...</div>';
+        // 로딩 중 표시
+        ballotArea.innerHTML = '<div style="text-align:center; padding:2rem;">투표 기록을 확인 중입니다...</div>';
 
         try {
-            // 1. 모든 투표용지 가져오기 (ElectionService에서 이미 지역구->비례 순으로 정렬됨)
+            // 1. 모든 투표용지 정보 가져오기
             const allBallots = await service.getMyBallotList(election.id);
 
-            // [수정] 필터링 조건 변경:
-            // 기존: 이미 투표한 것 OR 무투표인 것 제외
-            // 변경: 오직 '이미 투표한 것(hasVoted)'만 제외 (무투표도 화면에 보여주기 위함)
+            // 2. '아직 투표하지 않은' 용지 목록만 필터링
             pendingBallots = allBallots.filter(b => !b.hasVoted);
 
+            // [핵심 수정] 남은 투표가 없다면(이미 다 했다면) -> 즉시 퇴장 조치
             if (pendingBallots.length === 0) {
-                showModal('알림', '이미 모든 투표를 완료하셨습니다.', () => {
-                    showCompleteScreen();
-                });
-                return;
+                // 더 이상 보여줄 화면 없이 바로 알림창 띄우고 종료
+                alertAndClose('이미 모든 투표를 완료하셨습니다.\n투표소를 종료합니다.');
+                return; 
             }
 
-            // 첫 번째 투표용지 로드
+            // 3. 투표할 게 남아있다면 첫 번째 용지 로드
             loadNextBallot();
 
         } catch (error) {
             console.error(error);
             if (error.message.includes('배정되지')) {
-                 showModal('알림', `[${election.title}]에는 투표 권한이 없습니다.`, () => initPage());
+                // 권한 없는 경우도 즉시 퇴장
+                 alertAndClose(`[${election.title}]에는 투표 권한이 없습니다.`);
             } else {
-                alertAndClose(error.message);
+                alertAndClose('오류 발생: ' + error.message);
             }
         }
-    } // End of loadElection
+    }
 
     // [신규] 다음 투표용지를 화면에 그리기
 function loadNextBallot() {
