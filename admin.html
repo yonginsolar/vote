@@ -1963,109 +1963,188 @@ window.finalizeNomination = async () => {
         };
         return map[s] || s;
     }
-    // [신규] 개표 결과 집계 및 렌더링 함수
+// [최종 수정] 개표 결과 집계 (quota 및 vote_type 스키마 완벽 반영)
     window.loadElectionResults = async () => {
         const resultChartDiv = document.getElementById('result-chart');
-        resultChartDiv.innerHTML = '<div style="text-align:center; padding:20px;">표를 세고 있습니다... 🗳️</div>';
+        resultChartDiv.innerHTML = '<div style="text-align:center; padding:20px;">🗳️ 개표 데이터를 분석 중입니다...</div>';
 
         try {
-            // 1. 후보자 목록 가져오기
-            const { data: candidates, error: candError } = await supabase
-                .from('candidates')
-                .select('id, name, symbol, district_id')
-                .eq('election_id', currentElectionId)
-                .eq('status', 'APPROVED'); // 승인된 후보만
+            // 1. 정확한 스키마로 데이터 조회 (quota, vote_type 포함)
+            const [distRes, candRes, ballotRes] = await Promise.all([
+                supabase.from('districts')
+                    .select('id, name, is_common, quota, vote_type') // quota: 선출인원, vote_type: 투표유형
+                    .eq('election_id', currentElectionId),
+                supabase.from('candidates')
+                    .select('*')
+                    .eq('election_id', currentElectionId)
+                    .eq('status', 'APPROVED'),
+                supabase.from('ballots')
+                    .select('district_id, candidate_id, choice')
+                    .eq('election_id', currentElectionId)
+            ]);
 
-            if (candError) throw candError;
+            if (distRes.error) throw distRes.error;
+            if (candRes.error) throw candRes.error;
+            if (ballotRes.error) throw ballotRes.error;
 
-            // 2. 투표 데이터(표) 가져오기 (익명성을 위해 candidate_id만 조회)
-            // 참고: 실제 대규모 선거에서는 DB의 count 기능을 써야 하지만, 
-            // 수천 명 규모에서는 이렇게 가져와서 JS로 세는 것이 실시간성 처리에 유리합니다.
-            const { data: votes, error: voteError } = await supabase
-                .from('election_votes')
-                .select('candidate_id')
-                .eq('election_id', currentElectionId);
+            const districts = distRes.data;
+            const candidates = candRes.data;
+            const ballots = ballotRes.data;
 
-            if (voteError) throw voteError;
+            let html = '';
 
-            // 3. 개표 (집계)
-            const totalVotes = votes.length;
-            const voteCounts = {}; // { 후보ID: 득표수 }
+            // 2. 선거구별 루프
+            districts.forEach(dist => {
+                const distCands = candidates.filter(c => c.district_id === dist.id);
+                const distBallots = ballots.filter(b => b.district_id === dist.id);
+                
+                // [스키마 반영] quota(선출인원)와 vote_type(투표유형) 사용
+                const quota = dist.quota || 1; 
+                const isBinary = dist.vote_type === 'BINARY'; // 찬반 투표 여부
 
-            // 초기화
-            candidates.forEach(c => voteCounts[c.id] = 0);
-            
-            // 표 세기
-            votes.forEach(v => {
-                if (voteCounts[v.candidate_id] !== undefined) {
-                    voteCounts[v.candidate_id]++;
+                html += `<div style="margin-bottom: 30px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                            <div style="background: #f9fafb; padding: 12px 15px; border-bottom: 1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <span style="font-weight: bold; font-size: 1.1rem; color:#374151;">📍 ${dist.name}</span>
+                                    <span style="font-size: 0.8rem; background:#e0f2fe; color:#0369a1; padding:2px 6px; border-radius:4px; margin-left:5px;">
+                                        ${isBinary ? '찬반 투표' : `${quota}인 선출`}
+                                    </span>
+                                </div>
+                                <span style="font-size:0.8rem; color:#6b7280;">${dist.is_common ? '(공통/비례)' : '(지역구)'}</span>
+                            </div>`;
+
+                // ---------------------------------------------------
+                // [CASE A] 후보자 없음
+                // ---------------------------------------------------
+                if (distCands.length === 0) {
+                    html += `<div style="padding: 30px; text-align: center; color: #9ca3af;">등록된 후보자가 없습니다.</div>`;
                 }
-            });
+                
+                // ---------------------------------------------------
+                // [CASE B] 찬반 투표 (vote_type = 'BINARY')
+                // ---------------------------------------------------
+                else if (isBinary) {
+                    // 찬반 집계 (choice 컬럼: AGREE, DISAGREE, ABSTENTION)
+                    const counts = { 'AGREE': 0, 'DISAGREE': 0, 'ABSTENTION': 0 };
+                    let total = 0;
+                    
+                    distBallots.forEach(b => {
+                        if (counts[b.choice] !== undefined) { 
+                            counts[b.choice]++; 
+                            total++; 
+                        }
+                    });
+                    
+                    const agreePct = total === 0 ? 0 : ((counts['AGREE'] / total) * 100).toFixed(1);
+                    const disagreePct = total === 0 ? 0 : ((counts['DISAGREE'] / total) * 100).toFixed(1);
 
-            // 4. 득표율 계산 및 정렬 (득표수 내림차순)
-            const results = candidates.map(c => {
-                const count = voteCounts[c.id] || 0;
-                const percent = totalVotes === 0 ? 0 : ((count / totalVotes) * 100).toFixed(1);
-                return { ...c, count, percent };
-            }).sort((a, b) => b.count - a.count);
-
-            // 5. 결과 화면 그리기 (HTML/CSS 막대그래프)
-            let html = `
-                <div style="margin-bottom:20px; text-align:center;">
-                    <h2 style="color:var(--primary-blue); margin:0;">총 투표수: ${totalVotes.toLocaleString()}표</h2>
-                </div>
-                <table style="width:100%; border-collapse: collapse; background:white; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-                    <thead style="background:#f3f4f6; border-bottom:2px solid #e5e7eb;">
-                        <tr>
-                            <th style="padding:12px; text-align:center; width:60px;">순위</th>
-                            <th style="padding:12px; text-align:left;">후보자</th>
-                            <th style="padding:12px; text-align:right; width:100px;">득표수</th>
-                            <th style="padding:12px; text-align:right; width:80px;">득표율</th>
-                            <th style="padding:12px; width:30%;">그래프</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            results.forEach((r, index) => {
-                // 1위 강조 스타일
-                const isWinner = index === 0 && r.count > 0;
-                const rowStyle = isWinner ? 'background:#eff6ff; font-weight:bold;' : 'border-bottom:1px solid #f3f4f6;';
-                const barColor = isWinner ? '#2563eb' : '#9ca3af';
-
-                html += `
-                    <tr style="${rowStyle}">
-                        <td style="padding:12px; text-align:center;">${index + 1}</td>
-                        <td style="padding:12px;">
-                            ${isWinner ? '👑 ' : ''}${r.name}
-                            <span style="font-size:0.8rem; color:#666; font-weight:normal;">(기호 ${r.symbol || '-'})</span>
-                        </td>
-                        <td style="padding:12px; text-align:right;">${r.count.toLocaleString()}</td>
-                        <td style="padding:12px; text-align:right;">${r.percent}%</td>
-                        <td style="padding:12px;">
-                            <div style="background:#e5e7eb; width:100%; height:10px; border-radius:5px; overflow:hidden;">
-                                <div style="width:${r.percent}%; height:100%; background:${barColor}; transition:width 1s;"></div>
+                    html += `
+                        <div style="padding:20px;">
+                            <h5 style="text-align:center; margin:0 0 15px 0;">📊 찬반 투표 결과</h5>
+                            <div style="display:flex; height:40px; border-radius:20px; overflow:hidden; font-weight:bold; color:white;">
+                                <div style="width:${agreePct}%; background:#2563eb; display:flex; align-items:center; justify-content:center;">찬성 ${agreePct}%</div>
+                                <div style="width:${disagreePct}%; background:#dc2626; display:flex; align-items:center; justify-content:center;">반대 ${disagreePct}%</div>
                             </div>
-                        </td>
-                    </tr>
-                `;
+                            <div style="display:flex; justify-content:space-between; margin-top:10px; font-size:0.9rem; color:#4b5563;">
+                                <span>🔵 찬성: <strong>${counts['AGREE']}</strong>표</span>
+                                <span>⚪ 기권: ${counts['ABSTENTION']}표</span>
+                                <span>🔴 반대: <strong>${counts['DISAGREE']}</strong>표</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // ---------------------------------------------------
+                // [CASE C] 인물 투표 (vote_type = 'CANDIDATE')
+                // ---------------------------------------------------
+                else {
+                    // C-1. 무투표 당선 조건: 후보자 수 <= 선출인원(quota)
+                    if (distCands.length <= quota) {
+                         html += `
+                            <div style="padding: 2rem; text-align: center; background: #f0fdf4;">
+                                <div style="font-size: 3rem; margin-bottom: 10px;">🎉</div>
+                                <h3 style="color: #166534; margin: 0; font-weight:800;">전원 무투표 당선</h3>
+                                <p style="color: #15803d; margin-top: 5px; font-size:0.9rem;">
+                                    후보자 수(${distCands.length}명)가 선출 정원(${quota}명) 이내이므로<br>투표 없이 전원 당선 확정되었습니다.
+                                </p>
+                                <div style="margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;">
+                        `;
+                        distCands.forEach(winner => {
+                            html += `
+                                <div style="background: white; padding: 10px 20px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #bbf7d0;">
+                                    <div style="font-weight: bold; color: #374151;">${winner.name}</div>
+                                </div>`;
+                        });
+                        html += `</div></div>`;
+                    } 
+                    // C-2. 경선 (후보자 수 > quota)
+                    else {
+                        const voteCounts = {};
+                        let totalVotesInDist = 0;
+                        distCands.forEach(c => voteCounts[c.id] = 0);
+                        
+                        distBallots.forEach(b => {
+                            if (b.candidate_id && voteCounts[b.candidate_id] !== undefined) {
+                                voteCounts[b.candidate_id]++;
+                                totalVotesInDist++;
+                            }
+                        });
+
+                        const results = distCands.map(c => {
+                            const count = voteCounts[c.id];
+                            const percent = totalVotesInDist === 0 ? 0 : ((count / totalVotesInDist) * 100).toFixed(1);
+                            return { ...c, count, percent };
+                        }).sort((a, b) => b.count - a.count);
+
+                        html += `<table style="width:100%; border-collapse: collapse;">
+                                    <thead style="background: #fff; border-bottom: 2px solid #eee; font-size: 0.85rem; color: #666;">
+                                        <tr>
+                                            <th style="padding:10px; text-align:center; width:50px;">순위</th>
+                                            <th style="padding:10px;">후보자</th>
+                                            <th style="padding:10px; text-align:right;">득표수</th>
+                                            <th style="padding:10px; text-align:right;">%</th>
+                                            <th style="padding:10px; width:35%;">그래프</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+                        
+                        results.forEach((r, idx) => {
+                            // 당선권: 등수가 quota 안쪽인 경우
+                            const isWinner = idx < quota && r.count > 0;
+                            const barColor = isWinner ? '#2563eb' : '#d1d5db';
+                            const rowBg = isWinner ? 'background-color: #eff6ff;' : '';
+                            const rankIcon = idx < 3 ? ['🥇','🥈','🥉'][idx] : idx + 1;
+
+                            html += `<tr style="border-bottom: 1px solid #f3f4f6; ${rowBg}">
+                                        <td style="padding:10px; text-align:center;">${rankIcon}</td>
+                                        <td style="padding:10px;">
+                                            <div style="font-weight:bold;">${isWinner ? '👑 ' : ''}${r.name}</div>
+                                            <div style="font-size:0.75rem; color:#9ca3af;">기호 ${r.symbol || '-'}</div>
+                                        </td>
+                                        <td style="padding:10px; text-align:right;">${r.count}</td>
+                                        <td style="padding:10px; text-align:right;">${r.percent}%</td>
+                                        <td style="padding:10px;">
+                                            <div style="background:#e5e7eb; height:8px; border-radius:4px; overflow:hidden;">
+                                                <div style="width:${r.percent}%; height:100%; background:${barColor};"></div>
+                                            </div>
+                                        </td>
+                                     </tr>`;
+                        });
+                        html += `</tbody></table>
+                                 <div style="padding:10px; text-align:right; font-size:0.8rem; color:#666; background:#fafafa;">
+                                     총 투표: ${totalVotesInDist}표 / 선출: ${quota}명
+                                 </div>`;
+                    }
+                }
+                html += `</div>`; // 선거구 박스 닫기
             });
 
-            html += '</tbody></table>';
-            
-            // 결과가 없을 때
-            if (results.length === 0) {
-                html += '<p style="text-align:center; padding:20px; color:#666;">등록된 후보가 없습니다.</p>';
-            }
-
+            if(html === '') html = '<div style="text-align:center; padding:30px; color:#999;">표시할 선거구 정보가 없습니다.</div>';
             resultChartDiv.innerHTML = html;
-
-            // [추가] 로그 기록 (최초 1회만 남기거나, 매번 남기거나 정책 결정 필요. 여기선 매번 조회 시 남김)
-            // await service.logAction(currentElectionId, 'VOTE_COUNT', `개표 조회 실행 (작업자: ${currentUserEmail})`);
 
         } catch (e) {
             console.error(e);
-            resultChartDiv.innerHTML = `<p style="color:red; text-align:center;">개표 데이터를 불러오는데 실패했습니다.<br>${e.message}</p>`;
+            resultChartDiv.innerHTML = `<div style="color:#dc2626; text-align:center; padding:20px;">개표 오류: ${e.message}</div>`;
         }
     };
 window.init = init; // module scope export
