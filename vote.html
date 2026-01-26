@@ -31,39 +31,39 @@ body {
     color: var(--text-dark);
     line-height: 1.5;
 }
-        /* [수정 2] 하단 액션 영역: 버튼을 가로로 꽉 채우거나 가운데 정렬 */
+  
+/* [수정 1] 하단 버튼 영역: 가로로 꽉 채우거나 중앙 정렬 */
 .action-area {
     margin-top: 2rem;
     padding-top: 1.5rem;
     border-top: 1px solid #e5e7eb;
-    /* Flexbox로 중앙 정렬 및 꽉 채우기 제어 */
     display: flex;
-    justify-content: center; 
+    justify-content: center; /* 중앙 정렬 */
     align-items: center;
     width: 100%;
 }
 
-/* 버튼 공통 스타일 (투표하기 & 무투표확인) */
+/* [수정 2] 버튼 크기 조정 (모바일 친화적) */
 .btn-submit, .btn-uncontested {
-    /* 기존 스타일 유지하면서 가로폭 제어 추가 */
     width: 100%;           /* 가로로 꽉 채우기 */
-    max-width: 100%;       /* 모바일에서는 꽉 차게 */
-    /* PC에서 너무 넓은 게 싫으면 max-width: 400px; 로 제한 가능 */
-    margin: 0 auto;        /* 중앙 정렬 안전장치 */
+    max-width: 100%;       /* 모바일 꽉 채움 */
+    /* PC에서 너무 넓으면 max-width: 500px; 등으로 조절 가능 */
+    margin: 0 auto;
     display: block;
+    box-sizing: border-box; /* 패딩 포함 크기 계산 */
 }
 
-/* [수정 3] 모달 내용 여백 확보 */
+/* [수정 3] 모달 내용 여백 확보 (답답함 해소) */
 .modal-body {
-    padding: 1.5rem 1.5rem 3rem 1.5rem; /* 하단 패딩(3rem)을 늘려서 답답함 해소 */
-    max-height: 60vh;
+    padding: 1.5rem 1.5rem 3rem 1.5rem; /* 하단 패딩을 3rem으로 늘림 */
+    max-height: 70vh;      /* 높이도 조금 더 확보 */
     overflow-y: auto;
     line-height: 1.7;
     color: var(--text-dark);
     white-space: pre-wrap;
 }
 
-/* 후보자 프로필 테이블 스타일 (공약 모달용) */
+/* [추가] 후보자 정보 테이블 스타일 (공약 모달용) */
 .profile-table {
     width: 100%;
     border-collapse: collapse;
@@ -72,15 +72,15 @@ body {
 }
 .profile-table th {
     text-align: left;
-    padding: 0.5rem;
+    padding: 0.8rem 0.5rem;
     background: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
-    width: 80px;
+    width: 90px; /* 라벨 너비 고정 */
     color: #6b7280;
     font-weight: 600;
 }
 .profile-table td {
-    padding: 0.5rem;
+    padding: 0.8rem 0.5rem;
     border-bottom: 1px solid #e5e7eb;
     color: #1f2937;
 }
@@ -434,14 +434,12 @@ function loadNextBallot() {
         renderBallotContent(currentBallot);
     }
 
-    // 투표용지 내용 그리기 (renderBallot -> renderBallotContent로 이름 변경)
-// [수정된 함수] 공약 보기 모달 적용 및 카드 구조 변경
+// [수정] 투표용지 그리기 함수
     function renderBallotContent(info) {
         ballotArea.innerHTML = ''; 
 
-        // 무투표 당선 안내 (기존 코드 유지)
+        // 1. 무투표 당선 안내 메시지
         if (info.isUncontested) {
-            // ... (이전 단계에서 드린 무투표 안내 HTML 코드 그대로 유지) ...
             const noticeDiv = document.createElement('div');
             noticeDiv.style.cssText = 'background:#f0fdf4; padding:1rem; margin-bottom:1rem; border-radius:8px; text-align:center; color:#166534; border:1px solid #bbf7d0;';
             noticeDiv.innerHTML = `<strong style="font-size:1.1rem;">🎉 무투표 당선 안내</strong><br><span style="font-size:0.9rem; color:#374151;">후보자 수(${info.candidates.length}명)가 선출 인원(${info.district.quota}명) 이내이므로<br>투표 절차 없이 당선이 확정되었습니다.<br>아래 후보자를 확인하시고 <strong>[확인]</strong> 버튼을 눌러주세요.</span>`;
@@ -461,6 +459,7 @@ function loadNextBallot() {
                 const card = document.createElement('div');
                 card.className = 'candidate-card';
                 
+                // 무투표일 경우 선택 효과 제거 (보기 전용)
                 if (info.isUncontested) {
                     card.style.cursor = 'default';
                     card.style.borderColor = '#22c55e';
@@ -470,7 +469,7 @@ function loadNextBallot() {
 
                 const imgUrl = cand.photo_url || 'https://via.placeholder.com/150?text=No+Image';
                 
-                // [HTML 구조 변경] 사진과 내용을 분리하고 공약 버튼에 클래스 추가
+                // [카드 HTML 구조]
                 card.innerHTML = `
                     <img src="${imgUrl}" class="candidate-img" alt="${cand.name}">
                     <div class="card-content">
@@ -480,13 +479,14 @@ function loadNextBallot() {
                     </div>
                 `;
                 
-// [중요 변경] 공약 보기 클릭 시 후보자 객체 전체(cand)를 전달
+                // [중요 수정] 공약 보기 클릭 시 'cand' 객체 전체 전달
                 const manifestoBtn = card.querySelector('.btn-manifesto');
                 manifestoBtn.onclick = (e) => {
-                    e.stopPropagation(); // 카드 선택 방지
-                    showManifesto(cand); // (이름, 내용) 대신 (cand 객체) 전달
+                    e.stopPropagation(); 
+                    showManifesto(cand); // (이름, 내용) -> (cand 객체) 변경
                 };
 
+                // 일반 투표일 때만 선택 이벤트 연결
                 if (!info.isUncontested) {
                     card.addEventListener('click', (e) => {
                         if(e.target === manifestoBtn) return;
@@ -503,7 +503,7 @@ function loadNextBallot() {
             ballotArea.appendChild(listDiv);
 
         } else {
-            // (찬반 투표 로직은 기존과 동일)
+            // 찬반 투표 (기존 유지)
              ballotArea.innerHTML = `
                 <div class="binary-options">
                     <button type="button" class="btn-binary btn-yes" data-val="AGREE">찬성 (O)</button>
@@ -707,8 +707,7 @@ voteBtn.addEventListener('click', () => {
                 window.close(); 
             });
         }
-        // [추가] 공약 보기 모달 띄우기 함수
-// [수정] 공약 모달: 상세 정보(나이, 주소, 이력 등) 모두 표시
+// [수정] 공약 모달: 상세 정보 표시 기능 강화
     function showManifesto(cand) {
         const modal = document.getElementById('manifesto-modal');
         const title = document.getElementById('manifesto-title');
@@ -716,8 +715,8 @@ voteBtn.addEventListener('click', () => {
 
         title.innerText = `${cand.name} 후보 정보`;
         
-        // 1. 프로필 정보 HTML 생성 (테이블 형태)
-        // DB에 있는 필드: birth_date, address, career, manifesto
+        // 1. 상세 정보 테이블 생성
+        // (DB 컬럼: birth_date, address, career)
         let profileHtml = `
             <table class="profile-table">
                 <tr>
@@ -730,26 +729,26 @@ voteBtn.addEventListener('click', () => {
                 </tr>
                 <tr>
                     <th>주요경력</th>
-                    <td>${cand.career || '-'}</td>
+                    <td>${cand.career ? cand.career.replace(/\n/g, '<br>') : '-'}</td>
                 </tr>
             </table>
-            <h4 style="margin: 0 0 0.5rem 0; color:#2563eb;">출마의 변 및 공약</h4>
+            <div style="border-top:1px solid #eee; margin: 1rem 0;"></div>
+            <h4 style="margin: 0 0 0.5rem 0; color:#2563eb;">📢 출마의 변 및 공약</h4>
         `;
 
-        // 2. 공약 내용 처리 (이미지 vs 텍스트)
+        // 2. 공약 내용 처리
         let contentHtml = '';
         const content = cand.manifesto;
         
         if (content && (content.startsWith('http') || content.startsWith('/'))) {
+             // 이미지인 경우
              contentHtml = `<img src="${content}" style="max-width:100%; height:auto; border-radius:8px; margin-top:0.5rem;">`;
         } else {
-             // 텍스트 줄바꿈 처리
-             contentHtml = `<div style="background:#f9fafb; padding:1rem; border-radius:8px; margin-top:0.5rem;">${content || "등록된 공약 내용이 없습니다."}</div>`;
+             // 텍스트인 경우
+             contentHtml = `<div style="background:#f9fafb; padding:1rem; border-radius:8px; margin-top:0.5rem; min-height:100px;">${content || "등록된 공약 내용이 없습니다."}</div>`;
         }
 
-        // 3. 합쳐서 넣기
         body.innerHTML = profileHtml + contentHtml;
-        
         modal.style.display = 'flex';
     }
         initPage();
