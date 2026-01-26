@@ -253,7 +253,7 @@
         </button>
     </div>
 
-    <div id="login-modal" class="login-modal">
+<div id="login-modal" class="login-modal" style="display: none;">
         <div class="login-box">
             <h3 style="margin-top: 0; margin-bottom: 5px;">🗳️ 본인 인증</h3>
             <p style="font-size: 0.85rem; color: #666; margin-bottom: 1.5rem; line-height: 1.4;">
@@ -267,20 +267,20 @@
             <button onclick="closeLoginModal()" class="modal-close-btn">닫기</button>
         </div>
     </div>
-    <div id="candidate-detail-modal" class="login-modal" style="z-index: 2000;">
-    <div class="login-box" style="text-align: left; max-width: 500px; max-height: 80vh; overflow-y: auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <h3 style="margin:0;">👤 후보자 정보</h3>
-            <button onclick="closeCandidateDetail()" style="border:none; background:none; font-size:1.2rem; cursor:pointer;">✕</button>
-        </div>
-        
-        <div id="cand-detail-content"></div>
+<div id="candidate-detail-modal" class="login-modal" style="z-index: 2000; display: none;">
+    <div class="login-box" style="text-align: left; max-width: 500px; max-height: 80vh; overflow-y: auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h3 style="margin:0;">👤 후보자 정보</h3>
+            <button onclick="closeCandidateDetail()" style="border:none; background:none; font-size:1.2rem; cursor:pointer;">✕</button>
+        </div>
+        
+        <div id="cand-detail-content"></div>
 
-        <button onclick="closeCandidateDetail()" class="btn-enter" style="margin-top: 20px; padding: 12px;">닫기</button>
-    </div>
+        <button onclick="closeCandidateDetail()" class="btn-enter" style="margin-top: 20px; padding: 12px;">닫기</button>
+    </div>
 </div>
 
-    <div id="imageModal" class="img-modal-overlay" onclick="closeImageModal()">
+<div id="imageModal" class="img-modal-overlay" onclick="closeImageModal()" style="display: none;">
     <span class="img-modal-close">&times;</span>
     <img id="modalFullImage" class="img-modal-content">
 </div>
