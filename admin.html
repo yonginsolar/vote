@@ -140,9 +140,57 @@
         
         .voter-list-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
         .voter-list-table th, .voter-list-table td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
+        /* [추가] 로그인 오버레이 스타일 */
+        .login-wrapper {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #f3f4f6; z-index: 9999;
+            display: none; /* 기본 숨김 (JS로 제어) */
+            justify-content: center; align-items: center;
+            flex-direction: column;
+        }
+        .login-box {
+            background: white; padding: 2.5rem; border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%; max-width: 400px;
+            text-align: center; border: 1px solid #e5e7eb;
+        }
+        .login-title { font-size: 1.5rem; font-weight: 800; color: var(--primary-blue); margin-bottom: 0.5rem; }
+        .login-subtitle { color: #6b7280; font-size: 0.9rem; margin-bottom: 2rem; }
+        .login-input {
+            width: 100%; padding: 12px; margin-bottom: 12px;
+            border: 1px solid #d1d5db; border-radius: 8px;
+            font-size: 1rem; box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        .login-input:focus { outline: none; border-color: var(--primary-blue); ring: 2px solid var(--primary-light); }
+        .login-btn {
+            width: 100%; padding: 12px; background: var(--primary-blue);
+            color: white; border: none; border-radius: 8px;
+            font-weight: bold; font-size: 1rem; cursor: pointer;
+            margin-top: 10px; transition: background 0.2s;
+        }
+        .login-btn:hover { background-color: #1d4ed8; }
+        .login-footer { margin-top: 20px; font-size: 0.85rem; color: #9ca3af; }
     </style>
 </head>
 <body>
+    <div id="login-overlay" class="login-wrapper">
+    <div class="login-box">
+        <div class="login-title">Admin Console</div>
+        <div class="login-subtitle">선거 관리 시스템 접속</div>
+        
+        <input type="email" id="login-email" class="login-input" placeholder="이메일 (admin@example.com)" onkeyup="if(window.event.keyCode==13){document.getElementById('login-pw').focus();}">
+        <input type="password" id="login-pw" class="login-input" placeholder="비밀번호" onkeyup="if(window.event.keyCode==13){tryLogin();}">
+        
+        <button onclick="tryLogin()" class="login-btn" id="btn-login-action">로그인</button>
+        
+        <p id="login-msg" style="color:#dc2626; font-size:0.9rem; margin-top:15px; display:none;"></p>
+    </div>
+    <div class="login-footer">
+        Unauthorized access is strictly prohibited.<br>
+        &copy; Yongin Modu Solar Coop.
+    </div>
+</div>
 
 <header>
     <div class="header-left">
@@ -432,59 +480,64 @@
 
     window.closeModal = () => { document.getElementById('common-modal').style.display = 'none'; };
 
-// [수정된 init 함수] 관리자 및 선관위원 권한 검증 로직
+// [수정됨] 초기화 및 권한 검사 함수 (로그인 창 제어 포함)
     async function init() {
-        // [보안] 검증 시작 전까지 화면 숨김 (CSS가 없어도 JS로 강제 적용)
-        document.body.style.display = 'none';
+        // 1. UI 요소 가져오기
+        const loginOverlay = document.getElementById('login-overlay');
+        const header = document.querySelector('header');
+        const container = document.querySelector('.admin-container');
+        const emailDisplay = document.getElementById('admin-email');
+
+        // 2. 초기 상태 설정: 보안을 위해 일단 모든 메인 화면 숨김
+        document.body.style.display = 'block'; // body 자체는 보이게 설정
+        if (header) header.style.display = 'none';
+        if (container) container.style.display = 'none';
+        if (loginOverlay) loginOverlay.style.display = 'none'; // 로그인 창도 로딩 중엔 숨김 (깜빡임 방지)
 
         try {
-            // 1. 유저 정보 획득
+            // 3. Supabase 세션 확인 (로그인 여부)
             const { data: { user }, error: authError } = await supabase.auth.getUser();
-            
-            if (authError || !user || !user.email) {
-                throw new Error("로그인 정보가 없습니다.");
+
+            // [CASE A] 로그인이 안 되어 있는 경우 -> 로그인 창 표시
+            if (authError || !user) {
+                console.log("🔒 미로그인 상태: 로그인 화면 표시");
+                if (loginOverlay) loginOverlay.style.display = 'flex';
+                return; // 여기서 실행 중단 (사용자가 로그인할 때까지 대기)
             }
 
+            // [CASE B] 로그인 됨 -> 권한 검증 시작
             const userEmail = user.email;
+            currentUserEmail = userEmail; // 전역 변수에 저장 (로그 기록용)
             
-            // [수정] 전역 변수에 현재 작업자 이메일 저장 (로그 기록을 위해)
-            currentUserEmail = userEmail;
+            if (emailDisplay) emailDisplay.innerText = userEmail;
 
-            // 화면에 이메일 표시 (엘리먼트가 있을 때만)
-            const emailEl = document.getElementById('admin-email');
-            if (emailEl) emailEl.innerText = userEmail;
-
-            // 2. 권한 검증 (DB 조회 2단계)
+            // 4. DB 권한 조회 (관리자 또는 선관위원)
             let isAuthorized = false;
             let roleName = '';
 
-            // 2-1. 관리자(admin) 체크 (coop_members 테이블)
+            // 4-1. coop_members 테이블에서 기본 정보 및 admin 여부 확인
             const { data: memberData, error: memberError } = await supabase
                 .from('coop_members')
                 .select('role, member_id')
                 .eq('email', userEmail)
                 .maybeSingle();
 
-            if (memberError) console.error("Member DB Error:", memberError);
-
             if (memberData) {
-                // 관리자라면 즉시 통과
+                // (1) 관리자(admin) 권한 체크
                 if (memberData.role === 'admin') {
                     isAuthorized = true;
                     roleName = '관리자';
                 } 
-                // 관리자가 아니고 member_id가 있다면 선관위원 여부 체크
+                // (2) 선관위원(election_comm) 권한 체크
                 else if (memberData.member_id) {
-                    // 2-2. 선관위원(election_comm) 체크 (coop_officials 테이블)
-                    // 조건: member_id 일치 AND category='election_comm' AND status='active'
-                    const { data: officialData, error: officialError } = await supabase
+                    const { data: officialData } = await supabase
                         .from('coop_officials')
                         .select('id')
                         .eq('member_id', memberData.member_id)
-                        .eq('category', 'election_comm')
-                        .eq('status', 'active')
+                        .eq('category', 'election_comm') // 선거관리위원 카테고리
+                        .eq('status', 'active')          // 활동 상태가 active여야 함
                         .maybeSingle();
-
+                    
                     if (officialData) {
                         isAuthorized = true;
                         roleName = '선거관리위원';
@@ -492,34 +545,41 @@
                 }
             }
 
-            // 3. 결과 처리
+            // 5. 최종 접속 허용 여부 판단
             if (isAuthorized) {
-                // [성공] 화면 공개
-                console.log(`✅ 접속 허용: ${roleName} (${currentUserEmail})`);
-                document.body.style.display = 'block'; 
+                console.log(`✅ 접속 허용: ${roleName} (${userEmail})`);
+
+                // 로그인 창 확실히 닫기
+                if (loginOverlay) loginOverlay.style.display = 'none';
                 
-                // URL 파라미터 확인 후 대시보드 로드
+                // 메인 대시보드 UI 표시
+                if (header) header.style.display = 'flex';
+                if (container) container.style.display = 'grid';
+
+                // URL 파라미터(?id=...) 확인하여 해당 선거 로드
                 const urlParams = new URLSearchParams(window.location.search);
-                let targetId = urlParams.get('id');
+                const targetId = urlParams.get('id');
+
                 if (targetId) {
                     currentElectionId = targetId;
                     await startDashboard();
                 } else {
+                    // ID가 없으면 선거 선택 팝업 띄우기
                     await openElectionGateway();
                 }
 
             } else {
-                // [실패] 내용 파기 및 경고 후 내보내기
-                document.body.innerHTML = ''; // 보안을 위해 DOM 내용 삭제
-                alert("🚫 접근 권한이 없습니다.\n(관리자 또는 활성 선관위원만 접속 가능합니다)");
-                window.location.href = 'index.html'; 
+                // 로그인했지만 권한이 없는 경우 (일반 조합원 등)
+                alert("🚫 접근 권한이 없습니다.\n(관리자 또는 현재 활동 중인 선관위원만 접속 가능합니다.)");
+                await supabase.auth.signOut(); // 강제 로그아웃
+                window.location.reload();      // 새로고침하여 로그인 창으로 이동
             }
 
         } catch (e) {
-            console.error("Critical Auth Error:", e);
-            document.body.innerHTML = '';
-            alert("인증 오류가 발생했습니다. 다시 로그인해주세요.");
-            window.location.href = 'index.html';
+            console.error("Critical Init Error:", e);
+            alert("시스템 초기화 중 오류가 발생했습니다. 관리자에게 문의하세요.");
+            // 오류 발생 시 안전하게 로그인 창을 띄움
+            if (loginOverlay) loginOverlay.style.display = 'flex';
         }
     }
 
