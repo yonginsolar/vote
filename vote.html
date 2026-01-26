@@ -137,36 +137,24 @@
         ballotArea.appendChild(listDiv);
     }
 
-    // [핵심 변경] 선거 선택 시 로직: 투표할 목록을 큐(Queue)에 담음
 async function loadElection(election) {
         currentElection = election;
         titleElem.innerText = election.title;
         ballotArea.innerHTML = '<div style="text-align:center; padding:2rem;">투표용지를 확인 중입니다...</div>';
 
         try {
+            // 1. 모든 투표용지 가져오기 (ElectionService에서 이미 지역구->비례 순으로 정렬됨)
             const allBallots = await service.getMyBallotList(election.id);
 
-            // [필터링 로직 수정]
-            // 1. 이미 투표한 것 제외 (!hasVoted)
-            // 2. 무투표 당선인 것 제외 (!isUncontested) -> 투표할 필요 없음
-            pendingBallots = allBallots.filter(b => !b.hasVoted && !b.isUncontested);
+            // [수정] 필터링 조건 변경:
+            // 기존: 이미 투표한 것 OR 무투표인 것 제외
+            // 변경: 오직 '이미 투표한 것(hasVoted)'만 제외 (무투표도 화면에 보여주기 위함)
+            pendingBallots = allBallots.filter(b => !b.hasVoted);
 
-            // 투표할 것이 없는 경우 (이미 다 했거나, 무투표 당선이거나)
             if (pendingBallots.length === 0) {
-                // 무투표 당선 때문에 남은 게 없는지 확인
-                const unvotedButUncontested = allBallots.some(b => !b.hasVoted && b.isUncontested);
-                
-                if (unvotedButUncontested) {
-                    // 무투표 당선 안내
-                    showModal('안내', '해당 선거구는 후보자 수가 선출 인원 이내이므로 무투표 당선 확정되었습니다.\n별도의 투표 절차 없이 종료됩니다.', () => {
-                        showCompleteScreen(true); // true: 무투표 메시지 표시
-                    });
-                } else {
-                    // 일반 완료 안내
-                    showModal('알림', '이미 모든 투표를 완료하셨습니다.', () => {
-                        showCompleteScreen(false);
-                    });
-                }
+                showModal('알림', '이미 모든 투표를 완료하셨습니다.', () => {
+                    showCompleteScreen();
+                });
                 return;
             }
 
@@ -181,28 +169,40 @@ async function loadElection(election) {
                 alertAndClose(error.message);
             }
         }
-    }
+    } // End of loadElection
 
     // [신규] 다음 투표용지를 화면에 그리기
-    function loadNextBallot() {
+function loadNextBallot() {
         if (pendingBallots.length === 0) {
             showCompleteScreen();
             return;
         }
 
-        // 큐에서 하나 꺼냄
-        currentBallot = pendingBallots[0]; // (주의: shift()는 투표 완료 후에 함)
-        selectedValue = null; // 선택 초기화
+        currentBallot = pendingBallots[0];
+        selectedValue = null; // 선택값 초기화
 
         // UI 설정
         document.getElementById('district-name').style.display = 'block';
-        document.getElementById('district-name').innerText = currentBallot.district.name; // 예: "제1선거구", "비례대표"
+        document.getElementById('district-name').innerText = currentBallot.district.name;
         
         voteBtn.style.display = 'block';
-        voteBtn.disabled = true;
-        voteBtn.innerText = '투표하기'; // 초기화
 
-        // 남은 투표 수 표시 (선택사항)
+        // [수정] 무투표 당선 여부에 따른 버튼 상태 분기 처리
+        if (currentBallot.isUncontested) {
+            // Case A: 무투표 당선인 경우
+            voteBtn.innerText = '확인 (무투표 당선)';
+            voteBtn.disabled = false; // 선택 없이도 누를 수 있어야 함
+            voteBtn.classList.remove('btn-submit'); // 스타일 변경 (선택사항)
+            voteBtn.style.backgroundColor = '#6b7280'; // 회색 계열로 차별화
+        } else {
+            // Case B: 일반 투표인 경우
+            voteBtn.innerText = '투표하기';
+            voteBtn.disabled = true; // 선택 전에는 비활성화
+            voteBtn.classList.add('btn-submit');
+            voteBtn.style.backgroundColor = ''; // 원래 색상 복구
+        }
+
+        // 남은 투표 수 표시
         if (pendingBallots.length > 1) {
              titleElem.innerText = `${currentElection.title} (${pendingBallots.length}건 남음)`;
         } else {
@@ -210,25 +210,48 @@ async function loadElection(election) {
         }
 
         renderBallotContent(currentBallot);
-    }
+    } // End of loadNextBallot
 
     // 투표용지 내용 그리기 (renderBallot -> renderBallotContent로 이름 변경)
 function renderBallotContent(info) {
         ballotArea.innerHTML = ''; 
 
+        // [수정] 무투표 당선일 경우 상단에 안내 메시지 표시
+        if (info.isUncontested) {
+            const noticeDiv = document.createElement('div');
+            noticeDiv.style.cssText = 'background:#f0fdf4; padding:1rem; margin-bottom:1rem; border-radius:8px; text-align:center; color:#166534; border:1px solid #bbf7d0;';
+            noticeDiv.innerHTML = `
+                <strong style="font-size:1.1rem;">🎉 무투표 당선 안내</strong><br>
+                <span style="font-size:0.9rem; color:#374151;">
+                    후보자 수(${info.candidates.length}명)가 선출 인원(${info.district.quota}명) 이내이므로<br>
+                    투표 절차 없이 당선이 확정되었습니다.<br>
+                    아래 후보자를 확인하시고 <strong>[확인]</strong> 버튼을 눌러주세요.
+                </span>
+            `;
+            ballotArea.appendChild(noticeDiv);
+        }
+
         if (info.district.vote_type === 'CANDIDATE') {
             const listDiv = document.createElement('div');
             listDiv.className = 'candidate-list';
 
-            // [안전장치] 후보자 투표인데 후보가 0명이면 표시
             if (!info.candidates || info.candidates.length === 0) {
-                ballotArea.innerHTML = '<div style="text-align:center; padding:3rem; color:#666;">등록된 후보자가 없습니다.</div>';
+                ballotArea.innerHTML += '<div style="text-align:center; padding:3rem; color:#666;">등록된 후보자가 없습니다.</div>';
                 return;
             }
 
             info.candidates.forEach(cand => {
                 const card = document.createElement('div');
                 card.className = 'candidate-card';
+                
+                // [수정] 무투표일 경우 카드 스타일 변경 (선택된 느낌)
+                if (info.isUncontested) {
+                    card.style.cursor = 'default'; // 클릭 커서 제거
+                    card.style.borderColor = '#22c55e'; // 초록색 테두리
+                    card.style.backgroundColor = '#f0fdf4'; // 연한 초록 배경
+                    card.style.boxShadow = 'none';
+                }
+
                 const imgUrl = cand.photo_url || 'https://via.placeholder.com/150?text=No+Image';
                 
                 card.innerHTML = `
@@ -238,28 +261,31 @@ function renderBallotContent(info) {
                     <button type="button" class="btn-manifesto" style="margin-top:0.5rem; padding:0.2rem 0.5rem; cursor:pointer;">공약 보기</button>
                 `;
                 
-                // 공약 보기 버튼 클릭 이벤트 (버블링 방지)
+                // 공약 보기 버튼 이벤트
                 const manifestoBtn = card.querySelector('.btn-manifesto');
                 manifestoBtn.onclick = (e) => {
                     e.stopPropagation(); 
                     showManifesto(cand.name, cand.manifesto);
                 };
 
-                // 카드 클릭 이벤트 (후보 선택)
-                card.addEventListener('click', (e) => {
-                    if(e.target === manifestoBtn) return; // 공약 버튼 클릭 시 선택 안 함
-                    document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
-                    card.classList.add('selected');
-                    selectedValue = cand.id;
-                    voteBtn.disabled = false;
-                    voteBtn.innerText = `'${cand.name}' 선택완료`;
-                });
+                // [수정] 무투표 당선이 '아닐 때만' 선택 기능 활성화
+                if (!info.isUncontested) {
+                    card.addEventListener('click', (e) => {
+                        if(e.target === manifestoBtn) return;
+                        document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                        selectedValue = cand.id;
+                        voteBtn.disabled = false;
+                        voteBtn.innerText = `'${cand.name}' 선택완료`;
+                    });
+                }
+                
                 listDiv.appendChild(card);
             });
             ballotArea.appendChild(listDiv);
 
         } else {
-            // [BINARY 타입 - 찬반/추천]
+            // [기존 코드 유지] 찬반 투표 (BINARY)
             ballotArea.innerHTML = `
                 <div class="binary-options">
                     <button type="button" class="btn-binary btn-yes" data-val="AGREE">찬성 (O)</button>
@@ -277,13 +303,23 @@ function renderBallotContent(info) {
                 });
             });
         }
-    }
+    } // End of renderBallotContent
 
     // 버튼 클릭 이벤트
-    voteBtn.addEventListener('click', () => {
+voteBtn.addEventListener('click', () => {
+        // [수정] 1. 무투표 당선인 경우: DB 제출 없이 바로 다음 단계로 이동
+        if (currentBallot && currentBallot.isUncontested) {
+            pendingBallots.shift(); // 현재 투표용지 제거
+            loadNextBallot();       // 다음 투표용지 로드
+            return;                 // 함수 종료
+        }
+
+        // [기존 로직] 2. 일반 투표인 경우
         if (!selectedValue) return;
 
+        const isCandidateVote = currentBallot.district.vote_type === 'CANDIDATE';
         const isLastVote = pendingBallots.length === 1;
+        
         const confirmMsg = isLastVote 
             ? "정말 투표하시겠습니까? 투표 후에는 수정할 수 없습니다." 
             : "이 투표를 제출하고 '다음 투표'로 이동하시겠습니까?";
@@ -297,16 +333,14 @@ function renderBallotContent(info) {
                     electionId: currentElection.id,
                     districtId: currentBallot.district_id,
                     round: currentElection.current_round || 1,
-                    candidateId: currentBallot.district.vote_type === 'CANDIDATE' ? selectedValue : null,
-                    choice: currentBallot.district.vote_type === 'BINARY' ? selectedValue : null
+                    candidateId: isCandidateVote ? selectedValue : null,
+                    choice: !isCandidateVote ? selectedValue : null
                 };
 
-                // 투표 제출
                 await service.submitVote(payload);
 
-                // 성공 시 목록에서 제거하고 다음으로 이동
-                pendingBallots.shift(); // 맨 앞(방금 투표한 것) 제거
-                loadNextBallot(); // 재귀 호출 (남은게 없으면 완료화면)
+                pendingBallots.shift(); 
+                loadNextBallot(); 
 
             } catch (e) {
                 showModal('오류', e.message);
@@ -314,7 +348,7 @@ function renderBallotContent(info) {
                 voteBtn.innerText = '투표하기';
             }
         });
-    });
+    }); // End of voteBtn Event Listener
 
         // [이하 renderBallot, 이벤트 리스너, 모달 함수들은 기존 코드 그대로 사용]
         function renderBallot(info) {
