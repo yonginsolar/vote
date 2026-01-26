@@ -4,352 +4,181 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>선거인 명부 확인 및 투표소 입장</title>
-    <style>
-        /* [모바일 친화적 디자인 시스템] */
-        :root {
-            --primary: #2563eb;
-            --bg-color: #f3f4f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-sub: #6b7280;
-            --danger: #dc2626;
-        }
+<style>
+    /* [통합 디자인 시스템] */
+    :root {
+        --primary: #2563eb;       /* 신뢰감 있는 블루 */
+        --primary-dark: #1e40af;
+        --bg-color: #f1f5f9;      /* 연한 회색 배경 (흰색 카드와 대비) */
+        --card-bg: #ffffff;       /* 카드 배경은 순백색 */
+        --text-main: #1e293b;     /* 진한 네이비 (가독성 확보) */
+        --text-sub: #64748b;      /* 보조 텍스트 회색 */
+        --border: #e2e8f0;
+    }
 
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            padding-bottom: 100px; /* 하단 버튼 공간 확보 */
-        }
+    body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        padding-bottom: 100px; /* 하단 버튼 공간 */
+    }
 
-        /* 상단 헤더 */
-        .header {
-            background: white;
-            padding: 1.5rem 1rem;
-            text-align: center;
-            border-bottom: 1px solid #e5e7eb;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-        .header h1 { margin: 0; font-size: 1.4rem; color: var(--primary); font-weight: 800; }
-        .header p { margin: 8px 0 0; font-size: 0.9rem; color: var(--text-sub); }
-        .status-badge {
-            display: inline-block; padding: 4px 10px; border-radius: 12px; 
-            font-size: 0.8rem; font-weight: bold; color: white; margin-top: 5px;
-        }
+    /* 1. 헤더 스타일 */
+    .header {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        padding: 1rem;
+        text-align: center;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+    .header h1 { margin: 0; font-size: 1.25rem; color: var(--text-main); font-weight: 800; }
+    .header p { margin: 4px 0 0; font-size: 0.85rem; color: var(--text-sub); }
+    
+    .status-badge {
+        display: inline-block; padding: 4px 10px; border-radius: 12px;
+        font-size: 0.75rem; font-weight: bold; color: white; margin-top: 6px;
+    }
 
-        /* 메인 컨테이너 */
-        .container {
-            max-width: 600px; 
-            margin: 0 auto;
-            padding: 1rem;
-        }
-     
+    /* 2. 메인 컨테이너 */
+    .container { max-width: 600px; margin: 0 auto; padding: 16px; }
 
-        /* 후보자 카드 */
-        .candidate-list { display: flex; flex-direction: column; gap: 1rem; }
-        
-        .cand-card {
-            background: var(--card-bg); border-radius: 12px; overflow: hidden;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; border: 1px solid #e5e7eb;
-        }
-        .cand-photo {
-            width: 100px; min-height: 120px; background-color: #f3f4f6; object-fit: cover;
-            border-right: 1px solid #eee;
-        }
-        .cand-info { padding: 1rem; flex: 1; display: flex; flex-direction: column; justify-content: center; }
-        
-        .cand-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-        .cand-symbol {
-            background: var(--primary); color: white; width: 24px; height: 24px; border-radius: 50%;
-            text-align: center; line-height: 24px; font-size: 0.85rem; font-weight: bold; flex-shrink: 0;
-        }
-        .cand-name { font-size: 1.15rem; font-weight: 800; color: #111; margin: 0; }
-        .cand-district { font-size: 0.8rem; color: var(--primary); font-weight: 600; background: #eff6ff; padding: 2px 6px; border-radius: 4px; }
-        
-        .cand-detail { font-size: 0.85rem; color: #4b5563; line-height: 1.5; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    /* 3. 탭 버튼 (선거구 선택) */
+    .district-tabs { 
+        display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px;
+        scrollbar-width: none; 
+    }
+    .district-tabs::-webkit-scrollbar { display: none; }
+    
+    .tab-btn {
+        background: white; border: 1px solid var(--border);
+        padding: 8px 16px; border-radius: 20px; font-size: 0.9rem;
+        color: var(--text-sub); cursor: pointer; white-space: nowrap; transition: 0.2s;
+    }
+    .tab-btn.active {
+        background: var(--primary); color: white; border-color: var(--primary); font-weight: bold;
+        box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2);
+    }
 
-        /* 하단 고정 버튼 */
-        .bottom-action {
-            position: fixed; bottom: 0; left: 0; width: 100%; background: white;
-            padding: 1rem; box-shadow: 0 -2px 15px rgba(0,0,0,0.1); box-sizing: border-box; text-align: center; z-index: 100;
-        }
-        .btn-enter {
-            width: 100%; max-width: 580px; padding: 16px; background: var(--primary);
-            color: white; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 800;
-            cursor: pointer; transition: background 0.2s;
-        }
-        .btn-enter:disabled { background: #9ca3af; cursor: not-allowed; }
-        .btn-enter:active { transform: scale(0.98); }
+    /* 4. 후보자 카드 리스트 (이미지 리사이징 핵심) */
+    .candidate-list { display: flex; flex-direction: column; gap: 12px; }
 
-        /* 로그인 모달 */
-        .login-modal {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000;
-            backdrop-filter: blur(2px);
-        }
-        .login-box {
-            background: white; width: 85%; max-width: 320px; padding: 2rem 1.5rem;
-            border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            animation: slideUp 0.3s ease-out;
-        }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .cand-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden; /* 자식 요소가 튀어나오지 않게 */
+        display: flex;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .cand-card:active { transform: scale(0.98); }
 
-        .login-input {
-            width: 100%; padding: 14px; margin-bottom: 12px; border: 1px solid #d1d5db;
-            border-radius: 8px; font-size: 1rem; box-sizing: border-box; outline: none;
-            transition: border-color 0.2s;
-        }
-        .login-input:focus { border-color: var(--primary); }
+    /* [이미지 제어] 액자 역할 */
+    .cand-photo-wrapper {
+        width: 100px;
+        min-width: 100px; /* Flexbox에서 찌그러짐 방지 */
+        height: 120px;
+        background-color: #f3f4f6;
+        border-right: 1px solid var(--border);
+        position: relative;
+    }
+    /* [이미지 제어] 실제 이미지 */
+    .cand-img-fit {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* 비율 유지하며 꽉 채움 (잘릴 수 있음) */
+        display: block;
+    }
 
-        .modal-close-btn {
-            margin-top: 15px; background: none; border: none; color: #666; 
-            cursor: pointer; text-decoration: underline; font-size: 0.9rem;
-        }
+    .cand-info { flex: 1; padding: 12px 16px; display: flex; flex-direction: column; justify-content: center; }
+    
+    .cand-top-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .cand-symbol { 
+        background: var(--primary); color: white; width: 20px; height: 20px; 
+        border-radius: 50%; font-size: 0.75rem; font-weight: bold; 
+        display: flex; align-items: center; justify-content: center;
+    }
+    .cand-dist-badge { font-size: 0.75rem; color: var(--primary); background: #eff6ff; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+    
+    .cand-name { font-size: 1.1rem; font-weight: 800; color: var(--text-main); margin: 0; }
+    .cand-age { font-size: 0.85rem; color: var(--text-sub); font-weight: normal; margin-left: 4px; }
+    .cand-cta { font-size: 0.8rem; color: var(--primary); margin-top: 6px; font-weight: 500; }
 
-        /* [추가] 후보자 상세 모달 스타일 */
-.modal-cand-header {
-    display: flex; gap: 15px; align-items: center; 
-    border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;
-}
-/* [수정] 상세 모달 사진 크기 확대 */
-.modal-cand-photo {
-    width: 130px;        /* 기존 80px에서 확대 */
-    height: 160px;       /* 기존 100px에서 확대 */
-    object-fit: cover; 
-    border-radius: 8px; 
-    background: #f3f4f6; 
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 약간의 그림자 추가 */
-}
-.modal-section-label {
-    font-size: 0.85rem; color: var(--primary); font-weight: bold; 
-    margin-top: 15px; margin-bottom: 6px; display: block;
-}
-.modal-text-box {
-    background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #f3f4f6;
-    font-size: 0.9rem; line-height: 1.6; color: #374151; white-space: pre-wrap; text-align: left;
-}
-.modal-info-row {
-    display: flex; justify-content: space-between; font-size: 0.9rem; 
-    padding: 6px 0; border-bottom: 1px solid #f3f4f6;
-}
-.modal-info-label { color: #6b7280; }
-.modal-info-val { font-weight: 600; color: #111; text-align: right; }
-        /* 1. 리스트 내 썸네일 이미지: 비율 유지하며 꽉 차게 */
-.candidate-img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain; /* 잘림 방지 핵심 */
-    cursor: pointer;
-    background-color: #f0f0f0; /* 이미지 로딩 전 배경 */
-}
+    /* 5. 결과 화면 스타일 */
+    .result-card { background: white; border-radius: 16px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 20px; }
+    .result-header { padding: 15px; background: #f8fafc; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; font-weight: bold; }
+    .result-table { width: 100%; border-collapse: collapse; }
+    .result-table td { padding: 12px 15px; border-top: 1px solid #f1f5f9; }
+    .winner-row { background-color: #eff6ff; }
+    .bar-bg { background: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden; width: 100%; margin-top: 6px; }
+    .bar-fill { height: 100%; background: var(--primary); border-radius: 4px; }
 
-/* 2. 원본 보기 모달 (평소엔 숨김) */
-.img-modal-overlay {
-    display: none;
-    position: fixed;
-    z-index: 9999;
-    left: 0; top: 0;
-    width: 100%; height: 100%;
-    background-color: rgba(0,0,0,0.85); /* 짙은 반투명 배경 */
-    justify-content: center;
-    align-items: center;
-}
+    /* 6. 모달 공통 */
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6); z-index: 2000;
+        display: none; justify-content: center; align-items: center;
+        backdrop-filter: blur(4px);
+    }
+    .modal-box {
+        background: white; width: 85%; max-width: 320px; padding: 24px;
+        border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        max-height: 85vh; overflow-y: auto;
+    }
 
-/* 모달 내부 큰 이미지 */
-.img-modal-content {
-    max-width: 90vw;
-    max-height: 90vh;
-    object-fit: contain;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-}
+    /* 후보자 상세 모달 */
+    .modal-header-row { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; }
+    .modal-lg-photo { 
+        width: 100px; height: 120px; object-fit: cover; 
+        border-radius: 10px; background: #eee; border: 1px solid #ddd;
+        flex-shrink: 0; /* 찌그러짐 방지 */
+    }
+    .modal-section-title { font-size: 0.9rem; color: var(--primary); font-weight: bold; margin: 15px 0 5px; }
+    .modal-text-content { background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 0.9rem; line-height: 1.5; color: #4b5563; white-space: pre-wrap; }
 
-/* 닫기 버튼 */
-.img-modal-close {
-    position: absolute;
-    top: 20px; right: 30px;
-    color: white;
-    font-size: 40px;
-    font-weight: bold;
-    cursor: pointer;
-}
-            /* [추가] 선거 목록 카드 스타일 */
-        .election-item {
-            background: white; border: 1px solid #e5e7eb; border-radius: 12px;
-            padding: 1.5rem; margin-bottom: 1rem; cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s;
-        }
-        .election-item:hover { border-color: var(--primary); transform: translateY(-2px); }
-        .elec-status-label { font-size: 0.75rem; font-weight: bold; color: white; padding: 3px 8px; border-radius: 4px; }
-        /* [추가] 결과 화면 전용 스타일 */
-        .result-card { background: white; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .result-header { background: #f8fafc; padding: 12px 15px; border-bottom: 1px solid #e2e8f0; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
-        .result-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-        .result-table td { padding: 12px 15px; border-top: 1px solid #f1f5f9; vertical-align: middle; }
-        .bar-bg { background: #e2e8f0; height: 10px; border-radius: 5px; overflow: hidden; width: 100%; margin-top: 5px; }
-        .bar-fill { height: 100%; background: var(--primary); border-radius: 5px; transition: width 1s ease-out; }
-        .winner-row { background-color: #eff6ff; }
-        .badge-quota { font-size: 0.75rem; background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-weight: normal; }
-                <style>
-        /* [기본 설정] */
-        :root {
-            --primary: #3b82f6; /* 더 밝고 세련된 블루 */
-            --primary-dark: #1d4ed8;
-            --bg-color: #f8fafc; /* 아주 연한 블루그레이 배경 */
-            --card-bg: #ffffff;
-            --text-main: #1e293b;
-            --text-sub: #64748b;
-            --success: #10b981;
-            --danger: #ef4444;
-        }
+    /* 이미지 확대 모달 */
+    .img-full-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.9); z-index: 3000; display: none;
+        justify-content: center; align-items: center;
+    }
+    .img-full-content { max-width: 95%; max-height: 90%; object-fit: contain; }
+    .img-close-btn { position: absolute; top: 20px; right: 20px; color: white; font-size: 2rem; cursor: pointer; }
 
-        body {
-            margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg-color); color: var(--text-main);
-            padding-bottom: 100px;
-        }
+    /* 7. 하단 버튼 */
+    .bottom-action {
+        position: fixed; bottom: 0; left: 0; width: 100%;
+        background: white; padding: 16px; box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+        text-align: center; box-sizing: border-box; z-index: 100;
+    }
+    .btn-enter {
+        width: 100%; max-width: 500px; padding: 16px;
+        background: var(--primary); color: white;
+        border: none; border-radius: 14px; font-size: 1.1rem; font-weight: 800;
+        cursor: pointer;
+    }
+    .btn-enter:disabled { background: #94a3b8; cursor: not-allowed; }
 
-        /* 헤더 */
-        .header { background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); padding: 1.2rem; text-align: center; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 50; }
-        .header h1 { margin: 0; font-size: 1.3rem; color: var(--text-main); font-weight: 800; letter-spacing: -0.5px; }
-        .header p { margin: 5px 0 0; font-size: 0.85rem; color: var(--text-sub); }
-        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: white; margin-top: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-
-        .container { max-width: 600px; margin: 0 auto; padding: 20px 16px; }
-
-/* [탭 메뉴 - 알약 스타일 (통합 및 수정)] */
-        .district-tabs { 
-            display: flex; gap: 8px; overflow-x: auto; padding: 5px 2px 15px 2px; margin-bottom: 10px; 
-            scrollbar-width: none; /* Firefox */
-        }
-        .district-tabs::-webkit-scrollbar { display: none; /* Chrome/Safari */ }
-/* [수정] 탭 버튼 스타일 */
-        .tab-btn {
-            background: white; 
-            border: 1px solid #d1d5db;  /* 기본 회색 테두리 */
-            padding: 8px 16px; 
-            border-radius: 20px; 
-            font-size: 0.9rem; 
-            white-space: nowrap; 
-            cursor: pointer; 
-            color: #6b7280;             /* 기본 회색 글자 */
-            transition: all 0.2s;
-        }
-
-        /* 선택된 버튼 (글자 굵게 + 파란색 + 파란 테두리) */
-        .tab-btn.active {
-            background-color: white !important;          /* 배경 흰색 유지 */
-            color: var(--primary) !important;            /* 글자 파란색 */
-            border: 1px solid var(--primary) !important; /* 테두리 파란색으로 변경 */
-            font-weight: 800 !important;                 /* 글자 굵게 */
-            box-shadow: 0 2px 4px rgba(37,99,235,0.1);   /* 살짝 그림자 */
-        }
-
-        /* [결과 카드 디자인] */
-        .result-card {
-            background: white; border-radius: 20px; overflow: hidden; margin-bottom: 24px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
-            border: 1px solid #f1f5f9;
-        }
-        .result-header {
-            padding: 20px; background: white; border-bottom: 1px solid #f1f5f9;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .dist-name { font-size: 1.1rem; font-weight: 800; color: var(--text-main); }
-        .quota-badge { background: #eff6ff; color: var(--primary); font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
-
-        /* [후보자 리스트 아이템 (결과용)] */
-        .cand-result-item {
-            padding: 16px 20px; border-bottom: 1px solid #f8fafc; position: relative;
-        }
-        .cand-result-item:last-child { border-bottom: none; }
-        
-        /* 당선자 강조 효과 */
-        .winner-bg { background: linear-gradient(to right, #f0f9ff, white); }
-        .crown-icon { position: absolute; top: 16px; left: 14px; font-size: 1.2rem; transform: rotate(-15deg); filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1)); }
-
-        /* 내용 레이아웃 */
-        .res-row-top { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px; }
-        .res-name { font-size: 1rem; font-weight: 700; color: var(--text-main); }
-        .res-symbol { font-size: 0.8rem; color: var(--text-sub); margin-left: 4px; font-weight: normal; }
-        .res-votes { font-size: 1rem; font-weight: 800; color: var(--text-main); }
-        .res-percent { font-size: 0.8rem; color: var(--text-sub); margin-left: 4px; }
-
-        /* 막대 그래프 */
-        .progress-track { background: #f1f5f9; height: 12px; border-radius: 6px; overflow: hidden; width: 100%; position: relative; }
-        .progress-fill { height: 100%; border-radius: 6px; transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
-        .fill-winner { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-        .fill-loser { background: #cbd5e1; }
-
-        /* 찬반 투표 스타일 */
-        .binary-box { padding: 25px 20px; }
-        .binary-bar { display: flex; height: 44px; border-radius: 12px; overflow: hidden; font-weight: 700; color: white; font-size: 0.9rem; margin-bottom: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .binary-legend { display: flex; justify-content: space-between; font-size: 0.9rem; color: var(--text-sub); padding: 0 5px; }
-
-        /* 무투표 당선 박스 */
-        .uncontested-box { padding: 40px 20px; text-align: center; }
-        .uncontested-icon { font-size: 3rem; margin-bottom: 10px; display: block; }
-        .winner-pill { display: inline-block; background: white; border: 1px solid #e2e8f0; padding: 8px 16px; border-radius: 20px; margin: 4px; font-weight: 600; color: var(--text-main); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-
-        /* 하단 버튼, 모달 등 기존 필수 스타일 유지 (필요한 부분만 남김) */
-        .bottom-action { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding: 1rem; box-shadow: 0 -4px 20px rgba(0,0,0,0.05); text-align: center; z-index: 100; }
-        .btn-enter { width: 100%; max-width: 580px; padding: 16px; background: var(--text-main); color: white; border: none; border-radius: 16px; font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: 0.2s; }
-        
-        /* 모달 스타일 (기존 유지하되 조금 다듬음) */
-        .login-modal, .img-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 2000; backdrop-filter: blur(4px); }
-        .login-box { background: white; width: 85%; max-width: 320px; padding: 2rem; border-radius: 24px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
-        .login-input { width: 100%; padding: 14px; margin-bottom: 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 12px; font-size: 1rem; outline: none; box-sizing: border-box; }
-        .login-input:focus { border-color: var(--text-main); background: white; }
-        
-        /* 로딩 */
-        .loader { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-/* [추가] 결과 화면 전용 디자인 (카드 뉴스 스타일) */
-        .result-card { 
-            background: white; border-radius: 16px; margin-bottom: 24px; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #f1f5f9; overflow: hidden; 
-        }
-        .result-header { 
-            padding: 16px 20px; background: #fff; border-bottom: 1px solid #f1f5f9; 
-            display: flex; justify-content: space-between; align-items: center; 
-        }
-        .dist-name { font-size: 1.1rem; font-weight: 800; color: #1e293b; }
-        .quota-badge { 
-            background: #eff6ff; color: #3b82f6; font-size: 0.75rem; 
-            font-weight: 700; padding: 4px 10px; border-radius: 8px; 
-        }
-
-        /* 결과 리스트 아이템 */
-        .cand-result-item { padding: 15px 20px; border-bottom: 1px solid #f8fafc; position: relative; }
-        .cand-result-item:last-child { border-bottom: none; }
-        
-        /* 1등 강조 스타일 */
-        .winner-bg { background: linear-gradient(to right, #f0f9ff, #ffffff); }
-        .crown-icon { position: absolute; top: 12px; left: 12px; font-size: 1.2rem; transform: rotate(-15deg); }
-        .padding-winner { padding-left: 30px; } /* 왕관 공간 확보 */
-
-        .res-row-top { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px; }
-        .res-name { font-size: 1rem; font-weight: 700; color: #334155; }
-        .res-symbol { font-size: 0.8rem; color: #94a3b8; margin-left: 4px; font-weight: normal; }
-        .res-votes { font-size: 1rem; font-weight: 800; color: #1e293b; }
-        .res-percent { font-size: 0.8rem; color: #64748b; margin-left: 4px; }
-
-        /* 막대 그래프 */
-        .progress-track { background: #f1f5f9; height: 10px; border-radius: 5px; overflow: hidden; width: 100%; }
-        .progress-fill { height: 100%; border-radius: 5px; transition: width 1s ease-out; }
-        .fill-winner { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-        .fill-loser { background: #cbd5e1; }
-
-        /* 찬반 투표 & 무투표 박스 */
-        .binary-box { padding: 20px; }
-        .binary-bar { display: flex; height: 40px; border-radius: 12px; overflow: hidden; font-weight: bold; color: white; font-size: 0.9rem; margin-bottom: 8px; }
-        .binary-legend { display: flex; justify-content: space-between; font-size: 0.85rem; color: #64748b; }
-        
-        .uncontested-box { padding: 30px; text-align: center; }
-        .uncontested-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; }
-        .winner-pill { display: inline-block; background: white; border: 1px solid #cbd5e1; padding: 6px 14px; border-radius: 20px; margin: 4px; font-weight: 600; color: #334155; box-shadow: 0 2px 4px rgba(0,0,0,0.03); }
-    </style>
+    /* 로그인 인풋 */
+    .login-input {
+        width: 100%; padding: 14px; margin-bottom: 10px;
+        border: 1px solid var(--border); border-radius: 10px;
+        font-size: 1rem; box-sizing: border-box;
+    }
+    
+    /* 로딩 */
+    .loader {
+        width: 30px; height: 30px; border: 3px solid #eee;
+        border-top: 3px solid var(--primary); border-radius: 50%;
+        animation: spin 1s linear infinite; margin: 0 auto;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
 
@@ -397,22 +226,21 @@
         </button>
     </div>
 
-<div id="login-modal" class="login-modal" style="display: none;">
-        <div class="login-box">
-            <h3 style="margin-top: 0; margin-bottom: 5px;">🗳️ 본인 인증</h3>
-            <p style="font-size: 0.85rem; color: #666; margin-bottom: 1.5rem; line-height: 1.4;">
-                선거인 명부 확인을 위해<br>성함과 전화번호 뒷자리를 입력해주세요.
-            </p>
-            
-            <input type="text" id="input-name" class="login-input" placeholder="이름 (예: 홍길동)">
-            <input type="tel" id="input-phone" class="login-input" placeholder="전화번호 뒷자리 4자리" maxlength="4" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0,4);">
-            
-            <button onclick="processLogin()" id="btn-login-submit" class="btn-enter" style="padding: 12px; margin-top: 5px;">확인</button>
-            <button onclick="closeLoginModal()" class="modal-close-btn">닫기</button>
-        </div>
-    </div>
-<div id="candidate-detail-modal" class="login-modal" style="z-index: 2000; display: none;">
-    <div class="login-box" style="text-align: left; max-width: 500px; max-height: 80vh; overflow-y: auto;">
+<div id="login-modal" class="modal-overlay"> <div class="modal-box"> <h3 style="margin-top: 0; margin-bottom: 5px;">🗳️ 본인 인증</h3>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1.5rem;">
+            선거인 명부 확인을 위해<br>성함과 전화번호 뒷자리를 입력해주세요.
+        </p>
+        
+        <input type="text" id="input-name" class="login-input" placeholder="이름 (예: 홍길동)">
+        <input type="tel" id="input-phone" class="login-input" placeholder="전화번호 뒷자리 4자리" maxlength="4" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0,4);">
+        
+        <button onclick="processLogin()" id="btn-login-submit" class="btn-enter" style="padding: 12px; margin-top: 10px;">확인</button>
+        <button onclick="closeLoginModal()" style="margin-top: 15px; border:none; background:none; text-decoration:underline; color:#666;">닫기</button>
+    </div>
+</div>
+
+<div id="candidate-detail-modal" class="modal-overlay" style="z-index: 2000;">
+    <div class="modal-box">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <h3 style="margin:0;">👤 후보자 정보</h3>
             <button onclick="closeCandidateDetail()" style="border:none; background:none; font-size:1.2rem; cursor:pointer;">✕</button>
@@ -424,9 +252,9 @@
     </div>
 </div>
 
-<div id="imageModal" class="img-modal-overlay" onclick="closeImageModal()" style="display: none;">
-    <span class="img-modal-close">&times;</span>
-    <img id="modalFullImage" class="img-modal-content">
+<div id="imageModal" class="img-full-overlay" onclick="closeImageModal()">
+    <span class="img-close-btn">&times;</span>
+    <img id="modalFullImage" class="img-full-content">
 </div>
 
 <script type="module">
@@ -762,64 +590,66 @@ const name = d.name || '공통 선거구';
         }
     };
 
-        window.renderCandidates = async (filterDistId) => {
-            const container = document.getElementById('candidate-area');
-            container.innerHTML = ''; 
+window.renderCandidates = async (filterDistId) => {
+            const container = document.getElementById('candidate-area');
+            container.innerHTML = ''; 
 
-            let list = allCandidates;
-            if (filterDistId !== 'ALL') {
-                list = allCandidates.filter(c => c.district_id === filterDistId);
-            }
+            let list = allCandidates;
+            if (filterDistId !== 'ALL') {
+                list = allCandidates.filter(c => c.district_id === filterDistId);
+            }
 
-            if (list.length === 0) {
-                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
-                return;
-            }
+            if (list.length === 0) {
+                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
+                return;
+            }
 
-            const cardsHtmlPromises = list.map(async c => {
-                const distInfo = allDistricts.find(d => d.id === c.district_id);
-const distName = distInfo ? distInfo.name : '-';
+            const cardsHtmlPromises = list.map(async c => {
+                const distInfo = allDistricts.find(d => d.id === c.district_id);
+                const distName = distInfo ? distInfo.name : '-';
 
-                let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
-                if (c.photo_url) {
-                    if (c.photo_url.startsWith('http')) {
-                        photoSrc = c.photo_url;
-                    } else {
-                        const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
-                        if(data) photoSrc = data.publicUrl;
-                    }
-                }
+                let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+                if (c.photo_url) {
+                    if (c.photo_url.startsWith('http')) {
+                        photoSrc = c.photo_url;
+                    } else {
+                        const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
+                        if(data) photoSrc = data.publicUrl;
+                    }
+                }
 
-                // [중요] 함수 호출 (정의 아님)
-                const ageText = getKoreanAge(c.birth_date);
+                const ageText = getKoreanAge(c.birth_date);
 
-                return `
-                    <div class="cand-card" onclick="openCandidateDetail('${c.id}')" style="cursor: pointer;">
-                        <div style="width: 100px; min-width: 100px; height: 120px; border-right: 1px solid #eee;" onclick="event.stopPropagation()">
-                            <img 
-                                src="${photoSrc}" 
-                                class="candidate-img" 
-                                onclick="openImageModal('${photoSrc}')" 
-                                alt="${c.name}"
-                            >
-                        </div>
-                        <div class="cand-info">
-                            <div class="cand-header">
-                                <span class="cand-symbol">${c.symbol || '-'}</span>
-                                <span class="cand-district">${distName}</span>
-                            </div>
-                            <h3 class="cand-name">${c.name} <span style="font-size:0.8em; color:#666; font-weight:normal;">(${ageText})</span></h3>
-                            <div class="cand-detail" style="color:var(--primary); font-size:0.8rem;">
-                                👉 터치하여 상세 정보 보기
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
+                // [수정 포인트] 인라인 스타일(style="...")을 제거하고 CSS 클래스(cand-photo-wrapper, cand-img-fit) 적용
+                return `
+                    <div class="cand-card" onclick="openCandidateDetail('${c.id}')">
+                        <div class="cand-photo-wrapper" onclick="event.stopPropagation()">
+                            <img 
+                                src="${photoSrc}" 
+                                class="cand-img-fit" 
+                                onclick="openImageModal('${photoSrc}')" 
+                                alt="${c.name}"
+                            >
+                        </div>
+                        
+                        <div class="cand-info">
+                            <div class="cand-top-row">
+                                <span class="cand-symbol">${c.symbol || '-'}</span>
+                                <span class="cand-dist-badge">${distName}</span>
+                            </div>
+                            <h3 class="cand-name">
+                                ${c.name} 
+                                <span class="cand-age">(${ageText})</span>
+                            </h3>
+                            <div class="cand-cta">👉 상세 정보 보기</div>
+                        </div>
+                    </div>
+                `;
+            });
 
-            const cardsHtml = await Promise.all(cardsHtmlPromises);
-            container.innerHTML = cardsHtml.join('');
-        };
+            const cardsHtml = await Promise.all(cardsHtmlPromises);
+            container.innerHTML = cardsHtml.join('');
+        }; // End of renderCandidates
 
         // ==========================================
         // 4. 로그인 프로세스 (window에 등록)
