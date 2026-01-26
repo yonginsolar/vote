@@ -4,6 +4,42 @@
     <meta charset="UTF-8">
     <title>통합 선거 관리 시스템</title>
     <style>
+        /* [수정] 박스 사이징 전역 적용 (검색창이 튀어나가는 문제 해결) */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+/* [신규] 투표 상태 배지 스타일 */
+.badge-voted {
+    background-color: #16a34a; /* 초록색 */
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-left: 6px;
+    font-weight: normal;
+}
+.badge-not-voted {
+    background-color: #dc2626; /* 빨간색 */
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-left: 6px;
+    font-weight: normal;
+}
+
+/* [신규] 미투표자 필터 체크박스 컨테이너 */
+.filter-container {
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    margin-top: 8px; 
+    background: #fff1f2; /* 연한 빨강 배경 */
+    padding: 8px; 
+    border-radius: 4px; 
+    border: 1px solid #fecaca;
+}
         /* [톤앤매너] 색상 변수 */
         :root {
             --admin-bg: #f8f9fa;
@@ -1052,124 +1088,208 @@ window.openElectionGateway = async () => {
         }
     }
 
-// [수정됨] 유권자 현황 로드 (district_id 누락 수정)
-    window.loadVoterStats = async () => {
-        const container = document.getElementById('voter-stats-list');
-        container.innerHTML = '<p style="font-size:0.8rem;">데이터 로딩 중...</p>';
-        
-        try {
-            // 1. 유권자 목록 가져오기
-            // [중요] 여기서 district_id를 가져오지만, 아래 grouped 루프에서 사용을 안 해서 누락됐었습니다.
-            const { data: voters, error: voterError } = await supabase
+// [수정됨] 유권자 현황 로드 (투표 여부 확인 및 통계 포함)
+window.loadVoterStats = async () => {
+    const container = document.getElementById('voter-stats-list');
+    container.innerHTML = '<p style="font-size:0.8rem;">데이터 분석 중...</p>';
+    
+    try {
+        // 1. 유권자 목록 & 투표 기록 병렬 조회 (Promise.all)
+        const [voterRes, logRes] = await Promise.all([
+            supabase
                 .from('election_voters')
-                .select('member_no, district_id') 
-                .eq('election_id', currentElectionId);
+                .select('member_no, district_id, member_uuid') 
+                .eq('election_id', currentElectionId),
+            supabase
+                .from('vote_logs')
+                .select('member_uuid')
+                .eq('election_id', currentElectionId)
+        ]);
 
-            if(voterError) throw voterError;
+        if(voterRes.error) throw voterRes.error;
+        if(logRes.error) throw logRes.error;
 
-            if(!voters || voters.length === 0) {
-                container.innerHTML = '<p style="padding:10px; color:#999;">등록된 유권자가 없습니다.</p>';
-                return;
-            }
+        const voters = voterRes.data;
+        const logs = logRes.data;
 
-            // 2. 조합원 정보 가져오기
-            const memberNos = voters.map(v => v.member_no);
-            
-            const { data: members, error: memberError } = await supabase
-                .from('coop_members')
-                .select('member_id, name, phone')
-                .in('member_id', memberNos);
-
-            if(memberError) throw memberError;
-
-            // 3. 데이터 매핑
-            const memberMap = {};
-            if(members) {
-                members.forEach(m => {
-                    memberMap[m.member_id] = m;
-                });
-            }
-
-            // 4. 데이터 조립 및 렌더링
-            const grouped = {};
-            voters.forEach(v => {
-                const dName = cachedDistricts[v.district_id] || '미지정';
-                const memInfo = memberMap[v.member_no] || { name: '정보없음', phone: '-' };
-
-                // [수정된 부분] district_id를 명시적으로 객체에 담습니다.
-                // 그래야 클릭했을 때 openVoterInfo 함수로 이 값이 전달됩니다.
-                const combinedData = {
-                    member_no: v.member_no,
-                    district_id: v.district_id, // <--- 여기가 비어있어서 에러가 났습니다.
-                    _view_name: memInfo.name,
-                    _view_phone: memInfo.phone
-                };
-
-                if(!grouped[dName]) grouped[dName] = [];
-                grouped[dName].push(combinedData);
-            });
-
-            container.innerHTML = '';
-            for(const [dName, list] of Object.entries(grouped)) {
-                const div = document.createElement('div');
-                div.className = 'voter-group-item';
-                div.onclick = () => showVoterDetail(dName, list);
-                div.innerHTML = `<span style="font-weight:600;">${dName}</span> <span class="voter-count-badge">${list.length}명</span>`;
-                container.appendChild(div);
-            }
-
-        } catch(e) {
-            console.error("유권자 로드 에러:", e);
-            container.innerHTML = `<p style="color:red; font-size:0.8rem;">로드 실패: ${e.message}</p>`;
+        if(!voters || voters.length === 0) {
+            container.innerHTML = '<p style="padding:10px; color:#999;">등록된 유권자가 없습니다.</p>';
+            return;
         }
-    };
+
+        // 2. 투표자 UUID Set 생성 (빠른 검색용)
+        const votedSet = new Set(logs.map(l => l.member_uuid));
+
+        // 3. 조합원 상세 정보 가져오기 (이름, 전화번호)
+        const memberNos = voters.map(v => v.member_no);
+        const { data: members, error: memberError } = await supabase
+            .from('coop_members')
+            .select('member_id, name, phone')
+            .in('member_id', memberNos);
+
+        if(memberError) throw memberError;
+
+        const memberMap = {};
+        if(members) members.forEach(m => memberMap[m.member_id] = m);
+
+        // 4. 데이터 그룹화 및 통계 계산
+        const grouped = {};
+        
+        voters.forEach(v => {
+            const dName = cachedDistricts[v.district_id] || '미지정';
+            const memInfo = memberMap[v.member_no] || { name: '정보없음', phone: '-' };
+            
+            // [핵심] 투표 여부 판별
+            const isVoted = votedSet.has(v.member_uuid);
+
+            const combinedData = {
+                member_no: v.member_no,
+                district_id: v.district_id,
+                _view_name: memInfo.name,
+                _view_phone: memInfo.phone,
+                is_voted: isVoted // 투표 여부 플래그 추가
+            };
+
+            if(!grouped[dName]) {
+                grouped[dName] = { list: [], total: 0, notVoted: 0 };
+            }
+            
+            grouped[dName].list.push(combinedData);
+            grouped[dName].total++;
+            if(!isVoted) grouped[dName].notVoted++;
+        });
+
+        // 5. 사이드바 UI 렌더링
+        container.innerHTML = '';
+        for(const [dName, stat] of Object.entries(grouped)) {
+            const div = document.createElement('div');
+            div.className = 'voter-group-item';
+            // 클릭 시 리스트 모달 열기
+            div.onclick = () => showVoterDetail(dName, stat.list);
+            
+            // 미투표자가 있을 때만 빨간색 강조 텍스트 표시
+            const notVotedText = stat.notVoted > 0 
+                ? `<span style="color:#dc2626; font-size:0.75rem; margin-left:5px;">(미투표 ${stat.notVoted})</span>` 
+                : `<span style="color:#16a34a; font-size:0.75rem; margin-left:5px;">(전원참여)</span>`;
+
+            div.innerHTML = `
+                <div>
+                    <span style="font-weight:600;">${dName}</span>
+                    ${notVotedText}
+                </div>
+                <span class="voter-count-badge">${stat.total}명</span>
+            `;
+            container.appendChild(div);
+        }
+
+    } catch(e) {
+        console.error("현황 로드 실패:", e);
+        container.innerHTML = `<p style="color:red; font-size:0.8rem;">로드 실패: ${e.message}</p>`;
+    }
+};
     window.closeAddVoterModal = () => {
         document.getElementById('add-voter-modal').style.display = 'none';
     };
 
-// [수정됨] 선거구별 유권자 목록 보기 (내부 검색 기능 추가)
-    window.showVoterDetail = (dName, list) => {
-        // 모달 내부 HTML 구성
-        let html = `
-            <div style="padding:10px; background:#f3f4f6; margin-bottom:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                    <strong>${dName}</strong> 명부 (${list.length}명)
-                </div>
-                <input type="text" id="voter-list-search" placeholder="이름 또는 전화번호 검색..." 
-                       onkeyup="filterVoterList()" 
-                       style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:0.9rem;">
-                <div style="font-size:0.75rem; color:#666; margin-top:4px;">* 이름을 클릭하면 상세 정보 조회 및 이동이 가능합니다.</div>
+// [수정됨] 선거구별 유권자 목록 보기 (미투표 필터 추가)
+window.showVoterDetail = (dName, list) => {
+    // 1. 모달 헤더 및 필터 UI 구성
+    let html = `
+        <div style="padding:15px; background:#f9fafb; border-bottom:1px solid #eee;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h4 style="margin:0;">${dName} 명부 (${list.length}명)</h4>
             </div>
             
-            <div style="max-height:300px; overflow-y:auto;">
-                <table class="voter-list-table" id="voter-table-body">
-                    <thead>
-                        <tr>
-                            <th style="width:50px;">번호</th>
-                            <th>이름</th>
-                            <th>전화</th>
-                            <th style="width:50px;">관리</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+            <div style="margin-top:10px;">
+                <input type="text" id="voter-list-search" placeholder="이름 또는 전화번호 검색..." 
+                       onkeyup="filterVoterList()" 
+                       style="width:100%; padding:10px; border:1px solid #ddd; border-radius:4px; font-size:0.9rem;">
+                
+                <div class="filter-container">
+                    <label style="cursor:pointer; font-weight:bold; color:#dc2626; font-size:0.9rem; display:flex; align-items:center;">
+                        <input type="checkbox" id="chk-non-vote" onchange="filterVoterList()" style="margin-right:6px; transform:scale(1.2);">
+                        ⚡ 아직 투표 안 한 사람만 보기
+                    </label>
+                </div>
+            </div>
+        </div>
         
-        list.forEach(v => {
-            // 검색 필터링을 위해 data-search 속성에 검색 키워드(이름+전화번호) 심어둠
-            const searchKey = `${v._view_name}|${v._view_phone}`.toLowerCase();
-            
-            html += `
-                <tr class="voter-row" data-search="${searchKey}" style="cursor:pointer;" onclick="openVoterInfo('${v.member_no}', '${v.district_id}')">
-                    <td>${v.member_no}</td>
-                    <td style="font-weight:bold; color:var(--primary-blue);">${v._view_name}</td>
-                    <td>${v._view_phone || '-'}</td>
-                    <td><button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:0.7rem;">관리</button></td>
-                </tr>`;
-        });
+        <div style="max-height:400px; overflow-y:auto;">
+            <table class="voter-list-table">
+                <thead>
+                    <tr>
+                        <th style="width:50px;">번호</th>
+                        <th>이름 / 상태</th>
+                        <th>전화</th>
+                        <th style="width:50px;">관리</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+    
+    // 2. 리스트 행 생성 (data-voted 속성 주입)
+    list.forEach(v => {
+        const searchKey = `${v._view_name}|${v._view_phone}`.toLowerCase();
+        // 배지 HTML 생성
+        const statusBadge = v.is_voted 
+            ? `<span class="badge-voted">투표완료</span>` 
+            : `<span class="badge-not-voted">미투표</span>`;
         
-        html += '</tbody></table></div>';
+        // 투표 여부에 따라 행 배경색 미세 조정 (미투표자는 약간 붉은끼)
+        const rowBg = v.is_voted ? '' : 'background-color:#fffafa;';
+
+        html += `
+            <tr class="voter-row" 
+                data-search="${searchKey}" 
+                data-voted="${v.is_voted}" 
+                style="cursor:pointer; ${rowBg}" 
+                onclick="openVoterInfo('${v.member_no}', '${v.district_id}')">
+                
+                <td>${v.member_no}</td>
+                <td>
+                    <span style="font-weight:bold; color:var(--primary-blue);">${v._view_name}</span>
+                    ${statusBadge}
+                </td>
+                <td>${v._view_phone || '-'}</td>
+                <td><button class="btn btn-sm btn-outline" style="padding:2px 6px; font-size:0.7rem;">관리</button></td>
+            </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    
+    // 3. 모달 띄우기
+    window.showModal(`${dName} 관리`, html, null, true);
+};
+
+// [수정됨] 통합 필터링 함수 (검색어 + 미투표 체크박스 동시 적용)
+window.filterVoterList = () => {
+    const searchInput = document.getElementById('voter-list-search');
+    const chkNonVote = document.getElementById('chk-non-vote');
+    
+    if(!searchInput || !chkNonVote) return;
+    
+    const filterText = searchInput.value.toLowerCase();
+    const showNonVoteOnly = chkNonVote.checked;
+    
+    const rows = document.querySelectorAll('.voter-row');
+
+    rows.forEach(row => {
+        const textKey = row.getAttribute('data-search');
+        const isVoted = row.getAttribute('data-voted') === 'true'; // 문자열 비교 주의
         
-        window.showModal(`${dName} 유권자 명부`, html, null, true);
-    };
+        // 1. 텍스트 검색 일치 여부
+        const textMatch = textKey.includes(filterText);
+        
+        // 2. 미투표 필터 일치 여부 (체크되었으면, 미투표자(false)만 true)
+        const statusMatch = showNonVoteOnly ? (isVoted === false) : true;
+        
+        // 두 조건 모두 만족해야 표시
+        if (textMatch && statusMatch) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+};
 
     // [신규] 명부 리스트 실시간 필터링 함수
     window.filterVoterList = () => {
