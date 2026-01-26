@@ -280,6 +280,44 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 /* 공약 모달 특화 */
 .manifesto-content { max-width: 700px; } /* 공약 모달은 좀 더 넓게 */
 #manifesto-body img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
+
+        /* [신규] 공약 내용을 감싸는 통합 박스 */
+.manifesto-box {
+    background-color: #f8fafc; /* 아주 연한 회색/블루톤 */
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;       /* 둥근 모서리 */
+    padding: 1.5rem;           /* 내부 여백 넉넉히 */
+    margin-top: 1.5rem;        /* 프로필 테이블과의 거리 */
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.03); /* 안쪽으로 살짝 그림자 */
+}
+
+/* 박스 내부 제목 스타일 */
+.manifesto-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #2563eb;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e2e8f0; /* 제목 아래 밑줄 */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 박스 내부 텍스트 스타일 */
+.manifesto-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #334155;
+    white-space: pre-wrap; /* 줄바꿈 유지 */
+}
+
+/* 모달 내용 여백 최적화 (기존 것 덮어쓰기) */
+.modal-body {
+    padding: 1.5rem; /* 상하좌우 동일하게 */
+    overflow-y: auto;
+    max-height: 70vh; /* 높이 제한 */
+}
     </style>
 </head>
 <body>
@@ -821,22 +859,22 @@ voteBtn.addEventListener('click', () => {
         return addr.replace(/[0-9]/g, '*');
     }
 
-    // [3] 공약 모달 표시 함수 (수정됨: 나이/주소 변환 및 디자인 개선)
+// [수정] 공약 모달 표시 함수 (박스형 디자인 적용)
     function showManifesto(cand) {
         const modal = document.getElementById('manifesto-modal');
         const title = document.getElementById('manifesto-title');
         const body = document.getElementById('manifesto-body');
 
+        // 모달 상단 제목
         title.innerText = `${cand.name} 후보 정보`;
         
-        // 데이터 변환 실행
+        // 데이터 변환
         const age = getKoreanAge(cand.birth_date);
         const shortAddress = formatAddress(cand.address);
         
-        // 1. 상세 정보 테이블 생성
-        // [수정] 생년월일 -> 나이, 주소 -> 간소화 주소
+        // 1. 상단: 프로필 정보 테이블
         let profileHtml = `
-            <table class="profile-table">
+            <table class="profile-table" style="margin-bottom:0;">
                 <tr>
                     <th>나이</th>
                     <td>${age}</td>
@@ -850,25 +888,32 @@ voteBtn.addEventListener('click', () => {
                     <td>${cand.career ? cand.career.replace(/\n/g, '<br>') : '-'}</td>
                 </tr>
             </table>
-            
-            <div style="margin-top: 1.5rem; margin-bottom: 0.8rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem;">
-                <span style="font-size: 1.1rem; font-weight: bold; color: #2563eb;">📢 출마의 변 및 공약</span>
-            </div>
         `;
 
-        // 2. 공약 내용 처리
+        // 2. 하단: 공약 내용 (박스로 감싸기)
         let contentHtml = '';
         const content = cand.manifesto;
         
+        // 이미지인지 텍스트인지 확인
+        let innerContent = '';
         if (content && (content.startsWith('http') || content.startsWith('/'))) {
-             // 이미지인 경우
-             contentHtml = `<img src="${content}" style="max-width:100%; height:auto; border-radius:8px; display:block;">`;
+             innerContent = `<img src="${content}" style="width:100%; height:auto; border-radius:8px; border:1px solid #ddd;">`;
         } else {
-             // 텍스트인 경우
-             contentHtml = `<div style="background:#f9fafb; padding:1rem; border-radius:8px; line-height:1.6; min-height:100px;">${content || "등록된 공약 내용이 없습니다."}</div>`;
+             innerContent = `<div class="manifesto-text">${content || "등록된 공약 내용이 없습니다."}</div>`;
         }
 
-        body.innerHTML = profileHtml + contentHtml;
+        // [핵심] 제목과 내용을 하나의 박스(.manifesto-box)에 담음
+        const boxHtml = `
+            <div class="manifesto-box">
+                <div class="manifesto-title">
+                    📢 출마의 변 및 공약
+                </div>
+                ${innerContent}
+            </div>
+        `;
+
+        // 3. 최종 결합
+        body.innerHTML = profileHtml + boxHtml;
         modal.style.display = 'flex';
     }
     // [신규] 강력한 창 닫기 시도 및 실패 시 안내 화면 처리
