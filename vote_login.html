@@ -52,13 +52,6 @@
         }
         .district-tabs::-webkit-scrollbar { display: none; }
         
-        .tab-btn {
-            background: white; border: 1px solid #d1d5db; padding: 8px 14px; border-radius: 20px;
-            font-size: 0.9rem; white-space: nowrap; cursor: pointer; color: var(--text-sub); transition: all 0.2s;
-        }
-        .tab-btn.active {
-            background: var(--primary); color: white; border-color: var(--primary); font-weight: bold; box-shadow: 0 2px 4px rgba(37,99,235,0.3);
-        }
 
         /* 후보자 카드 */
         .candidate-list { display: flex; flex-direction: column; gap: 1rem; }
@@ -235,14 +228,18 @@
         /* [탭 메뉴 - 알약 스타일] */
         .district-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 5px 2px 15px 2px; margin-bottom: 10px; scrollbar-width: none; }
         .district-tabs::-webkit-scrollbar { display: none; }
+/* [수정] 탭 버튼 스타일: 선택 시 파란 배경에 흰 글씨 강제 적용 */
         .tab-btn {
-            background: white; border: 1px solid #e2e8f0; padding: 10px 18px; border-radius: 25px;
-            font-size: 0.9rem; font-weight: 600; color: var(--text-sub); cursor: pointer; transition: all 0.2s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.03); white-space: nowrap;
+            background: white; border: 1px solid #d1d5db; padding: 8px 16px; 
+            border-radius: 20px; font-size: 0.9rem; white-space: nowrap; 
+            cursor: pointer; color: #6b7280; transition: all 0.2s;
         }
         .tab-btn.active {
-            background: var(--text-main); color: white; border-color: var(--text-main);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15); transform: translateY(-1px);
+            background-color: var(--primary) !important; /* 강제 적용 */
+            color: #ffffff !important;                   /* 흰색 강제 */
+            border-color: var(--primary) !important;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(37,99,235,0.3);
         }
 
         /* [결과 카드 디자인] */
@@ -439,6 +436,7 @@
         let allDistricts = [];
         let currentStatus = '';
             let currentElection = null;
+            let cachedResultData = null;
 
         // ==========================================
         // [핵심] 1. 유틸리티 함수 정의 (전역 등록용)
@@ -744,11 +742,21 @@ const name = d.name || '공통 선거구';
             container.innerHTML = html;
         }
 
-        window.filterCandidates = (districtId, btnElement) => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            btnElement.classList.add('active');
-            renderCandidates(districtId);
-        };
+// [수정 1] 탭 클릭 시 필터링 로직 (즉시 반응하도록 개선)
+    window.filterCandidates = (distId, btn) => {
+        // 1. 버튼 스타일 활성화
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        // 2. 상태에 따라 다른 렌더링 함수 호출
+        if (currentStatus === 'PUBLISHED' || currentStatus === 'ENDED') {
+            // 결과 모드: DB 조회 없이 화면만 갱신
+            renderResultsUI(distId); 
+        } else {
+            // 후보자 모드: 기존 함수 사용
+            renderCandidates(distId);
+        }
+    };
 
         window.renderCandidates = async (filterDistId) => {
             const container = document.getElementById('candidate-area');
@@ -886,139 +894,145 @@ const distName = distInfo ? distInfo.name : '-';
                 btn.innerText = "확인";
             }
         };
-// [디자인이 개선된 결과 로드 함수]
-    async function loadResults(filterDistId = 'ALL') {
+// [수정 2] 결과 데이터 로드 (최초 1회만 DB 조회)
+    async function loadResults() {
         const container = document.getElementById('result-content');
-        container.innerHTML = '<div style="text-align:center; padding:60px 20px; color:#94a3b8;"><div class="loader"></div><br>개표 결과를 불러오고 있습니다...</div>';
+        container.innerHTML = '<div style="text-align:center; padding:30px;"><div class="loader"></div><br>결과 집계 중...</div>';
 
         try {
-            // 데이터 조회
+            // DB에서 데이터 가져오기
             const [distRes, candRes, ballotRes] = await Promise.all([
                 supabase.from('districts').select('id, name, is_common, quota, vote_type').eq('election_id', electionId).order('name'),
                 supabase.from('candidates').select('id, name, symbol, district_id').eq('election_id', electionId).eq('status', 'APPROVED'),
                 supabase.from('ballots').select('district_id, candidate_id, choice').eq('election_id', electionId)
             ]);
 
-            const districts = distRes.data || [];
-            const candidates = candRes.data || [];
-            const ballots = ballotRes.data || [];
-            
-            let html = '';
-            let targetDistricts = (filterDistId === 'ALL') ? districts : districts.filter(d => d.id === filterDistId);
+            // 전역 변수에 저장 (캐싱)
+            cachedResultData = {
+                districts: distRes.data || [],
+                candidates: candRes.data || [],
+                ballots: ballotRes.data || []
+            };
 
-            targetDistricts.forEach(dist => {
-                const distCands = candidates.filter(c => c.district_id === dist.id);
-                const distBallots = ballots.filter(b => b.district_id === dist.id);
-                const quota = dist.quota || 1;
-                const isBinary = dist.vote_type === 'BINARY';
-
-                html += `<div class="result-card">
-                            <div class="result-header">
-                                <span class="dist-name">${dist.name}</span>
-                                <span class="quota-badge">${isBinary ? '찬반 투표' : `${quota}인 선출`}</span>
-                            </div>`;
-
-                if (distCands.length === 0) {
-                    html += `<div style="padding:40px; text-align:center; color:#94a3b8;">등록된 후보자가 없습니다.</div>`;
-                } 
-                // [찬반 투표]
-                else if (isBinary) {
-                    let counts = { 'AGREE': 0, 'DISAGREE': 0, 'ABSTENTION': 0 };
-                    let total = 0;
-                    distBallots.forEach(b => { if(counts[b.choice] !== undefined) { counts[b.choice]++; total++; } });
-                    
-                    const agreePct = total ? ((counts.AGREE / total) * 100).toFixed(1) : 0;
-                    const disagreePct = total ? ((counts.DISAGREE / total) * 100).toFixed(1) : 0;
-
-                    html += `<div class="binary-box">
-                                <div class="binary-bar">
-                                    <div style="width:${agreePct}%; background:#3b82f6; display:flex; align-items:center; justify-content:center;">찬성 ${agreePct}%</div>
-                                    <div style="width:${disagreePct}%; background:#ef4444; display:flex; align-items:center; justify-content:center;">반대 ${disagreePct}%</div>
-                                </div>
-                                <div class="binary-legend">
-                                    <span>찬성 <b>${counts.AGREE}</b></span>
-                                    <span>기권 ${counts.ABSTENTION}</span>
-                                    <span>반대 <b>${counts.DISAGREE}</b></span>
-                                </div>
-                             </div>`;
-                } 
-                // [무투표 당선]
-                else if (distCands.length <= quota) {
-                     html += `<div class="uncontested-box">
-                                <span class="uncontested-icon">🎉</span>
-                                <h3 style="margin:0 0 5px 0; color:#166534;">전원 무투표 당선</h3>
-                                <p style="font-size:0.85rem; color:#64748b; margin-bottom:20px;">후보자 수가 선출 인원 이내입니다.</p>
-                                <div>
-                                    ${distCands.map(c => `<span class="winner-pill">${c.name}</span>`).join('')}
-                                </div>
-                              </div>`;
-                } 
-                // [경선]
-else {
-                    const voteCounts = {}; 
-                    let totalVotes = 0;
-                    
-                    distCands.forEach(c => voteCounts[c.id] = 0);
-                    distBallots.forEach(b => { 
-                        if(b.candidate_id && voteCounts[b.candidate_id] !== undefined) { 
-                            voteCounts[b.candidate_id]++; 
-                            totalVotes++; 
-                        } 
-                    });
-                    
-                    const results = distCands.map(c => ({
-                        ...c, count: voteCounts[c.id], 
-                        percent: totalVotes ? ((voteCounts[c.id] / totalVotes) * 100).toFixed(1) : 0
-                    })).sort((a, b) => b.count - a.count);
-
-                    html += `<div>`;
-                    
-                    results.forEach((r, idx) => {
-                        // [핵심 수정] 1등(idx===0)이 아니라, 선출인원(quota) 안에 들면 모두 Winner
-                        const isWinner = idx < quota; 
-                        
-                        const barColorClass = isWinner ? 'fill-winner' : 'fill-loser';
-                        const winnerClass = isWinner ? 'winner-bg' : '';
-                        const paddingClass = isWinner ? 'padding-winner' : '';
-                        
-                        // 당선인이면 모두 왕관 표시 (원치 않으면 이 줄을 지우면 됩니다)
-                        const crownHtml = isWinner ? '<div class="crown-icon">👑</div>' : '';
-
-                        // (선택사항) 만약 "당선" 텍스트 뱃지도 같이 주고 싶다면 아래 주석 해제
-                        // const badgeHtml = isWinner ? '<span style="font-size:0.7rem; color:#2563eb; border:1px solid #2563eb; padding:2px 4px; border-radius:4px; margin-left:5px;">당선</span>' : '';
-
-                        html += `<div class="cand-result-item ${winnerClass}">
-                                    ${crownHtml}
-                                    <div class="res-row-top ${paddingClass}">
-                                        <div>
-                                            <span class="res-name">${r.name}</span>
-                                            <span class="res-symbol">기호 ${r.symbol}</span>
-                                        </div>
-                                        <div>
-                                            <span class="res-votes">${r.count}표</span>
-                                            <span class="res-percent">(${r.percent}%)</span>
-                                        </div>
-                                    </div>
-                                    <div class="progress-track ${paddingClass}">
-                                        <div class="progress-fill ${barColorClass}" style="width:${r.percent}%;"></div>
-                                    </div>
-                                 </div>`;
-                    });
-                    html += `</div>
-                             <div style="padding:15px; text-align:right; font-size:0.8rem; color:#94a3b8; background:#f8fafc;">
-                                총 투표수: <strong>${totalVotes}</strong>표
-                             </div>`;
-                }
-                
-                html += `</div>`; // result-card 닫기
-            });
-
-            container.innerHTML = html;
+            // 전체 결과 그리기
+            renderResultsUI('ALL');
 
         } catch (e) {
-            console.error("결과 로드 중 에러:", e);
-            container.innerHTML = `<div style="color:#ef4444; text-align:center; padding:40px;">결과를 불러오지 못했습니다.<br><small>${e.message}</small></div>`;
+            console.error(e);
+            container.innerHTML = `<div style="color:red; text-align:center;">결과 로드 실패: ${e.message}</div>`;
         }
+    }
+            // [신규] 결과 화면 그리기 전용 함수 (필터링 적용)
+    function renderResultsUI(filterDistId) {
+        const container = document.getElementById('result-content');
+        if (!cachedResultData) return;
+
+        const { districts, candidates, ballots } = cachedResultData;
+        
+        // 필터링: 전체(ALL)이거나 해당 ID인 선거구만 선택
+        let targetDistricts = (filterDistId === 'ALL') 
+            ? districts 
+            : districts.filter(d => d.id === filterDistId);
+
+        let html = '';
+
+        if (targetDistricts.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">해당 선거구 정보가 없습니다.</div>';
+            return;
+        }
+
+        targetDistricts.forEach(dist => {
+            const distCands = candidates.filter(c => c.district_id === dist.id);
+            const distBallots = ballots.filter(b => b.district_id === dist.id);
+            const quota = dist.quota || 1;
+            const isBinary = dist.vote_type === 'BINARY';
+
+            html += `<div class="result-card">
+                        <div class="result-header">
+                            <span>${dist.name}</span>
+                            <span class="badge-quota">${isBinary ? '찬반 투표' : `${quota}인 선출`}</span>
+                        </div>`;
+
+            // [CASE A] 후보 없음
+            if (distCands.length === 0) {
+                html += `<div style="padding:30px; text-align:center; color:#999;">후보자가 없습니다.</div>`;
+            } 
+            // [CASE B] 찬반 투표
+            else if (isBinary) {
+                let counts = { 'AGREE': 0, 'DISAGREE': 0, 'ABSTENTION': 0 };
+                let total = 0;
+                distBallots.forEach(b => { 
+                    if(counts[b.choice] !== undefined) { counts[b.choice]++; total++; } 
+                });
+                
+                const agreePct = total ? ((counts.AGREE / total) * 100).toFixed(1) : 0;
+                const disagreePct = total ? ((counts.DISAGREE / total) * 100).toFixed(1) : 0;
+
+                html += `<div style="padding:20px;">
+                            <div style="display:flex; height:30px; border-radius:15px; overflow:hidden; font-weight:bold; color:white; font-size:0.85rem; margin-bottom:10px;">
+                                <div style="width:${agreePct}%; background:#2563eb; display:flex; align-items:center; justify-content:center;">찬성 ${agreePct}%</div>
+                                <div style="width:${disagreePct}%; background:#dc2626; display:flex; align-items:center; justify-content:center;">반대 ${disagreePct}%</div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-size:0.9rem; color:#4b5563;">
+                                <span>찬성 <b>${counts.AGREE}</b></span>
+                                <span>반대 <b>${counts.DISAGREE}</b></span>
+                            </div>
+                         </div>`;
+            }
+            // [CASE C] 무투표 당선
+            else if (distCands.length <= quota) {
+                 html += `<div style="padding:30px; text-align:center; background:#f0fdf4; color:#166534;">
+                            <div style="font-size:2rem; margin-bottom:10px;">🎉</div>
+                            <h3 style="margin:0;">전원 무투표 당선</h3>
+                            <div style="margin-top:10px;">${distCands.map(c => `<span style="background:white; border:1px solid #bbf7d0; padding:6px 12px; border-radius:20px; display:inline-block; margin:4px; font-weight:bold; color:#374151;">${c.name}</span>`).join('')}</div>
+                          </div>`;
+            } 
+            // [CASE D] 경선
+            else {
+                const voteCounts = {}; 
+                let totalVotes = 0;
+                distCands.forEach(c => voteCounts[c.id] = 0);
+                distBallots.forEach(b => { 
+                    if(b.candidate_id && voteCounts[b.candidate_id] !== undefined) { 
+                        voteCounts[b.candidate_id]++; 
+                        totalVotes++; 
+                    } 
+                });
+                
+                const results = distCands.map(c => ({
+                    ...c, 
+                    count: voteCounts[c.id], 
+                    percent: totalVotes ? ((voteCounts[c.id] / totalVotes) * 100).toFixed(1) : 0
+                })).sort((a, b) => b.count - a.count);
+
+                html += `<table class="result-table"><tbody>`;
+                results.forEach((r, idx) => {
+                    const isWinner = idx < quota; // 당선권
+                    html += `<tr class="${isWinner ? 'winner-row' : ''}">
+                                <td style="width:40%; padding-left:15px;">
+                                    <div style="font-weight:bold; color:#374151;">
+                                        ${isWinner ? '👑 ' : ''} ${r.name}
+                                    </div>
+                                    <div style="font-size:0.75rem; color:#9ca3af;">기호 ${r.symbol || '-'}</div>
+                                </td>
+                                <td style="text-align:right; width:20%; font-weight:bold;">${r.count}표</td>
+                                <td style="padding-right:15px; width:40%;">
+                                    <div class="bar-bg">
+                                        <div class="bar-fill" style="width:${r.percent}%; background:${isWinner ? '#2563eb' : '#cbd5e1'}"></div>
+                                    </div>
+                                    <div style="font-size:0.7rem; text-align:right; color:#666; margin-top:2px;">${r.percent}%</div>
+                                </td>
+                             </tr>`;
+                });
+                html += `</tbody></table>
+                         <div style="padding:10px; text-align:right; font-size:0.8rem; color:#94a3b8; background:#f8fafc;">
+                            총 투표수: ${totalVotes}표
+                         </div>`;
+            }
+            html += `</div>`; // 카드 닫기
+        });
+
+        container.innerHTML = html;
     }
 
         // 앱 시작
