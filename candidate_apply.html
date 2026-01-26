@@ -286,6 +286,13 @@
     }
     .preview-label { color: #64748b; font-weight: 500; }
     .preview-val { font-weight: 700; color: #334155; text-align: right; max-width: 60%; }
+    /* [신규] 파일 용량 및 안내 문구 스타일 */
+.file-info-text {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    margin-left: 8px;
+    font-weight: 400;
+}
 </style>
 </head>
 <body>
@@ -359,38 +366,44 @@
                 <input type="text" id="cand-name" required placeholder="예: 홍길동">
             </div>
 
-            <div style="margin-bottom:1.5rem;">
-                <label><strong>프로필 사진 (공개)</strong></label>
-                <div id="current-photo-area" style="display:none; margin-bottom:10px;">
-                    <img id="preview-photo" src="" style="width:80px; height:80px; object-fit:cover; border-radius:50%; border:2px solid #ddd;">
-                </div>
-                <div class="file-upload-wrapper">
-                    <input type="file" id="cand-photo" accept="image/*" class="file-upload-input">
-                    <label for="cand-photo" class="file-custom-label">
-                        📷 사진 파일 선택하기
-                    </label>
-                    <span id="photo-file-name" class="file-name-display">선택된 파일 없음</span>
-                </div>
-            </div>
+<div style="margin-bottom:1.5rem;">
+    <label>
+        <strong>프로필 사진 (공개)</strong>
+        <span class="file-info-text">* 최대 10MB</span>
+    </label>
+    <div id="current-photo-area" style="display:none; margin-bottom:10px;">
+        <img id="preview-photo" src="" style="width:80px; height:80px; object-fit:cover; border-radius:50%; border:2px solid #ddd;">
+    </div>
+    <div class="file-upload-wrapper">
+        <input type="file" id="cand-photo" accept="image/*" class="file-upload-input">
+        <label for="cand-photo" class="file-custom-label">
+            📷 사진 파일 선택하기
+        </label>
+        <span id="photo-file-name" class="file-name-display">선택된 파일 없음</span>
+    </div>
+</div>
 
-            <div style="margin-bottom:1rem;">
-                <label><strong>대표 이력</strong></label>
-                <textarea id="cand-career" rows="3" required placeholder="주요 경력을 입력하세요"></textarea>
-            </div>
+<div style="margin-bottom:1rem;">
+    <label><strong>대표 이력</strong></label>
+    <textarea id="cand-career" rows="3" required placeholder="주요 경력을 입력하세요"></textarea>
+</div>
 
-            <div style="margin-bottom:1.5rem;">
-                <label><strong>이력 증빙 서류 (비공개)</strong></label>
-                <div id="current-proof-area" style="display:none; margin-bottom:5px; color:green; font-size:0.9rem;">
-                    ✅ 저장된 증빙서류가 있습니다.
-                </div>
-                <div class="file-upload-wrapper">
-                    <input type="file" id="cand-proof" accept=".pdf,image/*" class="file-upload-input">
-                    <label for="cand-proof" class="file-custom-label" style="border-color:#64748b; color:#64748b;">
-                        📂 증빙 파일 선택하기
-                    </label>
-                    <span id="proof-file-name" class="file-name-display">선택된 파일 없음</span>
-                </div>
-            </div>
+<div style="margin-bottom:1.5rem;">
+    <label>
+        <strong>이력 증빙 서류 (비공개)</strong>
+        <span class="file-info-text">(선택 사항 / 최대 10MB)</span>
+    </label>
+    <div id="current-proof-area" style="display:none; margin-bottom:5px; color:green; font-size:0.9rem;">
+        ✅ 저장된 증빙서류가 있습니다.
+    </div>
+    <div class="file-upload-wrapper">
+        <input type="file" id="cand-proof" accept=".pdf,image/*" class="file-upload-input">
+        <label for="cand-proof" class="file-custom-label" style="border-color:#64748b; color:#64748b;">
+            📂 증빙 파일 선택하기
+        </label>
+        <span id="proof-file-name" class="file-name-display">선택된 파일 없음</span>
+    </div>
+</div>
 
             <div style="margin-bottom:1rem;">
                 <label><strong>공약 및 출마의 변</strong></label>
@@ -733,11 +746,12 @@
 
     window.closeConfirmModal = () => document.getElementById('confirm-modal').style.display = 'none';
 
-    // --- [8] 최종 제출 ---
+// --- [8] 최종 제출 ---
     document.getElementById('btn-final-submit').addEventListener('click', async () => {
         closeConfirmModal();
         const btn = document.getElementById('btn-pre-check');
-        btn.disabled = true; btn.innerText = '제출 중...';
+        btn.disabled = true; 
+        btn.innerText = '제출 중...';
 
         try {
             const userId = currentUser.id;
@@ -745,16 +759,34 @@
             const photoFile = document.getElementById('cand-photo').files[0];
             const proofFile = document.getElementById('cand-proof').files[0];
 
+            // [신규] 파일 용량 제한 설정 (10MB)
+            const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+            // 1. 필수값 검증 (사진은 필수)
             if (!candId) {
                 if (!photoFile) throw new Error('프로필 사진을 선택해주세요.');
-                if (!proofFile) throw new Error('증빙 서류를 선택해주세요.');
+                // [수정] 증빙 서류 필수 체크 로직 제거됨 (이제 선택 사항임)
             }
 
+            // 2. 용량 검증
+            if (photoFile && photoFile.size > MAX_SIZE) {
+                throw new Error('프로필 사진은 10MB를 초과할 수 없습니다.');
+            }
+            if (proofFile && proofFile.size > MAX_SIZE) {
+                throw new Error('증빙 서류는 10MB를 초과할 수 없습니다.');
+            }
+
+            // 3. 파일 업로드
             let photoUrl = null;
             let proofUrl = null;
+            
+            // 사진은 필수이므로 파일이 있거나 기존 URL이 있어야 함 (서비스 로직에 위임)
             if (photoFile) photoUrl = await service.uploadCandidatePhoto(photoFile, userId);
+            
+            // 증빙서류는 선택이므로 파일이 있을 때만 업로드
             if (proofFile) proofUrl = await service.uploadProofDoc(proofFile, userId);
 
+            // 4. DB 저장 데이터 구성
             const candidateObj = {
                 election_id: document.getElementById('election-id').value,
                 district_id: document.getElementById('district-id').value,
@@ -767,18 +799,21 @@
                 manifesto: document.getElementById('cand-manifesto').value,
                 agreed: true,
                 status: 'PENDING',
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString() // Update 시에는 Supabase가 처리하거나 무시됨
             };
 
+            // 파일이 새로 업로드된 경우에만 URL 업데이트
             if (photoUrl) candidateObj.photo_url = photoUrl;
             if (proofUrl) candidateObj.proof_url = proofUrl;
 
+            // 5. Insert 또는 Update 실행
             let result;
             if (candId) {
                 result = await supabase.from('candidates').update(candidateObj).eq('id', candId);
             } else {
                 result = await supabase.from('candidates').insert(candidateObj);
             }
+            
             if (result.error) throw result.error;
 
             showModal('성공', '신청이 완료되었습니다. 관리자 승인을 기다려주세요.', () => location.reload());
@@ -786,9 +821,11 @@
         } catch (err) {
             console.error(err);
             showModal('제출 실패', err.message);
-            btn.disabled = false; btn.innerText = '신청서 제출';
+            btn.disabled = false; 
+            btn.innerText = '신청서 제출';
         }
     });
+    // End of btn-final-submit event listener
 
     init();
     </script>
