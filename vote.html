@@ -58,18 +58,47 @@ h1 { margin: 0 0 0.5rem 0; font-size: 1.8rem; color: var(--text-dark); }
 }
 
 /* 후보자 카드 모던 디자인 */
+/* [수정 1] 후보자 카드 디자인 강화 (테두리 + 그림자) */
 .candidate-card {
     background: #fff;
-    border: 2px solid transparent;
+    border: 1px solid #e5e7eb; /* 연한 테두리 추가 */
     border-radius: var(--radius-lg);
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    /* 그림자를 더 진하게 수정하여 잘 보이게 함 */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     transition: all 0.2s ease;
     cursor: pointer;
     display: flex;
     flex-direction: column;
 }
-.candidate-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.candidate-card:hover {
+    border-color: var(--primary-color);
+    /* 마우스 올렸을 때 더 떠오르는 효과 */
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.1); 
+    transform: translateY(-3px);
+}
+
+/* [수정 2] 무투표 당선 확인 버튼 디자인 (모던 스타일) */
+.btn-uncontested {
+    /* 그라데이션 적용으로 올드한 느낌 제거 */
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    color: white;
+    border: none;
+    padding: 1rem 3rem;
+    font-size: 1.1rem;
+    border-radius: 2rem;
+    cursor: pointer;
+    font-weight: bold;
+    /* 버튼 자체에 빛나는 효과(Glow) 추가 */
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+    width: 100%;
+    max-width: 400px;
+}
+.btn-uncontested:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+}
 .candidate-card.selected {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.2); /* 강조 효과 */
@@ -341,27 +370,24 @@ function loadNextBallot() {
         }
 
         currentBallot = pendingBallots[0];
-        selectedValue = null; // 선택값 초기화
+        selectedValue = null;
 
-        // UI 설정
         document.getElementById('district-name').style.display = 'block';
         document.getElementById('district-name').innerText = currentBallot.district.name;
         
         voteBtn.style.display = 'block';
 
-        // [수정] 무투표 당선 여부에 따른 버튼 상태 분기 처리
+        // [디자인 수정] 버튼 스타일 교체 로직
         if (currentBallot.isUncontested) {
-            // Case A: 무투표 당선인 경우
+            // 무투표 당선: 예쁜 초록색 그라데이션 버튼 적용
             voteBtn.innerText = '확인 (무투표 당선)';
-            voteBtn.disabled = false; // 선택 없이도 누를 수 있어야 함
-            voteBtn.classList.remove('btn-submit'); // 스타일 변경 (선택사항)
-            voteBtn.style.backgroundColor = '#6b7280'; // 회색 계열로 차별화
+            voteBtn.disabled = false;
+            voteBtn.className = 'btn-uncontested'; // CSS에서 만든 클래스 적용
         } else {
-            // Case B: 일반 투표인 경우
+            // 일반 투표: 기본 파란색 버튼 적용
             voteBtn.innerText = '투표하기';
-            voteBtn.disabled = true; // 선택 전에는 비활성화
-            voteBtn.classList.add('btn-submit');
-            voteBtn.style.backgroundColor = ''; // 원래 색상 복구
+            voteBtn.disabled = true;
+            voteBtn.className = 'btn-submit'; // 기존 클래스 복구
         }
 
         // 남은 투표 수 표시
@@ -372,7 +398,7 @@ function loadNextBallot() {
         }
 
         renderBallotContent(currentBallot);
-    } // End of loadNextBallot
+    }
 
     // 투표용지 내용 그리기 (renderBallot -> renderBallotContent로 이름 변경)
 // [수정된 함수] 공약 보기 모달 적용 및 카드 구조 변경
@@ -647,7 +673,23 @@ voteBtn.addEventListener('click', () => {
                 window.close(); 
             });
         }
+        // [추가] 공약 보기 모달 띄우기 함수
+    function showManifesto(name, content) {
+        const modal = document.getElementById('manifesto-modal');
+        const title = document.getElementById('manifesto-title');
+        const body = document.getElementById('manifesto-body');
+
+        title.innerText = `${name} 후보 공약`;
         
+        // 내용이 이미지 URL인지 텍스트인지 판단
+        if (content && (content.startsWith('http') || content.startsWith('/'))) {
+             body.innerHTML = `<img src="${content}" style="max-width:100%; height:auto; border-radius:8px;">`;
+        } else {
+             body.innerText = content || "등록된 공약 내용이 없습니다.";
+        }
+        
+        modal.style.display = 'flex';
+    }
         initPage();
     </script>
 </body>
