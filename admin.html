@@ -1927,12 +1927,22 @@ window.finalizeNomination = async () => {
         } catch(e) {}
     }
 
+// [수정됨] 개표함 열기 버튼 클릭 시
     window.openBallotBox = () => {
-         const pwd = prompt("🔐 보안 확인: '개표' 입력");
-         if(pwd !== '개표') return alert('취소');
+         const pwd = prompt("🔐 보안 확인: 개표함 잠금을 해제하려면 '개표'라고 입력하세요.");
+         
+         if(pwd !== '개표') {
+             alert('비밀번호가 일치하지 않아 개표함을 열 수 없습니다.');
+             return;
+         }
+
+         // 1. 결과 영역 보여주기
          document.getElementById('result-display').style.display = 'block';
-         alert("개표함이 열렸습니다.");
-         // 여기에 실제 개표 결과를 불러오는 로직(service.getResults)을 연결하면 됩니다.
+         
+         // 2. [핵심] 실제 데이터를 불러오는 함수 실행!
+         loadElectionResults();
+         
+         alert("개표함이 열렸습니다. 집계 결과를 불러옵니다.");
     };
     
     // 단순 탭 전환 (메뉴 클릭용)
@@ -1953,6 +1963,111 @@ window.finalizeNomination = async () => {
         };
         return map[s] || s;
     }
+    // [신규] 개표 결과 집계 및 렌더링 함수
+    window.loadElectionResults = async () => {
+        const resultChartDiv = document.getElementById('result-chart');
+        resultChartDiv.innerHTML = '<div style="text-align:center; padding:20px;">표를 세고 있습니다... 🗳️</div>';
+
+        try {
+            // 1. 후보자 목록 가져오기
+            const { data: candidates, error: candError } = await supabase
+                .from('candidates')
+                .select('id, name, symbol, district_id')
+                .eq('election_id', currentElectionId)
+                .eq('status', 'APPROVED'); // 승인된 후보만
+
+            if (candError) throw candError;
+
+            // 2. 투표 데이터(표) 가져오기 (익명성을 위해 candidate_id만 조회)
+            // 참고: 실제 대규모 선거에서는 DB의 count 기능을 써야 하지만, 
+            // 수천 명 규모에서는 이렇게 가져와서 JS로 세는 것이 실시간성 처리에 유리합니다.
+            const { data: votes, error: voteError } = await supabase
+                .from('election_votes')
+                .select('candidate_id')
+                .eq('election_id', currentElectionId);
+
+            if (voteError) throw voteError;
+
+            // 3. 개표 (집계)
+            const totalVotes = votes.length;
+            const voteCounts = {}; // { 후보ID: 득표수 }
+
+            // 초기화
+            candidates.forEach(c => voteCounts[c.id] = 0);
+            
+            // 표 세기
+            votes.forEach(v => {
+                if (voteCounts[v.candidate_id] !== undefined) {
+                    voteCounts[v.candidate_id]++;
+                }
+            });
+
+            // 4. 득표율 계산 및 정렬 (득표수 내림차순)
+            const results = candidates.map(c => {
+                const count = voteCounts[c.id] || 0;
+                const percent = totalVotes === 0 ? 0 : ((count / totalVotes) * 100).toFixed(1);
+                return { ...c, count, percent };
+            }).sort((a, b) => b.count - a.count);
+
+            // 5. 결과 화면 그리기 (HTML/CSS 막대그래프)
+            let html = `
+                <div style="margin-bottom:20px; text-align:center;">
+                    <h2 style="color:var(--primary-blue); margin:0;">총 투표수: ${totalVotes.toLocaleString()}표</h2>
+                </div>
+                <table style="width:100%; border-collapse: collapse; background:white; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                    <thead style="background:#f3f4f6; border-bottom:2px solid #e5e7eb;">
+                        <tr>
+                            <th style="padding:12px; text-align:center; width:60px;">순위</th>
+                            <th style="padding:12px; text-align:left;">후보자</th>
+                            <th style="padding:12px; text-align:right; width:100px;">득표수</th>
+                            <th style="padding:12px; text-align:right; width:80px;">득표율</th>
+                            <th style="padding:12px; width:30%;">그래프</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            results.forEach((r, index) => {
+                // 1위 강조 스타일
+                const isWinner = index === 0 && r.count > 0;
+                const rowStyle = isWinner ? 'background:#eff6ff; font-weight:bold;' : 'border-bottom:1px solid #f3f4f6;';
+                const barColor = isWinner ? '#2563eb' : '#9ca3af';
+
+                html += `
+                    <tr style="${rowStyle}">
+                        <td style="padding:12px; text-align:center;">${index + 1}</td>
+                        <td style="padding:12px;">
+                            ${isWinner ? '👑 ' : ''}${r.name}
+                            <span style="font-size:0.8rem; color:#666; font-weight:normal;">(기호 ${r.symbol || '-'})</span>
+                        </td>
+                        <td style="padding:12px; text-align:right;">${r.count.toLocaleString()}</td>
+                        <td style="padding:12px; text-align:right;">${r.percent}%</td>
+                        <td style="padding:12px;">
+                            <div style="background:#e5e7eb; width:100%; height:10px; border-radius:5px; overflow:hidden;">
+                                <div style="width:${r.percent}%; height:100%; background:${barColor}; transition:width 1s;"></div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            
+            // 결과가 없을 때
+            if (results.length === 0) {
+                html += '<p style="text-align:center; padding:20px; color:#666;">등록된 후보가 없습니다.</p>';
+            }
+
+            resultChartDiv.innerHTML = html;
+
+            // [추가] 로그 기록 (최초 1회만 남기거나, 매번 남기거나 정책 결정 필요. 여기선 매번 조회 시 남김)
+            // await service.logAction(currentElectionId, 'VOTE_COUNT', `개표 조회 실행 (작업자: ${currentUserEmail})`);
+
+        } catch (e) {
+            console.error(e);
+            resultChartDiv.innerHTML = `<p style="color:red; text-align:center;">개표 데이터를 불러오는데 실패했습니다.<br>${e.message}</p>`;
+        }
+    };
 window.init = init; // module scope export
     init();
 </script>
