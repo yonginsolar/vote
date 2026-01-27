@@ -794,52 +794,18 @@ window.openElectionGateway = async () => {
             // -------------------------------------------------------
             let isAuthorized = false;
             
-            // 1-1. coop_members 조회 (기본 정보 + UUID 획득)
-            const { data: memberData, error: memError } = await supabase
-                .from('coop_members')
-                .select('role, member_id, id') // id(UUID) 추가 조회
-                .eq('email', email)
-                .maybeSingle();
+            // ✅ 1단계: DB 테이블 직접 조회 대신 RPC로 권한만 확인
+const { data: ok, error: okError } = await supabase.rpc('can_request_magiclink', {
+  p_email: email.trim().toLowerCase()
+});
 
-            if (memError) throw memError;
+if (okError) throw okError;
+isAuthorized = !!ok;
 
-            if (memberData) {
-                // (A) 기존: 관리자(admin) 권한
-                if (memberData.role === 'admin') {
-                    isAuthorized = true;
-                } 
-                // (B) 기존: 선관위원 권한
-                else if (memberData.member_id) {
-                    const { data: officialData } = await supabase
-                        .from('coop_officials')
-                        .select('id')
-                        .eq('member_id', memberData.member_id)
-                        .eq('category', 'election_comm')
-                        .eq('status', 'active')
-                        .maybeSingle();
-                    
-                    if (officialData) isAuthorized = true;
-                }
-
-                // (C) [신규] coop_admins 테이블 확인
-                // 기존 권한이 없을 때만 추가 체크
-                if (!isAuthorized && memberData.id) {
-                    const { data: adminData } = await supabase
-                        .from('coop_admins')
-                        .select('id')
-                        .eq('id', memberData.id) // coop_members의 UUID로 조회
-                        .maybeSingle();
-                    
-                    if (adminData) isAuthorized = true;
-                }
-            }
-
-            // -------------------------------------------------------
-            // 2단계: 결과 처리
-            // -------------------------------------------------------
-            if (!isAuthorized) {
-                throw new Error("등록된 관리자, 선관위원 또는 시스템 관리자가 아닙니다.");
-            }
+// 2단계: 결과 처리
+if (!isAuthorized) {
+  throw new Error("등록된 관리자, 선관위원 또는 시스템 관리자가 아닙니다.");
+}
 
             // 권한 있음: 매직링크 발송 시작
             btn.innerText = "메일 발송 중...";
