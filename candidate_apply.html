@@ -387,7 +387,7 @@
 
 <div style="margin-bottom:1rem;">
     <label><strong>대표 이력 [필수]</strong></label>
-    <textarea id="cand-career" rows="3" required placeholder="주요 경력을 입력하세요"></textarea>
+    <textarea id="cand-career" rows="3" required placeholder="대표 경력 하나 입력하세요"></textarea>
 </div>
 
 <div style="margin-bottom:1.5rem; display:none;">
@@ -414,7 +414,18 @@
 </div>
 
             <h3 style="border-bottom:2px solid #333; padding-bottom:10px; margin-top:30px;">3. 필수 동의</h3>
-            
+<div class="consent-box">
+                <label><strong>사실 확인 서약</strong></label>
+                <textarea class="terms-text" readonly>
+✅위 기재 내용은 사실과 틀림이 없음을 확인합니다.
+만약 기재 내용이 사실과 다를 경우 후보 자격 박탈 및 당선 후라도 즉시 대의원 자격 정지 및 조합에서 제명될 수 있음을 확인합니다.                
+                </textarea>
+                <label style="cursor:pointer;">
+                    <input type="checkbox" id="agree-privacy" required> 위 내용을 확인하였으며 동의합니다.
+                </label>
+            </div>
+    
+    
             <div class="consent-box">
                 <label><strong>개인정보 수집 및 이용 동의</strong></label>
                 <textarea class="terms-text" readonly>
