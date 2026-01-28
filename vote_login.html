@@ -354,138 +354,124 @@
         window.closeCandidateDetail = closeCandidateDetail;
         window.goToVotePage = goToVotePage;
 
-// ==========================================
-        // 2. 메인 로직 (초기화) - [완성본]
-        // ==========================================
-        async function init() {
-            if (!document.getElementById('election-title')) return;
-            
-            // 화면 깜빡임 방지용 숨김
-            document.getElementById('election-list-view').style.display = 'none';
-            document.getElementById('detail-view').style.display = 'none';
-            document.getElementById('candidate-detail-modal').style.display = 'none';
-            document.getElementById('bottom-bar').style.display = 'none';
+// [수정] 초기화 및 3단 인증 로직 (UUID -> MemberID -> Officials)
+    async function init() {
+        if (!document.getElementById('election-title')) return;
+        
+        // 1. UI 초기 숨김
+        document.getElementById('election-list-view').style.display = 'none';
+        document.getElementById('detail-view').style.display = 'none';
+        document.getElementById('bottom-bar').style.display = 'none';
 
-            // ▼▼▼ [1] 도메인 간 세션 이어받기 (Bridge) ▼▼▼
-            const params = new URLSearchParams(window.location.search);
-            const at = params.get('at'); 
-            const rt = params.get('rt'); 
+        // 2. 세션 브리지 (URL 토큰 처리)
+        const params = new URLSearchParams(window.location.search);
+        const at = params.get('at');
+        const rt = params.get('rt');
 
-            if (at && rt) {
-                console.log("🔗 메인 도메인에서 세션을 전달받았습니다. 로그인 처리 중...");
-                // 전달받은 토큰으로 현재 서브도메인에 강제 로그인
-                const { error } = await supabase.auth.setSession({
-                    access_token: at,
-                    refresh_token: rt
-                });
-
-                if (!error) {
-                    // URL 창에서 토큰 제거 (보안 & 깔끔함)
-                    const cleanUrl = window.location.pathname; 
-                    window.history.replaceState({}, document.title, cleanUrl);
-                    console.log("✅ 세션 연결 성공!");
-                } else {
-                    console.error("세션 연결 실패:", error);
-                }
-            }
-            // ▲▲▲ [세션 이어받기 끝] ▲▲▲
-
-
-            // [2] 세션 체크 (재시도 로직 포함)
-            let session = null;
-            try {
-                // 1차 시도
-                const { data, error } = await supabase.auth.getSession();
-                if (error) throw error;
-                session = data.session;
-
-            } catch (err) {
-                // AbortError 발생 시 0.2초 후 재시도
-                if (err.name === 'AbortError' || err.message.includes('AbortError')) {
-                    console.warn("⚠️ 세션 요청 중단됨. 재시도합니다...");
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                    try {
-                        const retryResult = await supabase.auth.getSession();
-                        session = retryResult.data.session;
-                    } catch (retryErr) { console.error(retryErr); }
-                } else {
-                    console.error(err);
-                }
-            }
-
-            // 세션 없으면 메인으로 추방
-            if (!session) {
-                alert("로그인이 필요합니다.\n메인 관리 페이지로 이동합니다.");
-                // 메인 도메인 주소로 변경
-                window.location.href = 'http://yonginsolar.kr/membermanage.html'; 
-                return;
-            }
-
-            // [3] 사용자 권한(Role) 확인 및 UI 렌더링
-            try {
-                const { data: member } = await supabase
-                    .from('coop_members')
-                    .select('name, role')
-                    .eq('email', session.user.email)
-                    .single();
-
-                if (member) {
-                    userRole = member.role ? member.role.toLowerCase() : 'user';
-                    
-                    const roleName = userRole === 'admin' ? '관리자' : (userRole === 'committee' ? '선관위' : '조합원');
-                    document.getElementById('user-greeting').innerText = `${member.name}님 (${roleName}) 환영합니다.`;
-                    
-                    // 관리자용 버튼 주입
-                    renderAdminControls(userRole);
-                }
-            } catch (err) { console.warn(err); }
-
-            // [4] 데이터 로드 (목록 or 상세)
-            if (!electionId) {
-                document.getElementById('election-list-view').style.display = 'block';
-                document.getElementById('election-title').innerText = "선거 목록";
-                document.getElementById('election-period').innerText = "";
-                document.getElementById('status-badge').style.display = 'none';
-                await loadElectionList();
-            } else {
-                document.getElementById('detail-view').style.display = 'block';
-                try {
-                    await loadElectionInfo();
-                    await loadDistrictsAndCandidates();
-                } catch (e) { console.error(e); }
+        if (at && rt) {
+            const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+            if (!error) {
+                // 토큰 흔적 지우기
+                const cleanUrl = window.location.pathname + (electionId ? `?id=${electionId}` : '');
+                window.history.replaceState({}, document.title, cleanUrl);
             }
         }
 
-        // [신규] 관리자 컨트롤 렌더링
-        function renderAdminControls(role) {
-            const container = document.getElementById('admin-controls');
-            let html = '';
+        // 3. 세션 확인
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-            // 관리자(admin)는 설정, 관리 모두 가능
-            if (role === 'admin') {
-                html += `
-                    <button class="btn-admin-shortcut" style="background:#dbeafe; color:#1e40af;" onclick="window.location.href='admin_setup.html?id=${electionId || ''}'">
-                        ⚙️ 선거 설정
-                    </button>
-                    <button class="btn-admin-shortcut" style="background:#fef3c7; color:#92400e;" onclick="window.location.href='admin.html?id=${electionId || ''}'">
-                        🛡️ 선거 관리
-                    </button>
-                `;
-            } 
-            // 선관위(committee)는 관리만 가능
-            else if (role === 'committee') {
-                html += `
-                    <button class="btn-admin-shortcut" style="background:#fef3c7; color:#92400e;" onclick="window.location.href='admin.html?id=${electionId || ''}'">
-                        🛡️ 선거 관리
-                    </button>
-                `;
-            }
-
-            if (html) {
-                container.innerHTML = html;
-                container.style.display = 'flex';
-            }
+        if (error || !session) {
+            alert("로그인이 필요합니다.\n메인 관리 페이지로 이동합니다.");
+            window.location.href = 'http://yonginsolar.kr/membermanage.html';
+            return;
         }
+
+        // 4. 권한 정밀 체크 (3단 논법 적용)
+        try {
+            // (1) 내 정보 조회 (UUID -> Text ID 획득)
+            const { data: member } = await supabase
+                .from('coop_members')
+                .select('name, role, member_id') // member_id(Text) 필수 조회
+                .eq('email', session.user.email)
+                .single();
+
+            if (member) {
+                let detectedRole = 'user'; // 기본값
+
+                // (2) 관리자 Role 우선 확인
+                if (member.role === 'admin' || member.role === 'super_admin') {
+                    detectedRole = 'admin';
+                } 
+                // (3) 관리자가 아니면 선관위 명부 확인 (Text ID 사용)
+                else if (member.member_id) {
+                    const { data: official } = await supabase
+                        .from('coop_officials')
+                        .select('id')
+                        .eq('member_id', member.member_id) // ★ Text ID로 비교
+                        .eq('category', 'election_comm')
+                        .eq('status', 'active')
+                        .maybeSingle();
+                    
+                    if (official) detectedRole = 'committee';
+                }
+
+                userRole = detectedRole; // 전역 변수 업데이트
+
+                // (4) 환영 메시지 및 버튼 표시
+                const roleName = userRole === 'admin' ? '관리자' : (userRole === 'committee' ? '선관위' : '조합원');
+                document.getElementById('user-greeting').innerText = `${member.name}님 (${roleName}) 환영합니다.`;
+                
+                renderAdminControls(userRole); // 위에서 만든 함수 호출
+            }
+        } catch (e) {
+            console.warn("회원 정보 로드 실패:", e);
+        }
+
+        // 5. 콘텐츠 로드 (목록 or 상세)
+        if (!electionId) {
+            document.getElementById('election-list-view').style.display = 'block';
+            document.getElementById('election-title').innerText = "선거 목록";
+            document.getElementById('status-badge').style.display = 'none';
+            await loadElectionList();
+        } else {
+            document.getElementById('detail-view').style.display = 'block';
+            await loadElectionInfo();
+            await loadDistrictsAndCandidates();
+        }
+    }
+
+// [수정] 관리자 컨트롤 렌더링 (권한별 버튼 차등 노출)
+    function renderAdminControls(role) {
+        const container = document.getElementById('admin-controls');
+        if (!container) return;
+
+        let html = '';
+
+        // 1. 관리자 (Admin): 설정 + 운영 모두 가능
+        if (role === 'admin') {
+            html += `
+                <button class="btn-admin-shortcut" style="background:#dbeafe; color:#1e40af;" onclick="window.location.href='admin_setup.html?id=${electionId || ''}'">
+                    ⚙️ 선거 설정
+                </button>
+                <button class="btn-admin-shortcut" style="background:#fef3c7; color:#92400e;" onclick="window.location.href='admin.html?id=${electionId || ''}'">
+                    🛡️ 선거 관리
+                </button>
+            `;
+        } 
+        // 2. 선관위 (Committee): 운영(관리)만 가능
+        else if (role === 'committee') {
+            html += `
+                <button class="btn-admin-shortcut" style="background:#fef3c7; color:#92400e;" onclick="window.location.href='admin.html?id=${electionId || ''}'">
+                    🛡️ 선거 관리
+                </button>
+            `;
+        }
+
+        if (html) {
+            container.innerHTML = html;
+            container.style.display = 'flex';
+        }
+    }
 
         async function loadElectionList() {
             const { data: elections } = await supabase.from('elections').select('*').neq('status', 'DRAFT').order('created_at', { ascending: false });
