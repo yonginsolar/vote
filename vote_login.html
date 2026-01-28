@@ -354,58 +354,76 @@
         window.closeCandidateDetail = closeCandidateDetail;
         window.goToVotePage = goToVotePage;
 
-        // ==========================================
-        // 2. 메인 로직 (초기화)
+// ==========================================
+        // 2. 메인 로직 (초기화) - [완성본]
         // ==========================================
         async function init() {
             if (!document.getElementById('election-title')) return;
             
-            // 화면 초기 숨김
+            // 화면 깜빡임 방지용 숨김
             document.getElementById('election-list-view').style.display = 'none';
             document.getElementById('detail-view').style.display = 'none';
             document.getElementById('candidate-detail-modal').style.display = 'none';
             document.getElementById('bottom-bar').style.display = 'none';
 
-// [1] 세션 체크 (재시도 로직 포함)
+            // ▼▼▼ [1] 도메인 간 세션 이어받기 (Bridge) ▼▼▼
+            const params = new URLSearchParams(window.location.search);
+            const at = params.get('at'); 
+            const rt = params.get('rt'); 
+
+            if (at && rt) {
+                console.log("🔗 메인 도메인에서 세션을 전달받았습니다. 로그인 처리 중...");
+                // 전달받은 토큰으로 현재 서브도메인에 강제 로그인
+                const { error } = await supabase.auth.setSession({
+                    access_token: at,
+                    refresh_token: rt
+                });
+
+                if (!error) {
+                    // URL 창에서 토큰 제거 (보안 & 깔끔함)
+                    const cleanUrl = window.location.pathname; 
+                    window.history.replaceState({}, document.title, cleanUrl);
+                    console.log("✅ 세션 연결 성공!");
+                } else {
+                    console.error("세션 연결 실패:", error);
+                }
+            }
+            // ▲▲▲ [세션 이어받기 끝] ▲▲▲
+
+
+            // [2] 세션 체크 (재시도 로직 포함)
             let session = null;
-            
             try {
-                // 첫 번째 시도
+                // 1차 시도
                 const { data, error } = await supabase.auth.getSession();
                 if (error) throw error;
                 session = data.session;
 
             } catch (err) {
-                // AbortError 발생 시, 즉시 포기하지 않고 재시도
+                // AbortError 발생 시 0.2초 후 재시도
                 if (err.name === 'AbortError' || err.message.includes('AbortError')) {
-                    console.warn("⚠️ 세션 요청 중단됨. 0.2초 후 재시도합니다...");
-                    
-                    // 0.2초 대기 (Wait)
+                    console.warn("⚠️ 세션 요청 중단됨. 재시도합니다...");
                     await new Promise(resolve => setTimeout(resolve, 200));
-
                     try {
-                        // 두 번째 시도 (Retry)
                         const retryResult = await supabase.auth.getSession();
                         session = retryResult.data.session;
-                        if (session) console.log("✅ 재시도 성공!");
-                    } catch (retryErr) {
-                        console.error("❌ 재시도 실패:", retryErr);
-                    }
+                    } catch (retryErr) { console.error(retryErr); }
                 } else {
-                    console.error("세션 확인 실패:", err);
+                    console.error(err);
                 }
             }
 
-            // 재시도까지 했는데도 세션이 없으면 -> 진짜 로그인이 안 된 것임
+            // 세션 없으면 메인으로 추방
             if (!session) {
-                alert("로그인 정보가 확인되지 않습니다.\n조합원 관리 페이지에서 다시 로그인해주세요.");
-                window.location.href = 'index.html'; // 관리 페이지 파일명 확인
+                alert("로그인이 필요합니다.\n메인 관리 페이지로 이동합니다.");
+                // 메인 도메인 주소로 변경
+                window.location.href = 'http://yonginsolar.kr/membermanage.html'; 
                 return;
             }
 
-            // [2] 사용자 권한(Role) 확인
+            // [3] 사용자 권한(Role) 확인 및 UI 렌더링
             try {
-                const { data: member, error: dbError } = await supabase
+                const { data: member } = await supabase
                     .from('coop_members')
                     .select('name, role')
                     .eq('email', session.user.email)
@@ -413,16 +431,16 @@
 
                 if (member) {
                     userRole = member.role ? member.role.toLowerCase() : 'user';
-                    document.getElementById('user-greeting').innerText = `${member.name}님 (${userRole === 'admin' ? '관리자' : (userRole === 'committee' ? '선관위' : '조합원')}) 환영합니다.`;
                     
-                    // [3] 관리자용 버튼 주입
+                    const roleName = userRole === 'admin' ? '관리자' : (userRole === 'committee' ? '선관위' : '조합원');
+                    document.getElementById('user-greeting').innerText = `${member.name}님 (${roleName}) 환영합니다.`;
+                    
+                    // 관리자용 버튼 주입
                     renderAdminControls(userRole);
                 }
-            } catch (err) {
-                console.warn("회원 정보 로드 실패", err);
-            }
+            } catch (err) { console.warn(err); }
 
-            // [4] 데이터 로드 분기
+            // [4] 데이터 로드 (목록 or 상세)
             if (!electionId) {
                 document.getElementById('election-list-view').style.display = 'block';
                 document.getElementById('election-title').innerText = "선거 목록";
@@ -434,10 +452,7 @@
                 try {
                     await loadElectionInfo();
                     await loadDistrictsAndCandidates();
-                } catch (e) {
-                    console.error(e);
-                    alert("데이터 로드 중 오류가 발생했습니다.");
-                }
+                } catch (e) { console.error(e); }
             }
         }
 
