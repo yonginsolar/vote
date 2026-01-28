@@ -473,22 +473,33 @@
         <div class="modal-content" style="max-width: 600px; text-align: left;">
             <span class="modal-title">➕ 후보자 직접 등록 (관리자 권한)</span>
             <p style="font-size:0.85rem; color:#666; margin-bottom:1rem;">
-                관리자 권한으로 후보를 즉시 <strong>승인(APPROVED)</strong> 상태로 등록합니다.<br>
-                대상 조합원을 먼저 검색하여 선택해주세요.
+                이사회 추천 등 관리자 권한으로 후보를 즉시 <strong>승인(APPROVED)</strong> 상태로 등록합니다.<br>
+                대상 조합원을 검색한 후, <strong>출마할 선거구</strong>를 지정해주세요.
             </p>
 
-            <div style="margin-bottom: 1.5rem; background: #f3f4f6; padding: 15px; border-radius: 8px;">
+            <div style="margin-bottom: 1rem; background: #f3f4f6; padding: 15px; border-radius: 8px;">
                 <label style="font-weight:bold; font-size:0.9rem;">대상 조합원 검색</label>
                 <div style="display:flex; gap:10px; margin-top:5px;">
                     <input type="text" id="cand-search-input" placeholder="이름 또는 전화번호" 
                            style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px;"
-                           onkeyup="if(window.event.keyCode==13){searchCandidateMember()}"> <button onclick="searchCandidateMember()" class="btn btn-primary btn-sm">검색</button>
+                           onkeyup="if(window.event.keyCode==13){searchCandidateMember()}">
+                    <button onclick="searchCandidateMember()" class="btn btn-primary btn-sm">검색</button>
                 </div>
                 <div id="cand-search-result" style="margin-top:10px; max-height:100px; overflow-y:auto; border:1px solid #e5e7eb; background:white; display:none;"></div>
                 
-                <input type="hidden" id="selected-cand-member-no">
                 <input type="hidden" id="selected-cand-uuid">
+                <input type="hidden" id="selected-cand-phone">
+                <input type="hidden" id="selected-cand-address">
+                <input type="hidden" id="selected-cand-birth">
+
                 <div id="selected-cand-display" style="margin-top:5px; font-weight:bold; color:var(--primary-blue); display:none;"></div>
+            </div>
+
+            <div style="margin-bottom:1rem;">
+                <label style="font-weight:600;">출마 선거구 선택 (필수)</label>
+                <select id="new-cand-district" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px; background:#fff;">
+                    <option value="">-- 선거구를 선택하세요 --</option>
+                    </select>
             </div>
 
             <div style="margin-bottom:1rem;">
@@ -2260,25 +2271,6 @@ window.finalizeNomination = async () => {
             resultChartDiv.innerHTML = `<div style="color:#dc2626; text-align:center; padding:20px;">개표 오류: ${e.message}</div>`;
         }
     };
-    // [신규] 후보 등록 모달 열기
-    window.openAddCandidateModal = () => {
-        // 초기화
-        document.getElementById('cand-search-input').value = '';
-        document.getElementById('cand-search-result').innerHTML = '';
-        document.getElementById('cand-search-result').style.display = 'none';
-        document.getElementById('selected-cand-member-no').value = '';
-        document.getElementById('selected-cand-uuid').value = '';
-        document.getElementById('selected-cand-display').style.display = 'none';
-        
-        document.getElementById('new-cand-name').value = '';
-        document.getElementById('new-cand-career').value = '';
-        document.getElementById('new-cand-manifesto').value = '';
-        document.getElementById('new-cand-photo').value = '';
-        document.getElementById('new-cand-proof').value = '';
-
-        document.getElementById('add-candidate-modal').style.display = 'flex';
-    };
-
     window.closeAddCandidateModal = () => {
         document.getElementById('add-candidate-modal').style.display = 'none';
     };
@@ -2327,6 +2319,177 @@ window.finalizeNomination = async () => {
         // 이름 자동 입력 (편의성)
         document.getElementById('new-cand-name').value = name;
         document.getElementById('cand-search-result').style.display = 'none';
+    };
+// [신규] 후보 등록 모달 열기 (선거구 목록 채우기)
+    window.openAddCandidateModal = () => {
+        // 1. 입력 필드 초기화
+        document.getElementById('cand-search-input').value = '';
+        document.getElementById('cand-search-result').innerHTML = '';
+        document.getElementById('cand-search-result').style.display = 'none';
+        
+        document.getElementById('selected-cand-uuid').value = '';
+        document.getElementById('selected-cand-phone').value = '';
+        document.getElementById('selected-cand-address').value = '';
+        document.getElementById('selected-cand-birth').value = ''; // 여기에 변환된 날짜가 담김
+        document.getElementById('selected-cand-display').style.display = 'none';
+        
+        document.getElementById('new-cand-name').value = '';
+        document.getElementById('new-cand-career').value = '';
+        document.getElementById('new-cand-manifesto').value = '';
+        document.getElementById('new-cand-photo').value = '';
+        document.getElementById('new-cand-proof').value = '';
+
+        // 2. 선거구 선택박스 채우기
+        const distSelect = document.getElementById('new-cand-district');
+        distSelect.innerHTML = '<option value="">-- 선거구를 선택하세요 --</option>';
+        
+        districtList.forEach(d => {
+            const typeLabel = d.is_common ? '[비례/공통]' : '[지역구]';
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.text = `${typeLabel} ${d.name}`;
+            distSelect.appendChild(opt);
+        });
+
+        document.getElementById('add-candidate-modal').style.display = 'flex';
+    };
+
+    // [신규] 후보자용 조합원 검색 (추가 정보 fetch 포함)
+    window.searchCandidateMember = async () => {
+        const keyword = document.getElementById('cand-search-input').value.trim();
+        const resDiv = document.getElementById('cand-search-result');
+        
+        if(keyword.length < 2) { alert('2글자 이상 입력하세요.'); return; }
+
+        resDiv.innerHTML = '검색 중...';
+        resDiv.style.display = 'block';
+
+        // ⚠️ 중요: 여기서 coop_members의 실제 칼럼명을 확인하세요.
+        // 예: birth_date가 없다면 rrn 등을 가져와야 합니다.
+        const { data: members, error } = await supabase
+            .from('coop_members')
+            .select('member_id, id, name, phone, address, rrn_display') // birth_date 칼럼이 있는지 꼭 확인!
+            .or(`name.ilike.%${keyword}%,phone.ilike.%${keyword}%`)
+            .limit(10);
+
+        if(error) {
+            console.error(error);
+            resDiv.innerHTML = '<div style="padding:10px; color:red;">검색 오류 발생</div>';
+            return;
+        }
+
+        if(!members || members.length === 0) {
+            resDiv.innerHTML = '<div style="padding:10px; color:#999;">결과 없음</div>';
+            return;
+        }
+
+        let html = '';
+        members.forEach(m => {
+            // 데이터 전달을 위해 객체를 문자열로 인코딩 (간편 방식)
+            // 작은 따옴표(')가 이름에 들어갈 경우를 대비해 escape 처리 필요하지만, 일단 간단히 구현
+            const safeName = m.name.replace(/'/g, "");
+            const safeAddr = (m.address || "").replace(/'/g, "");
+            
+            html += `
+                <div style="padding:8px; border-bottom:1px solid #eee; cursor:pointer;" 
+                     onclick="selectCandidateMember('${m.id}', '${safeName}', '${m.phone || ''}', '${safeAddr}', '${m.birth_date || ''}')">
+                    <strong>${m.name}</strong> (${m.phone || '전화없음'})<br>
+                    <span style="font-size:0.8rem; color:#666;">${m.address || '주소없음'}</span>
+                </div>`;
+        });
+        resDiv.innerHTML = html;
+    };
+
+    // [신규] 검색된 조합원 선택 (정보 hidden input에 저장)
+    window.selectCandidateMember = (uuid, name, phone, address, birth) => {
+        // Hidden 필드에 값 저장
+        document.getElementById('selected-cand-uuid').value = uuid;
+        document.getElementById('selected-cand-phone').value = phone;
+        document.getElementById('selected-cand-address').value = address;
+        document.getElementById('selected-cand-birth').value = birth;
+        
+        // UI 표시
+        const disp = document.getElementById('selected-cand-display');
+        disp.innerText = `선택됨: ${name} (${phone})`;
+        disp.style.display = 'block';
+        
+        // 이름 자동 입력
+        document.getElementById('new-cand-name').value = name;
+        
+        // 검색 결과창 닫기
+        document.getElementById('cand-search-result').style.display = 'none';
+    };
+
+    // [신규] 후보 등록 실행 (정보 포함 Insert)
+    window.executeCandidateRegister = async () => {
+        const uuid = document.getElementById('selected-cand-uuid').value;
+        const name = document.getElementById('new-cand-name').value;
+        const districtId = document.getElementById('new-cand-district').value; // 선택한 선거구 ID
+        
+        // 추가 정보 가져오기
+        const phone = document.getElementById('selected-cand-phone').value;
+        const address = document.getElementById('selected-cand-address').value;
+        const birthDate = document.getElementById('selected-cand-birth').value;
+
+        if(!uuid) { alert('조합원을 먼저 검색하여 선택해주세요.'); return; }
+        if(!districtId) { alert('출마할 선거구를 선택해주세요.'); return; }
+        if(!name) { alert('후보자 이름을 입력해주세요.'); return; }
+
+        try {
+            // 1. 파일 업로드 (기존 로직 유지)
+            const photoFile = document.getElementById('new-cand-photo').files[0];
+            const proofFile = document.getElementById('new-cand-proof').files[0];
+            
+            let photoUrl = null;
+            let proofUrl = null;
+            const timestamp = Date.now();
+
+            if(photoFile) {
+                const path = `candidates/${currentElectionId}/${uuid}_photo_${timestamp}`;
+                // 버킷명이 'candidate_photos' 인지 확인 필요
+                const { data, error } = await supabase.storage.from('candidate_photos').upload(path, photoFile);
+                if(error) throw error;
+                photoUrl = data.path; 
+            }
+            if(proofFile) {
+                const path = `candidates/${currentElectionId}/${uuid}_proof_${timestamp}`;
+                const { data, error } = await supabase.storage.from('candidate_proofs').upload(path, proofFile);
+                if(error) throw error;
+                proofUrl = data.path;
+            }
+
+            // 2. DB Insert (연락처, 주소, 생일 포함)
+            const { error: insertError } = await supabase
+                .from('candidates')
+                .insert({
+                    election_id: currentElectionId,
+                    district_id: districtId, // 관리자가 직접 선택한 선거구
+                    member_uuid: uuid,
+                    name: name,
+                    contact: phone,          // coop_members에서 가져온 전화번호
+                    address: address,        // coop_members에서 가져온 주소
+                    birth_date: birthDate,   // coop_members에서 가져온 생년월일
+                    career: document.getElementById('new-cand-career').value,
+                    manifesto: document.getElementById('new-cand-manifesto').value,
+                    photo_url: photoUrl,
+                    proof_url: proofUrl,
+                    status: 'APPROVED',      // 즉시 승인
+                    agreed: true
+                });
+
+            if(insertError) throw insertError;
+
+            alert('후보자가 등록(승인) 되었습니다.');
+            closeAddCandidateModal();
+            loadCandidates(); // 목록 갱신
+            
+            // 로그 기록
+            await service.logAction(currentElectionId, 'CANDIDATE_ADD_ADMIN', `관리자 직권 등록: ${name} (선거구: ${districtId})`);
+
+        } catch(e) {
+            console.error(e);
+            alert('등록 실패: ' + e.message);
+        }
     };
 
     // [신규] 후보 등록 실행 (제한 없음)
