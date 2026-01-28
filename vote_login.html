@@ -248,20 +248,26 @@
     </div>
 
     <script type="module">
-        import { supabase } from './ElectionService.js';
-        // [신규] 기본 프로필 이미지 상수 (회색 사람 실루엣)
-        const DEFAULT_PROFILE_IMG = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzk5OTk5OSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==";
+       import { supabase } from './ElectionService.js';
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const electionId = urlParams.get('id');
-        
-        // 전역 데이터
-        let allCandidates = [];
-        let allDistricts = [];
-        let currentStatus = '';
-        let currentElection = null;
-        let cachedResultData = null;
-        let userRole = 'user'; // 기본값
+    // ==========================================
+    // [0] 전역 변수 및 상수 선언 (이 부분이 없으면 에러 발생)
+    // ==========================================
+    const DEFAULT_PROFILE_IMG = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzk5OTk5OSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==";
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const electionId = urlParams.get('id');
+
+    // 데이터 저장용 전역 변수
+    let allCandidates = [];
+    let allDistricts = [];
+    let currentElection = null;
+    let cachedResultData = null;
+    
+    // 사용자 상태 저장용 전역 변수 (초기화 필수)
+    let myInfo = null;   
+    let myRights = null; 
+    let userRole = 'user';
 
         // ==========================================
         // 1. 유틸리티 함수 (전역 바인딩)
@@ -422,7 +428,9 @@
         window.closeCandidateDetail = closeCandidateDetail;
         window.goToVotePage = goToVotePage;
 
-// [수정] 초기화 함수
+// ==========================================
+    // [1] 초기화 및 라우팅
+    // ==========================================
     async function init() {
         if (!document.getElementById('election-title')) return;
 
@@ -431,10 +439,11 @@
         document.getElementById('detail-view').style.display = 'none';
         document.getElementById('bottom-bar').style.display = 'none';
 
-        // 세션 처리
+        // 세션 브리지 (URL 토큰 처리)
         const params = new URLSearchParams(window.location.search);
         const at = params.get('at');
         const rt = params.get('rt');
+
         if (at && rt) {
             const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
             if (!error) {
@@ -443,7 +452,7 @@
             }
         }
 
-        // 로그인 체크
+        // 세션 확인
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error || !session) {
             alert("로그인이 필요합니다.\n메인 관리 페이지로 이동합니다.");
@@ -451,7 +460,7 @@
             return;
         }
 
-        // [중요] 사용자 정보(myInfo) 먼저 확실하게 로드
+        // 사용자 정보 및 권한 로드
         try {
             const { data: member } = await supabase
                 .from('coop_members')
@@ -460,9 +469,8 @@
                 .single();
 
             if (member) {
-                myInfo = member; // 전역 변수에 저장 (이게 되어야 이후 로직 작동)
+                myInfo = member; // 전역 변수 할당
                 
-                // 권한(Role) 체크 로직
                 let detectedRole = 'user';
                 if (member.role === 'admin' || member.role === 'super_admin') {
                     detectedRole = 'admin';
@@ -474,25 +482,25 @@
                         .eq('category', 'election_comm')
                         .eq('status', 'active')
                         .maybeSingle();
+                    
                     if (official) detectedRole = 'committee';
                 }
                 userRole = detectedRole;
 
-                // 환영 메시지
                 const roleName = userRole === 'admin' ? '관리자' : (userRole === 'committee' ? '선관위' : '조합원');
                 document.getElementById('user-greeting').innerText = `${member.name}님 (${roleName}) 환영합니다.`;
+                
                 renderAdminControls(userRole);
             }
         } catch (e) {
             console.warn("회원 정보 로드 실패:", e);
         }
 
-        // 뷰 라우팅
+        // 화면 라우팅
         if (!electionId) {
-            setupListView();
+            await setupListView(); // 목록 화면 (함수 복원됨)
         } else {
-            // 사용자 정보가 로드된 상태에서 상세 뷰 진입
-            await setupDetailView();
+            await setupDetailView(); // 상세 화면
         }
     }
         // [신규] 상세 뷰 설정 (데이터 로드 순서 제어)
