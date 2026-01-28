@@ -179,34 +179,40 @@
             </div>
             
             <div class="admin-panel" style="padding:1.5rem; border:1px solid #ccc; border-radius:8px; margin-bottom:10px;">
-                <h3>Step 1. 기본 정보 및 일정</h3>
-                
-                <div class="form-group">
-                    <label class="form-label">선거명</label>
-                    <input type="text" id="election-title" placeholder="예: 2026년 임원 선출의 건" class="form-input" style="width:100%; box-sizing:border-box;">
-                </div>
+    <h3>Step 1. 기본 정보 및 일정</h3>
+    
+    <div class="form-group">
+        <label class="form-label">선거명</label>
+        <input type="text" id="election-title" placeholder="예: 2026년 임원 선출의 건" class="form-input" style="width:100%; box-sizing:border-box;">
+    </div>
 
-                <div class="form-group">
-                    <label class="form-label">📝 후보 등록 기간</label>
-                    <div class="form-row">
-                        <input type="datetime-local" id="candidacy-start" class="form-input">
-                        <span>~</span>
-                        <input type="datetime-local" id="candidacy-end" class="form-input">
-                    </div>
-                </div>
+    <div class="form-group">
+        <label class="form-label">📢 선거 공고일</label>
+        <input type="date" id="announcement-date" class="form-input">
+        <div class="form-helper">* 선거 공고가 게시되는 날짜입니다.</div>
+    </div>
 
-                <div class="form-group">
-                    <label class="form-label">🗳️ 투표 기간</label>
-                    <div class="form-row">
-                        <input type="datetime-local" id="vote-start" class="form-input">
-                        <span>~</span>
-                        <input type="datetime-local" id="vote-end" class="form-input">
-                    </div>
-                    <div class="form-helper">* 후보 등록 마감 이후로 설정하는 것을 권장합니다.</div>
-                </div>
+    <div class="form-group">
+        <label class="form-label">📝 후보 등록 기간</label>
+        <div class="form-row">
+            <input type="datetime-local" id="candidacy-start" class="form-input">
+            <span>~</span>
+            <input type="datetime-local" id="candidacy-end" class="form-input">
+        </div>
+    </div>
 
-                <button onclick="createElection()" style="margin-top:1rem; padding:10px; background:var(--color-primary); color:white; border:none; width:100%; cursor:pointer; border-radius:6px; font-weight:bold;">설정 저장 후 다음</button>
-            </div>
+    <div class="form-group">
+        <label class="form-label">🗳️ 투표 기간</label>
+        <div class="form-row">
+            <input type="datetime-local" id="vote-start" class="form-input">
+            <span>~</span>
+            <input type="datetime-local" id="vote-end" class="form-input">
+        </div>
+        <div class="form-helper">* 후보 등록 마감 이후로 설정하는 것을 권장합니다.</div>
+    </div>
+
+    <button onclick="createElection()" style="margin-top:1rem; padding:10px; background:var(--color-primary); color:white; border:none; width:100%; cursor:pointer; border-radius:6px; font-weight:bold;">설정 저장 후 다음</button>
+</div>
             
 <div id="step-2" style="display:none; margin-top:1rem; padding:1.5rem; border:1px solid #ccc; border-radius:8px;">
                 <h3>Step 2. 선거구 및 선출 인원</h3>
@@ -976,7 +982,6 @@ window.finishSetup = async () => {
     // [전역 변수] 중복 실행 방지용 잠금 장치 (하나만 남김)
     
 
-    // [신규] 지난 선거 데이터 불러오기
 async function loadPreviousElectionData() {
     // 가장 최근에 생성된 선거 1개를 조회
     const { data, error } = await supabase.from('elections')
@@ -990,7 +995,12 @@ async function loadPreviousElectionData() {
     window.showConfirm(`최근 선거 '${data.title}'의 정보를 불러오시겠습니까?`, () => {
         document.getElementById('election-title').value = data.title + ' (복사본)';
         
-        // 날짜 데이터가 있으면 포맷(YYYY-MM-DDTHH:mm)에 맞춰 입력
+        // [추가] 공고일 복사 (이전 데이터에 있을 경우)
+        if(data.announcement_date) {
+            document.getElementById('announcement-date').value = data.announcement_date;
+        }
+
+        // 날짜 데이터 포맷팅
         if(data.candidacy_start_at) document.getElementById('candidacy-start').value = data.candidacy_start_at.slice(0,16);
         if(data.candidacy_end_at) document.getElementById('candidacy-end').value = data.candidacy_end_at.slice(0,16);
         if(data.vote_start_at) document.getElementById('vote-start').value = data.vote_start_at.slice(0,16);
@@ -998,16 +1008,18 @@ async function loadPreviousElectionData() {
         
         window.showAlert('데이터가 채워졌습니다.');
     });
-} // End of loadPreviousElectionData
+} 
+// End of function loadPreviousElectionData
 
-// [신규] Step 1 폼 초기화 버튼용
 function resetStep1Form() {
     document.getElementById('election-title').value = '';
+    document.getElementById('announcement-date').value = ''; // [추가]
     document.getElementById('candidacy-start').value = '';
     document.getElementById('candidacy-end').value = '';
     document.getElementById('vote-start').value = '';
     document.getElementById('vote-end').value = '';
-} // End of resetStep1Form
+} 
+// End of function resetStep1Form
 
 // [신규] 상태 뱃지 업데이트 헬퍼 함수
 function updateStatusBadge(status) {
@@ -1227,58 +1239,63 @@ function clearDistrictInputs() {
         }
     };
 
-// [수정] 작성 중인 선거 이어하기 (전체 코드)
-    window.resumeSetup = async (el) => {
-        // 1. 화면 전환 (대시보드 숨김 -> 설정창 표시)
-        document.getElementById('dashboard-section').style.display = 'none';
-        document.getElementById('setup-section').style.display = 'block';
+window.resumeSetup = async (el) => {
+    // 1. 화면 전환 (대시보드 숨김 -> 설정창 표시)
+    document.getElementById('dashboard-section').style.display = 'none';
+    document.getElementById('setup-section').style.display = 'block';
+    
+    // 2. 전역 변수 설정 및 스토리지 저장 (새로고침 방어)
+    newElectionId = el.id;
+    localStorage.setItem('draft_election_id', newElectionId);
+    updateStatusBadge('작성 중');
+
+    // 3. Step 1 폼 데이터 채우기
+    document.getElementById('election-title').value = el.title;
+    
+    // [추가] 공고일 바인딩 (데이터가 있을 경우에만)
+    if(el.announcement_date) {
+        document.getElementById('announcement-date').value = el.announcement_date;
+    }
+    
+    // 날짜 데이터 포맷팅 및 바인딩 (YYYY-MM-DDTHH:mm)
+    if(el.candidacy_start_at) document.getElementById('candidacy-start').value = el.candidacy_start_at.slice(0,16);
+    if(el.candidacy_end_at) document.getElementById('candidacy-end').value = el.candidacy_end_at.slice(0,16);
+    if(el.vote_start_at) document.getElementById('vote-start').value = el.vote_start_at.slice(0,16);
+    if(el.vote_end_at) document.getElementById('vote-end').value = el.vote_end_at.slice(0,16);
+
+    // 4. Step 2 선거구 정보 복원
+    createdDistricts = {}; // 메모리 초기화
+    document.getElementById('district-list').innerHTML = ''; // 화면 리스트 초기화
+
+    // DB에서 선거구 조회
+    const { data: districts } = await supabase
+        .from('districts')
+        .select('*')
+        .eq('election_id', newElectionId);
         
-        // 2. 전역 변수 설정 및 스토리지 저장 (새로고침 방어)
-        newElectionId = el.id;
-        localStorage.setItem('draft_election_id', newElectionId);
-        updateStatusBadge('작성 중');
-
-        // 3. Step 1 폼 데이터 채우기
-        document.getElementById('election-title').value = el.title;
-        
-        // 날짜 데이터가 있는 경우에만 포맷에 맞춰 입력 (YYYY-MM-DDTHH:mm)
-        if(el.candidacy_start_at) document.getElementById('candidacy-start').value = el.candidacy_start_at.slice(0,16);
-        if(el.candidacy_end_at) document.getElementById('candidacy-end').value = el.candidacy_end_at.slice(0,16);
-        if(el.vote_start_at) document.getElementById('vote-start').value = el.vote_start_at.slice(0,16);
-        if(el.vote_end_at) document.getElementById('vote-end').value = el.vote_end_at.slice(0,16);
-
-        // 4. Step 2 선거구 정보 복원
-        createdDistricts = {}; // 메모리 초기화
-        document.getElementById('district-list').innerHTML = ''; // 화면 리스트 초기화
-
-        // DB에서 선거구 조회
-        const { data: districts } = await supabase
-            .from('districts')
-            .select('*')
-            .eq('election_id', newElectionId);
+    // 선거구가 존재하면 리스트 생성
+    if (districts && districts.length > 0) {
+        districts.forEach(d => {
+            createdDistricts[d.code] = d.id; // 중복 방지용 맵 업데이트
             
-        // 선거구가 존재하면 리스트 생성
-        if (districts && districts.length > 0) {
-            districts.forEach(d => {
-                createdDistricts[d.code] = d.id; // 중복 방지용 맵 업데이트
-                
-                // [중요] 새로 만든 UI 헬퍼 함수를 사용하여 수정/삭제 버튼이 포함된 리스트 생성
-                addDistrictToListUI(d.id, d.name, d.code, d.quota, d.vote_type);
-            });
+            // UI 헬퍼 함수 사용하여 리스트 생성
+            addDistrictToListUI(d.id, d.name, d.code, d.quota, d.vote_type);
+        });
 
-            // UI 상태 업데이트 (Step 3 활성화)
-            document.getElementById('step-2').style.display = 'block';
-            document.getElementById('step-3').style.display = 'block';
-            document.getElementById('district-warning').style.color = 'green';
-            document.getElementById('district-warning').innerText = `✅ 선거구 불러오기 완료 (${districts.length}개)`;
-        } else {
-            // 선거구가 없으면 Step 2만 표시하고 경고 문구 출력
-             document.getElementById('step-2').style.display = 'block';
-             document.getElementById('step-3').style.display = 'none';
-             document.getElementById('district-warning').innerText = '⚠️ 선거구는 최소 1개 이상 등록해야 합니다.';
-             document.getElementById('district-warning').style.color = 'red';
-        }
-    }; // End of resumeSetup
+        // UI 상태 업데이트 (Step 3 활성화)
+        document.getElementById('step-2').style.display = 'block';
+        document.getElementById('step-3').style.display = 'block';
+        document.getElementById('district-warning').style.color = 'green';
+        document.getElementById('district-warning').innerText = `✅ 선거구 불러오기 완료 (${districts.length}개)`;
+    } else {
+        // 선거구가 없으면 Step 2만 표시
+         document.getElementById('step-2').style.display = 'block';
+         document.getElementById('step-3').style.display = 'none';
+         document.getElementById('district-warning').innerText = '⚠️ 선거구는 최소 1개 이상 등록해야 합니다.';
+         document.getElementById('district-warning').style.color = 'red';
+    }
+}; 
+// End of function resumeSetup
 
     // 상태 변경
     window.handleStatusChange = async (event, electionId, newStatus) => {
@@ -1366,29 +1383,43 @@ function clearDistrictInputs() {
         document.getElementById('setup-section').style.display = 'block';
     };
 
-    window.createElection = async () => {
-        const title = document.getElementById('election-title').value;
-        const cS = document.getElementById('candidacy-start').value;
-        const cE = document.getElementById('candidacy-end').value;
-        const vS = document.getElementById('vote-start').value;
-        const vE = document.getElementById('vote-end').value;
+window.createElection = async () => {
+    const title = document.getElementById('election-title').value;
+    const announceDate = document.getElementById('announcement-date').value; // [추가]
+    const cS = document.getElementById('candidacy-start').value;
+    const cE = document.getElementById('candidacy-end').value;
+    const vS = document.getElementById('vote-start').value;
+    const vE = document.getElementById('vote-end').value;
 
-        if(!title || !cS || !cE || !vS || !vE) return window.showAlert('모든 정보를 입력하세요.');
-        if(cS >= cE) return window.showAlert('후보 등록 종료일 오류');
-        if(vS >= vE) return window.showAlert('투표 종료일 오류');
+    // [검증] 공고일 포함 모든 필수값 체크
+    if(!title || !announceDate || !cS || !cE || !vS || !vE) {
+        return window.showAlert('선거명, 공고일, 기간 등 모든 정보를 입력하세요.');
+    }
+    
+    // 논리적 유효성 검사
+    if(cS >= cE) return window.showAlert('후보 등록 종료일이 시작일보다 앞설 수 없습니다.');
+    if(vS >= vE) return window.showAlert('투표 종료일이 시작일보다 앞설 수 없습니다.');
 
-        const { data, error } = await supabase.from('elections').insert({
-            title, candidacy_start_at: cS, candidacy_end_at: cE,
-            vote_start_at: vS, vote_end_at: vE,
-            start_at: cS, end_at: vE, status: 'DRAFT'
-        }).select().single();
+    // [DB Insert] announcement_date 추가
+    const { data, error } = await supabase.from('elections').insert({
+        title, 
+        announcement_date: announceDate, // [추가]
+        candidacy_start_at: cS, 
+        candidacy_end_at: cE,
+        vote_start_at: vS, 
+        vote_end_at: vE,
+        start_at: cS, // 전체 시작 기준을 후보 등록 시작으로 유지 (필요시 공고일로 변경 가능)
+        end_at: vE, 
+        status: 'DRAFT'
+    }).select().single();
 
-        if(error) return window.showAlert('생성 실패: ' + error.message);
+    if(error) return window.showAlert('생성 실패: ' + error.message);
 
-        newElectionId = data.id;
-        window.showAlert('임시 저장되었습니다.\n선거구 설정을 계속해주세요.');
-        document.getElementById('step-2').style.display = 'block';
-    };
+    newElectionId = data.id;
+    window.showAlert('임시 저장되었습니다.\n선거구 설정을 계속해주세요.');
+    document.getElementById('step-2').style.display = 'block';
+}; 
+// End of function createElection
 
 // [수정] 선거구 추가/수정 (중복 오류 해결 + 즉시 새로고침)
     window.addDistrict = async () => {
