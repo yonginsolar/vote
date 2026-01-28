@@ -26,13 +26,18 @@ export class AdminService {
     }
 
     // 1. 선거 정보 및 현재 상태 가져오기
-    async getElectionInfo() {
-        // 가장 최근 선거 하나만 가져옴
+// [수정됨] 선거 정보 가져오기 (ID 기반 조회)
+    // 기존: 무조건 최근 1개 -> 변경: 요청받은 ID에 해당하는 선거 조회
+    async getElectionInfo(electionId) {
+        if (!electionId) {
+            console.warn("getElectionInfo에 ID가 전달되지 않았습니다.");
+            return null;
+        }
+
         const { data, error } = await supabase
             .from('elections')
             .select('*')
-            .order('created_at', { ascending: false })
-            .limit(1)
+            .eq('id', electionId) // [핵심] 특정 ID로 필터링
             .single();
             
         if (error) throw error;
