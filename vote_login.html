@@ -612,11 +612,15 @@
 
         badge.style.display = 'inline-block';
 
-        // ----------------------------------------------------
-        // [상태별 버튼 로직]
+       // ----------------------------------------------------
+        // [수정된 상태별 버튼 로직] - 순서 변경 (투표중 > 후보등록)
         // ----------------------------------------------------
 
-        // A. 결과 발표 (종료)
+        const now = new Date();
+        const candStart = new Date(election.candidacy_start_at);
+        const candEnd = new Date(election.candidacy_end_at);
+
+        // A. 결과 발표 (종료) - 최우선
         if (election.status === 'PUBLISHED' || election.status === 'ENDED') {
             badge.innerText = "결과 발표"; badge.style.background = "#2563eb";
             bottomBar.style.display = 'none';
@@ -624,87 +628,88 @@
             document.getElementById('result-view').style.display = 'block';
             await loadResults();
         } 
-        else {
-            // 진행 중 상태
+        
+        // B. [순서 변경됨] 투표 진행 중 (OPEN) - 후보 등록 기간보다 먼저 체크!
+        else if (election.status === 'OPEN') {
+            badge.innerText = "투표 진행 중"; badge.style.background = "#16a34a";
+            document.getElementById('result-view').style.display = 'none';
+            document.getElementById('candidate-area').style.display = 'flex';
+            bottomBar.style.display = 'block';
+            
+            if (rights.canVote) {
+                // 후보자도 투표권이 있으면 이 버튼이 뜹니다.
+                mainBtn.innerText = "🗳️ 투표소 입장";
+                mainBtn.disabled = false;
+                mainBtn.style.backgroundColor = "#2563eb"; // 파란색
+                mainBtn.onclick = goToVotePage;
+            } else {
+                mainBtn.innerText = "👁️ 투표소 구경하기 (투표권 없음)";
+                mainBtn.disabled = false;
+                mainBtn.style.backgroundColor = "#64748b"; // 진회색
+                mainBtn.onclick = () => {
+                    alert(`[참관인 입장]\n${rights.voteReason}\n\n투표는 불가능하며 현황 열람만 가능합니다.`);
+                    goToVotePage();
+                };
+            }
+        }
+
+        // C. [순서 변경됨] 후보 등록 기간 (상태가 NOMINATION 이거나 날짜 범위 내)
+        // OPEN 상태가 아닐 때만 체크하므로, 투표 기간과 겹쳐도 투표 버튼이 우선시됨
+        else if (election.status === 'NOMINATION' || (now >= candStart && now <= candEnd)) {
+            badge.innerText = "후보 등록 중"; badge.style.background = "#8b5cf6"; // 보라색
             document.getElementById('result-view').style.display = 'none';
             document.getElementById('candidate-area').style.display = 'flex';
             bottomBar.style.display = 'block';
 
-            const now = new Date();
-            const candStart = new Date(election.candidacy_start_at);
-            const candEnd = new Date(election.candidacy_end_at);
+            // 이미 등록했는지 확인
+            const { data: myCand } = await supabase
+                .from('candidates')
+                .select('id, status')
+                .eq('election_id', electionId)
+                .eq('member_uuid', myInfo.id)
+                .maybeSingle();
 
-            // B. 후보 등록 기간 (상태가 NOMINATION 이거나 날짜 범위 내)
-            if (election.status === 'NOMINATION' || (now >= candStart && now <= candEnd)) {
-                badge.innerText = "후보 등록 중"; badge.style.background = "#8b5cf6"; // 보라색
-
-                // 이미 등록했는지 확인 (candidates 테이블 조회)
-                const { data: myCand } = await supabase
-                    .from('candidates')
-                    .select('id, status')
-                    .eq('election_id', electionId)
-                    .eq('member_uuid', myInfo.id) // 내 UUID로 확인
-                    .maybeSingle();
-
-                if (myCand) {
-                    // 이미 신청함 -> 현황 보기
-                    mainBtn.innerText = "✅ 내 신청 현황 보기";
+            if (myCand) {
+                mainBtn.innerText = "✅ 내 신청 현황 보기";
+                mainBtn.disabled = false;
+                mainBtn.style.backgroundColor = "#10b981"; // 초록색
+                mainBtn.onclick = () => {
+                    window.location.href = `candidate_apply.html?id=${electionId}`;
+                };
+            } else {
+                if (rights.canRun) {
+                    mainBtn.innerText = "📝 후보자 등록 신청하기";
                     mainBtn.disabled = false;
-                    mainBtn.style.backgroundColor = "#10b981"; // 초록색
+                    mainBtn.style.backgroundColor = "#8b5cf6"; // 보라색
                     mainBtn.onclick = () => {
                         window.location.href = `candidate_apply.html?id=${electionId}`;
                     };
                 } else {
-                    // 미신청 -> 자격에 따라 버튼 처리
-                    if (rights.canRun) {
-                        mainBtn.innerText = "📝 후보자 등록 신청하기";
-                        mainBtn.disabled = false;
-                        mainBtn.style.backgroundColor = "#8b5cf6"; // 보라색
-                        mainBtn.onclick = () => {
-                            window.location.href = `candidate_apply.html?id=${electionId}`;
-                        };
-                    } else {
-                        mainBtn.innerText = "🚫 후보 자격 없음";
-                        mainBtn.disabled = false; // 클릭해서 사유를 볼 수 있게 활성화는 해둠
-                        mainBtn.style.backgroundColor = "#9ca3af"; // 회색
-                        mainBtn.onclick = () => {
-                            alert(`[신청 불가 사유]\n${rights.runReason}`);
-                        };
-                    }
-                }
-            }
-            // C. 투표 진행 중
-            else if (election.status === 'OPEN') {
-                badge.innerText = "투표 진행 중"; badge.style.background = "#16a34a";
-                
-                if (rights.canVote) {
-                    mainBtn.innerText = "🗳️ 투표소 입장";
+                    mainBtn.innerText = "🚫 후보 자격 없음";
                     mainBtn.disabled = false;
-                    mainBtn.style.backgroundColor = "#2563eb"; // 파란색
-                    mainBtn.onclick = goToVotePage;
-                } else {
-                    // 투표권 없음 (참관)
-                    mainBtn.innerText = "👁️ 투표소 구경하기 (투표권 없음)";
-                    mainBtn.disabled = false;
-                    mainBtn.style.backgroundColor = "#64748b"; // 진회색
+                    mainBtn.style.backgroundColor = "#9ca3af"; 
                     mainBtn.onclick = () => {
-                        alert(`[참관인 입장]\n${rights.voteReason}\n\n투표는 불가능하며 현황 열람만 가능합니다.`);
-                        goToVotePage(); // 입장은 시켜줌 (vote.html 내부에서 투표 차단 로직 필요)
+                        alert(`[신청 불가 사유]\n${rights.runReason}`);
                     };
                 }
-            } 
-            // D. 마감/대기 등 기타 상태
-            else {
-                if (election.status === 'CLOSED') {
-                    badge.innerText = "투표 종료"; badge.style.background = "#dc2626";
-                    mainBtn.innerText = "⛔ 투표 마감";
-                } else {
-                    badge.innerText = "준비 중"; badge.style.background = "#d97706";
-                    mainBtn.innerText = "🔒 투표 대기 중";
-                }
-                mainBtn.disabled = true;
-                mainBtn.style.backgroundColor = "#94a3b8";
             }
+        }
+        
+        // D. 마감/대기 등 기타 상태
+        else {
+            document.getElementById('result-view').style.display = 'none';
+            document.getElementById('candidate-area').style.display = 'flex';
+            bottomBar.style.display = 'block';
+            
+            if (election.status === 'CLOSED') {
+                badge.innerText = "투표 종료"; badge.style.background = "#dc2626";
+                mainBtn.innerText = "⛔ 투표 마감";
+            } else {
+                badge.innerText = "준비 중"; badge.style.background = "#d97706";
+                mainBtn.innerText = "🔒 투표 대기 중";
+            }
+            mainBtn.disabled = true;
+            mainBtn.style.backgroundColor = "#94a3b8";
         }
     }
 
