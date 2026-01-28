@@ -307,6 +307,7 @@
                     if(data) photoSrc = data.publicUrl;
                 }
             }
+            
 
             const age = getKoreanAge(c.birth_date);
             const safeAddress = formatAddress(c.address);
@@ -335,6 +336,61 @@
             document.getElementById('cand-detail-content').innerHTML = html;
             document.getElementById('candidate-detail-modal').style.display = 'flex';
         }
+        // [신규] 만 19세 미만(미성년자) 판별 함수
+    function isMinor(rrn) {
+        if (!rrn || rrn.length < 8) return true; // 데이터 없으면 미성년 취급 (안전)
+        
+        const yy = parseInt(rrn.substring(0, 2));
+        const mm = parseInt(rrn.substring(2, 4)) - 1;
+        const dd = parseInt(rrn.substring(4, 6));
+        const gender = parseInt(rrn.substring(7, 8));
+
+        // 1900년대(1,2,5,6) vs 2000년대(3,4,7,8)
+        const century = ([1, 2, 5, 6].includes(gender)) ? 1900 : 2000;
+        const birthDate = new Date(century + yy, mm, dd);
+        
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return age < 19; // 만 19세 미만이면 true
+    }
+
+    // [신규] 자격 검증 계산 함수
+    function checkRights(member, announcementDateStr) {
+        const announceDate = new Date(announcementDateStr);
+        const joinDate = new Date(member.join_date);
+        
+        // 기준일: 공고일 1개월 전 (후보 자격용)
+        const oneMonthBefore = new Date(announceDate);
+        oneMonthBefore.setMonth(announceDate.getMonth() - 1);
+
+        const isActive = member.status === '정상';
+        const isAdult = !isMinor(member.rrn_display);
+
+        // 1. 피선거권 (후보 자격)
+        // 조건: 정조합원 + 성년 + 가입일이 공고일 1달 전
+        let canRun = false;
+        let runReason = '';
+
+        if (!isActive) runReason = '정조합원(상태:정상)만 후보 등록이 가능합니다.';
+        else if (!isAdult) runReason = '미성년자는 후보 등록이 불가능합니다.';
+        else if (joinDate > oneMonthBefore) runReason = '가입 후 1개월이 지나지 않았습니다.';
+        else canRun = true;
+
+        // 2. 선거권 (투표 자격)
+        // 조건: 정조합원 + 가입일이 공고일 이전 (당일 포함 여부는 정책에 따라, 여기선 이전으로 설정)
+        let canVote = false;
+        let voteReason = '';
+
+        if (!isActive) voteReason = '정조합원만 투표가 가능합니다.';
+        else if (joinDate >= announceDate) voteReason = '선거 공고일 이후 가입자는 투표권이 없습니다.';
+        else canVote = true;
+
+        return { canRun, runReason, canVote, voteReason };
+    }
 
         function closeCandidateDetail() {
             document.getElementById('candidate-detail-modal').style.display = 'none';
@@ -501,51 +557,144 @@
             }).join('');
         }
 
-        async function loadElectionInfo() {
-            const { data: election, error } = await supabase.from('elections').select('*').eq('id', electionId).single();
-            if (error || !election) throw new Error("선거 정보 없음");
+// [수정] 선거 정보 로드 및 자격 검증 (Candidates & Voters Logic)
+    async function loadElectionInfo() {
+        // 1. 선거 정보 조회
+        const { data: election, error } = await supabase
+            .from('elections')
+            .select('*')
+            .eq('id', electionId)
+            .single();
 
-            currentElection = election;
-            currentStatus = election.status;
+        if (error || !election) throw new Error("선거 정보 없음");
 
-            document.getElementById('election-title').innerText = election.title;
-            const startStr = new Date(election.vote_start_at).toLocaleDateString();
-            const endStr = new Date(election.vote_end_at).toLocaleDateString();
-            document.getElementById('election-period').innerText = `투표기간: ${startStr} ~ ${endStr}`;
+        currentElection = election;
+        currentStatus = election.status;
 
-            const badge = document.getElementById('status-badge');
-            const mainBtn = document.getElementById('btn-main-action');
-            const bottomBar = document.getElementById('bottom-bar');
-            
-            badge.style.display = 'inline-block';
+        // 2. 내 정보 상세 조회 (자격 검증용: status, join_date, rrn_display)
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data: myInfo } = await supabase
+            .from('coop_members')
+            .select('id, member_id, status, join_date, rrn_display')
+            .eq('email', session.user.email)
+            .single();
 
-            if (election.status === 'PUBLISHED' || election.status === 'ENDED') {
-                badge.innerText = "결과 발표"; badge.style.background = "#2563eb";
-                bottomBar.style.display = 'none'; 
-                document.getElementById('candidate-area').style.display = 'none';
-                document.getElementById('result-view').style.display = 'block';
-                await loadResults();
-            } else {
-                document.getElementById('result-view').style.display = 'none';
-                document.getElementById('candidate-area').style.display = 'flex';
-                bottomBar.style.display = 'block';
+        // 3. 자격 검증 계산
+        // (announcement_date는 필수값이므로 예외처리 없이 바로 사용)
+        const rights = checkRights(myInfo, election.announcement_date);
 
-                if (election.status === 'OPEN') {
-                    badge.innerText = "투표 진행 중"; badge.style.background = "#16a34a";
-                    mainBtn.innerText = "🗳️ 투표소 입장하기";
+        // UI 기본 세팅
+        document.getElementById('election-title').innerText = election.title;
+        const startStr = new Date(election.vote_start_at).toLocaleDateString();
+        const endStr = new Date(election.vote_end_at).toLocaleDateString();
+        document.getElementById('election-period').innerText = `투표기간: ${startStr} ~ ${endStr}`;
+
+        const badge = document.getElementById('status-badge');
+        const mainBtn = document.getElementById('btn-main-action');
+        const bottomBar = document.getElementById('bottom-bar');
+        
+        // 사용자 신분 배지 표시 (이름 옆에 붙여주기 위해 기존 요소 활용)
+        const greetingEl = document.getElementById('user-greeting');
+        const roleBadge = rights.canVote ? '✅ 유권자' : '👁️ 참관인';
+        greetingEl.innerHTML += ` <span style="font-size:0.8rem; background:#eee; padding:2px 6px; border-radius:4px; margin-left:5px;">${roleBadge}</span>`;
+
+        badge.style.display = 'inline-block';
+
+        // ----------------------------------------------------
+        // [상태별 버튼 로직]
+        // ----------------------------------------------------
+
+        // A. 결과 발표 (종료)
+        if (election.status === 'PUBLISHED' || election.status === 'ENDED') {
+            badge.innerText = "결과 발표"; badge.style.background = "#2563eb";
+            bottomBar.style.display = 'none';
+            document.getElementById('candidate-area').style.display = 'none';
+            document.getElementById('result-view').style.display = 'block';
+            await loadResults();
+        } 
+        else {
+            // 진행 중 상태
+            document.getElementById('result-view').style.display = 'none';
+            document.getElementById('candidate-area').style.display = 'flex';
+            bottomBar.style.display = 'block';
+
+            const now = new Date();
+            const candStart = new Date(election.candidacy_start_at);
+            const candEnd = new Date(election.candidacy_end_at);
+
+            // B. 후보 등록 기간 (상태가 NOMINATION 이거나 날짜 범위 내)
+            if (election.status === 'NOMINATION' || (now >= candStart && now <= candEnd)) {
+                badge.innerText = "후보 등록 중"; badge.style.background = "#8b5cf6"; // 보라색
+
+                // 이미 등록했는지 확인 (candidates 테이블 조회)
+                const { data: myCand } = await supabase
+                    .from('candidates')
+                    .select('id, status')
+                    .eq('election_id', electionId)
+                    .eq('member_uuid', myInfo.id) // 내 UUID로 확인
+                    .maybeSingle();
+
+                if (myCand) {
+                    // 이미 신청함 -> 현황 보기
+                    mainBtn.innerText = "✅ 내 신청 현황 보기";
                     mainBtn.disabled = false;
-                    mainBtn.onclick = goToVotePage; // [핵심] 바로 이동
-                } else if (election.status === 'CLOSED') {
+                    mainBtn.style.backgroundColor = "#10b981"; // 초록색
+                    mainBtn.onclick = () => {
+                        window.location.href = `candidate_apply.html?id=${electionId}`;
+                    };
+                } else {
+                    // 미신청 -> 자격에 따라 버튼 처리
+                    if (rights.canRun) {
+                        mainBtn.innerText = "📝 후보자 등록 신청하기";
+                        mainBtn.disabled = false;
+                        mainBtn.style.backgroundColor = "#8b5cf6"; // 보라색
+                        mainBtn.onclick = () => {
+                            window.location.href = `candidate_apply.html?id=${electionId}`;
+                        };
+                    } else {
+                        mainBtn.innerText = "🚫 후보 자격 없음";
+                        mainBtn.disabled = false; // 클릭해서 사유를 볼 수 있게 활성화는 해둠
+                        mainBtn.style.backgroundColor = "#9ca3af"; // 회색
+                        mainBtn.onclick = () => {
+                            alert(`[신청 불가 사유]\n${rights.runReason}`);
+                        };
+                    }
+                }
+            }
+            // C. 투표 진행 중
+            else if (election.status === 'OPEN') {
+                badge.innerText = "투표 진행 중"; badge.style.background = "#16a34a";
+                
+                if (rights.canVote) {
+                    mainBtn.innerText = "🗳️ 투표소 입장";
+                    mainBtn.disabled = false;
+                    mainBtn.style.backgroundColor = "#2563eb"; // 파란색
+                    mainBtn.onclick = goToVotePage;
+                } else {
+                    // 투표권 없음 (참관)
+                    mainBtn.innerText = "👁️ 투표소 구경하기 (투표권 없음)";
+                    mainBtn.disabled = false;
+                    mainBtn.style.backgroundColor = "#64748b"; // 진회색
+                    mainBtn.onclick = () => {
+                        alert(`[참관인 입장]\n${rights.voteReason}\n\n투표는 불가능하며 현황 열람만 가능합니다.`);
+                        goToVotePage(); // 입장은 시켜줌 (vote.html 내부에서 투표 차단 로직 필요)
+                    };
+                }
+            } 
+            // D. 마감/대기 등 기타 상태
+            else {
+                if (election.status === 'CLOSED') {
                     badge.innerText = "투표 종료"; badge.style.background = "#dc2626";
                     mainBtn.innerText = "⛔ 투표 마감";
-                    mainBtn.disabled = true;
                 } else {
                     badge.innerText = "준비 중"; badge.style.background = "#d97706";
                     mainBtn.innerText = "🔒 투표 대기 중";
-                    mainBtn.disabled = true;
                 }
+                mainBtn.disabled = true;
+                mainBtn.style.backgroundColor = "#94a3b8";
             }
         }
+    }
 
         async function loadDistrictsAndCandidates() {
             const { data: districts } = await supabase.from('districts').select('*').eq('election_id', electionId).order('name');
