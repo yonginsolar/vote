@@ -366,7 +366,7 @@
     <input type="text" id="cand-name" required placeholder="예: 홍길동">
 </div>
 
-<div style="margin-bottom:1.5rem;">
+<div style="margin-bottom:1.5rem; display:none;">
     <label>
         <strong>프로필 사진 (공개) [필수]</strong>
         <span class="file-info-text">* 최대 10MB</span>
@@ -790,6 +790,7 @@
     window.closeConfirmModal = () => document.getElementById('confirm-modal').style.display = 'none';
 
 // --- [8] 최종 제출 (수정된 버전) ---
+// --- [8] 최종 제출 (수정된 버전) ---
     document.getElementById('btn-final-submit').addEventListener('click', async () => {
         closeConfirmModal();
         const btn = document.getElementById('btn-pre-check');
@@ -805,18 +806,21 @@
             // [설정] 파일 용량 제한 (10MB)
             const MAX_SIZE = 10 * 1024 * 1024; 
 
-            // 1. 필수값 검증
-            // (신규 등록일 때만 파일 필수, 수정일 땐 기존 파일 있으면 통과)
+            // 1. 필수값 검증 (수정: 사진 및 증빙서류 필수 체크 로직 제거)
+            /* [기존 코드 주석 처리]
+            요청에 의해 사진과 증빙서류가 없어도 등록 가능하도록 검증 로직을 비활성화함.
             if (!candId) {
                 if (!photoFile) throw new Error('프로필 사진을 선택해주세요.');
                 if (!proofFile) throw new Error('증빙 서류를 선택해주세요.');
             }
+            */
 
-            // 2. 용량 검증
+            // 2. 용량 검증 (파일이 존재할 때만 검사)
             if (photoFile && photoFile.size > MAX_SIZE) throw new Error('프로필 사진은 10MB를 초과할 수 없습니다.');
             if (proofFile && proofFile.size > MAX_SIZE) throw new Error('증빙 서류는 10MB를 초과할 수 없습니다.');
 
             // 3. 파일 업로드 (Service 위임)
+            // 파일이 없으면 null 반환 -> DB에도 null 혹은 기존 값 유지
             let photoUrl = null;
             let proofUrl = null;
             
@@ -833,10 +837,10 @@
                 contact: document.getElementById('user-contact').value,
                 address: document.getElementById('user-address').value,
                 career: document.getElementById('cand-career').value,
-                manifesto: document.getElementById('cand-manifesto').value, // 숨겨진 값이지만 저장
+                manifesto: document.getElementById('cand-manifesto').value, 
                 agreed: true,
                 status: 'PENDING',
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString() // 주의: Update 시에는 이 필드를 제외하거나 DB 트리거 확인 필요
             };
 
             // 파일이 새로 업로드된 경우에만 URL 업데이트
@@ -846,7 +850,7 @@
             // 5. Insert 또는 Update 실행
             let result;
             if (candId) {
-                // 수정: ID로 업데이트
+                // 수정: ID로 업데이트 (created_at 등 불필요한 필드는 제외하는 것이 정석이나, 편의상 유지함)
                 result = await supabase.from('candidates').update(candidateObj).eq('id', candId);
             } else {
                 // 신규: 삽입
@@ -864,6 +868,7 @@
             btn.innerText = '신청서 제출';
         }
     });
+    // End of btn-final-submit event listener
     // End of btn-final-submit event listener
 
     init();
