@@ -580,41 +580,39 @@
         modalOverlay.style.display = 'flex';
     }
 
-// [수정] 초기화 함수 (세션 브리지 추가)
+// [수정] 초기화 함수: URL의 id 파라미터를 감지하여 자동 실행
     async function init() {
         try {
-            // ▼▼▼ [1] 세션 연결 (Bridge) ▼▼▼
+            // 1. 세션 처리
             const params = new URLSearchParams(window.location.search);
             const at = params.get('at');
             const rt = params.get('rt');
+            const targetElectionId = params.get('id'); // URL에서 ID 확인
 
             if (at && rt) {
-                // 토큰이 있으면 강제 로그인 처리
                 const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
                 if (!error) {
-                    // 주소창 깔끔하게 정리
-                    const cleanUrl = window.location.pathname; 
-                    window.history.replaceState({}, document.title, cleanUrl);
+                    // ID 파라미터는 유지, 토큰만 정리
+                    const newUrl = window.location.pathname + (targetElectionId ? `?id=${targetElectionId}` : '');
+                    window.history.replaceState({}, document.title, newUrl);
                 }
             }
-            // ▲▲▲ [끝] ▲▲▲
 
-            // [2] 로그인 확인
+            // 2. 로그인 확인
             currentUser = await service.initialize();
             
             if (!currentUser) { 
                 showModal('알림', '로그인이 필요합니다.\n선거 포털에서 다시 접속해주세요.', () => {
-                    // 로그인 페이지가 아닌 선거 포털로 이동 (흐름상 더 자연스러움)
                     window.location.href = 'vote_login.html'; 
                 });
                 return; 
             }
 
-            // [3] 사용자 추가 정보 조회 (coop_members)
+            // 3. 사용자 정보 보강
             const { data: memberInfo } = await supabase.from('coop_members').select('*').eq('id', currentUser.id).maybeSingle();
             if (memberInfo) currentUser = { ...currentUser, ...memberInfo };
 
-            // [4] 선거 목록 로드 (후보 등록 기간인 선거만)
+            // 4. 선거 목록 로드
             const { data: elections } = await supabase.from('elections')
                 .select('*')
                 .eq('status', 'NOMINATION')
@@ -627,8 +625,10 @@
                 return;
             }
 
-            // Select Box 구성
+            // 5. Select Box 구성 및 자동 선택 로직
             const selectEl = document.getElementById('election-select');
+            let isTargetValid = false;
+
             elections.forEach(el => {
                 const option = document.createElement('option');
                 option.value = el.id;
@@ -636,22 +636,35 @@
                 option.dataset.start = el.candidacy_start_at || '-';
                 option.dataset.end = el.candidacy_end_at || '-';
                 selectEl.appendChild(option);
+
+                // URL의 ID와 일치하는 선거가 있는지 확인
+                if (targetElectionId && el.id === targetElectionId) {
+                    isTargetValid = true;
+                }
             });
+
             document.getElementById('select-area').style.display = 'block';
+
+            // [핵심] URL에 ID가 있고 유효하다면 -> 자동 실행
+            if (isTargetValid) {
+                selectEl.value = targetElectionId; // 선택값 세팅
+                checkQualification(targetElectionId); // 바로 자격 확인 시작
+            }
 
         } catch (e) { 
             console.error(e); 
             showModal('오류', '초기화 실패: ' + e.message); 
         }
     }
-
-    // --- [4] 이벤트: 내 선거구 확인 ---
-    document.getElementById('btn-check-qual').addEventListener('click', async () => {
-        const selectEl = document.getElementById('election-select');
-        const electionId = selectEl.value;
+            // [신규] 자격 확인 로직 함수화 (버튼 클릭 & 자동 실행 공용)
+    async function checkQualification(electionId) {
         if (!electionId) return showModal('알림', '출마할 선거를 선택해주세요.');
 
-        // 기간 표시 (HTML 요소가 존재할 때만 값 넣기)
+        const selectEl = document.getElementById('election-select');
+        // 수동 선택이 아닐 경우를 대비해 값 동기화
+        if (selectEl.value !== electionId) selectEl.value = electionId;
+
+        // 기간 표시 업데이트
         const option = selectEl.options[selectEl.selectedIndex];
         const sDate = option.dataset.start !== '-' ? new Date(option.dataset.start).toLocaleDateString() : '-';
         const eDate = option.dataset.end !== '-' ? new Date(option.dataset.end).toLocaleDateString() : '-';
@@ -660,25 +673,26 @@
         if(periodEl) periodEl.innerText = `${sDate} ~ ${eDate}`;
 
         const btn = document.getElementById('btn-check-qual');
-        btn.disabled = true; btn.innerText = '확인 중...';
+        btn.disabled = true; btn.innerText = '자격 확인 및 데이터 로딩 중...';
 
         try {
             // 1. 선거인 명부 체크
             const { data: voterRows } = await supabase.from('election_voters').select('district_id').eq('election_id', electionId).eq('member_uuid', currentUser.id);
-            if (!voterRows || !voterRows.length) throw new Error('선거인 명부에 귀하의 정보가 없습니다.');
+            if (!voterRows || !voterRows.length) throw new Error('선거인 명부에 귀하의 정보가 없습니다.\n(해당 선거의 유권자가 아닙니다)');
 
             // 2. 지역구 체크
             const districtIds = voterRows.map(r => r.district_id);
             const { data: districtData } = await supabase.from('districts').select('*').in('id', districtIds).eq('is_common', false).limit(1).maybeSingle();
 
-            if (!districtData) throw new Error('출마 가능한 지역 선거구가 없습니다.');
-            if (districtData.vote_type === 'BINARY') throw new Error('찬반 투표 지역은 후보 등록 대상이 아닙니다.');
+            if (!districtData) throw new Error('출마 가능한 지역 선거구가 확인되지 않습니다.\n(비례대표 투표권만 있거나 선거구 데이터 오류)');
+            if (districtData.vote_type === 'BINARY') throw new Error('선택하신 지역구는 찬반 투표 대상이므로\n후보자 등록 대상이 아닙니다.');
 
             selectedDistrict = districtData;
 
             // 3. 기존 신청 내역 체크
             const { data: existingApp } = await supabase.from('candidates').select('*').eq('election_id', electionId).eq('member_uuid', currentUser.id).maybeSingle();
 
+            // 성공 시 선택 섹션 숨김 (자연스러운 전환)
             document.getElementById('selection-section').style.display = 'none';
 
             if (existingApp && existingApp.status === 'APPROVED') {
@@ -689,10 +703,17 @@
             }
         } catch (e) {
             showModal('알림', e.message);
+            // 실패 시 다시 선택창 보여줌
             document.getElementById('selection-section').style.display = 'block';
         } finally {
             btn.disabled = false; btn.innerText = '내 선거구 확인 및 신청내역 조회';
         }
+    }
+
+// [수정] 버튼 이벤트 리스너: 위에서 만든 함수 호출
+    document.getElementById('btn-check-qual').addEventListener('click', () => {
+        const id = document.getElementById('election-select').value;
+        checkQualification(id);
     });
 
     // --- [5] 폼 열기 ---
