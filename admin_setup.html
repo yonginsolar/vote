@@ -146,33 +146,12 @@
         <div class="header-logo">
             <span>🛡️ Election Admin</span>
         </div>
-        <div id="user-info-area" style="display:none;">
-            <span id="login-info" style="font-weight:bold; color:#555; font-size:0.9rem;">관리자님</span>
-            <button onclick="handleLogout()" style="background:#fff; border:1px solid #ddd; padding:6px 14px; border-radius:20px; cursor:pointer; font-size:0.8rem; font-weight:bold; color:#444;">
-                로그아웃
-            </button>
-        </div>
+
     </header>
 
     <div class="container active">
         
-<div id="login-section" style="text-align:center; padding: 4rem 1rem;">
-    <h2 style="color:#333;">🔐 관리자 접속</h2>
-    <p style="color:#666; margin-bottom:2rem;">설정하신 비밀번호로 로그인하세요.</p>
-    
-    <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
-        <input type="email" id="admin-email" placeholder="이메일 (admin@example.com)" 
-               style="padding:0.8rem; width:280px; border:1px solid #ddd; border-radius:6px; font-size:1rem;">
-        
-        <input type="password" id="admin-password" placeholder="비밀번호" 
-               onkeypress="if(event.key==='Enter') handleLogin()"
-               style="padding:0.8rem; width:280px; border:1px solid #ddd; border-radius:6px; font-size:1rem;">
 
-        <button onclick="handleLogin()" style="padding:0.8rem; width:300px; background:var(--color-primary); color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-size:1rem; margin-top:10px;">
-            로그인
-        </button>
-    </div>
-</div>
 
         <div id="dashboard-section" style="display:none;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -997,48 +976,6 @@ window.finishSetup = async () => {
     // [전역 변수] 중복 실행 방지용 잠금 장치 (하나만 남김)
     
 
-
-
-    // [관리자 권한 확인 및 렌더링 함수] - 전역 함수 선언
-    async function checkAdminAndRender(session) {
-        const userEmail = session.user.email ? session.user.email.toLowerCase() : '';
-        console.log(`🔎 권한 조회 시작: ${userEmail}`);
-
-        // 1. 관리자 정보 조회
-        const { data: member, error } = await supabase
-            .from('coop_members')
-            .select('role, name, email')
-            .eq('email', userEmail)
-            .maybeSingle();
-
-        // 2. 에러 처리
-        if (error) throw new Error("데이터베이스 연결 오류: " + error.message);
-        if (!member) throw new Error("등록된 회원 정보가 없습니다. 관리자에게 문의하세요.");
-        
-        // [중요] role 체크
-        const userRole = member.role ? member.role.toLowerCase() : '';
-        if (userRole !== 'admin' && userRole !== 'super_admin') {
-            throw new Error(`접근 권한이 없습니다. (현재 등급: ${member.role})`);
-        }
-
-        // 3. 성공 시 UI 전환
-        console.log("✅ 관리자 승인 완료.");
-        document.getElementById('login-section').style.display = 'none';
-        document.getElementById('user-info-area').style.display = 'flex';
-        document.getElementById('login-info').innerText = `${member.name}님 (${userEmail})`;
-        
-        // 4. 대시보드 로드
-        document.getElementById('dashboard-section').style.display = 'block';
-        await loadDashboard(); 
-    }
-
-    // 로그인 화면 렌더링
-    function renderLoginScreen() {
-        document.getElementById('login-section').style.display = 'block';
-        document.getElementById('user-info-area').style.display = 'none';
-        document.getElementById('dashboard-section').style.display = 'none';
-        document.getElementById('setup-section').style.display = 'none';
-    }
     // [신규] 지난 선거 데이터 불러오기
 async function loadPreviousElectionData() {
     // 가장 최근에 생성된 선거 1개를 조회
@@ -1364,66 +1301,63 @@ function clearDistrictInputs() {
     // ----------------------------------------------------------------
     // [3] 이벤트 핸들러
     // ----------------------------------------------------------------
+// [수정] 로그아웃 핸들러
     window.handleLogout = async () => {
         await supabase.auth.signOut();
-        window.location.reload();
+        window.location.href = 'vote_login.html'; // 선거 포털로 이동
     };
 
-// [수정] 로그인 핸들러 (ID/PW 방식)
-    window.handleLogin = async () => {
-        const email = document.getElementById('admin-email').value;
-        const password = document.getElementById('admin-password').value;
 
-        if (!email || !password) return window.showAlert('이메일과 비밀번호를 입력하세요.');
-
-        // 로딩 표시 (선택사항)
-        const btn = document.querySelector('#login-section button');
-        const originalText = btn.innerText;
-        btn.innerText = '로그인 중...';
-        btn.disabled = true;
-
-        try {
-            // [핵심] 비밀번호 로그인 시도
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
-
-            if (error) throw error;
-            
-            // 성공하면 onAuthStateChange가 자동으로 감지하므로 
-            // 여기서 별도 처리를 안 해도 되지만, 사용자 경험을 위해:
-            console.log('로그인 성공');
-
-        } catch (err) {
-            window.showAlert('로그인 실패: ' + err.message);
-            btn.innerText = originalText;
-            btn.disabled = false;
-        }
-    };
-
-    // [수정] 초기화 함수 (매직링크 로직 제거로 매우 단순해짐)
+// [수정] 초기화 함수: 로그인 창 없이 즉시 권한 체크
     async function init() {
-        console.log("🚀 앱 초기화 시작 (ID/PW 모드)...");
+        console.log("🚀 관리자 페이지 진입...");
 
-        // 1. 이벤트 리스너: 로그인 상태 변화 감지
-        supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(`📣 인증 상태: ${event}`);
-            
-            if (event === 'SIGNED_IN') {
-                // 로그인 성공 시 권한 확인 및 대시보드 진입
-                if (session) await checkAdminAndRender(session);
-            } else if (event === 'SIGNED_OUT') {
-                renderLoginScreen();
+        // 1. 세션 확인 (vote_login.html에서 로그인하고 넘어왔는지)
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error || !session) {
+            alert("로그인 정보가 없습니다. 선거 포털로 이동합니다.");
+            window.location.href = 'vote_login.html'; // 쫓아내기
+            return;
+        }
+
+        // 2. 관리자 권한 확인 (DB 조회)
+        try {
+            const { data: member, error: dbError } = await supabase
+                .from('coop_members')
+                .select('name, role, email')
+                .eq('email', session.user.email)
+                .single();
+
+            if (dbError || !member) throw new Error("회원 정보를 찾을 수 없습니다.");
+
+            // role이 admin이 아니면 접속 불가
+            if (member.role !== 'admin' && member.role !== 'super_admin') {
+                alert("⛔ 관리자 권한이 필요합니다.");
+                window.location.href = 'vote_login.html'; // 쫓아내기
+                return;
             }
-        });
 
-        // 2. 새로고침 시 세션 복구
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            await checkAdminAndRender(session);
-        } else {
-            renderLoginScreen();
+            // 3. [성공] 대시보드 화면 표시
+            console.log(`✅ 관리자 인증 성공: ${member.name}`);
+            
+            // 상단 헤더 정보 표시 (필요 시)
+            const headerInfo = document.getElementById('user-info-area');
+            if(headerInfo) {
+                headerInfo.style.display = 'flex';
+                document.getElementById('login-info').innerText = `${member.name}님 (관리자)`;
+            }
+
+            // 대시보드 섹션 보이기
+            document.getElementById('dashboard-section').style.display = 'block';
+            
+            // 데이터 로드 시작
+            await loadDashboard();
+
+        } catch (e) {
+            console.error(e);
+            alert("권한 확인 중 오류: " + e.message);
+            window.location.href = 'vote_login.html';
         }
     }
 
