@@ -249,6 +249,8 @@
 
     <script type="module">
         import { supabase } from './ElectionService.js';
+        // [신규] 기본 프로필 이미지 상수 (회색 사람 실루엣)
+        const DEFAULT_PROFILE_IMG = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzk5OTk5OSI+PHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPjwvc3ZnPg==";
 
         const urlParams = new URLSearchParams(window.location.search);
         const electionId = urlParams.get('id');
@@ -295,26 +297,33 @@
             document.getElementById('imageModal').style.display = 'none';
         }
 
+// [수정됨] 후보자 상세 모달 열기 (기본 이미지 적용)
         function openCandidateDetail(candId) {
             const c = allCandidates.find(item => item.id === candId);
             if (!c) return;
             
-            let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+            // 1. 기본 이미지 로직 적용
+            let photoSrc = DEFAULT_PROFILE_IMG;
+
             if (c.photo_url) {
-                if (c.photo_url.startsWith('http')) photoSrc = c.photo_url;
-                else {
+                if (c.photo_url.startsWith('http')) {
+                    photoSrc = c.photo_url;
+                } else {
                     const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
                     if(data) photoSrc = data.publicUrl;
                 }
             }
-            
 
             const age = getKoreanAge(c.birth_date);
             const safeAddress = formatAddress(c.address);
 
             const html = `
                 <div class="modal-cand-header">
-                    <img src="${photoSrc}" class="modal-cand-photo" onclick="openImageModal('${photoSrc}')">
+                    <img src="${photoSrc}" 
+                         class="modal-cand-photo" 
+                         onclick="openImageModal('${photoSrc}')"
+                         onerror="this.src='${DEFAULT_PROFILE_IMG}'"
+                         style="background-color: #f3f4f6;">
                     <div>
                         <div style="font-size:0.9rem; color:#666; margin-bottom:4px;">기호 <span style="font-weight:bold; color:var(--primary); font-size:1.1rem;">${c.symbol || '-'}</span>번</div>
                         <div style="font-size:1.4rem; font-weight:800;">${c.name}</div>
@@ -722,6 +731,7 @@
             else renderCandidates(distId);
         };
 
+// [수정됨] 후보자 리스트 렌더링 (기본 이미지 적용)
         function renderCandidates(filterDistId) {
             const container = document.getElementById('candidate-area');
             let list = allCandidates;
@@ -735,19 +745,29 @@
             container.innerHTML = list.map(c => {
                 const distInfo = allDistricts.find(d => d.id === c.district_id);
                 const distName = distInfo ? distInfo.name : '-';
-                let photoSrc = 'https://via.placeholder.com/100x120?text=No+Img';
+                
+                // 1. 기본 이미지 로직 적용
+                let photoSrc = DEFAULT_PROFILE_IMG;
+
                 if (c.photo_url) {
-                    if (c.photo_url.startsWith('http')) photoSrc = c.photo_url;
-                    else {
+                    if (c.photo_url.startsWith('http')) {
+                        photoSrc = c.photo_url;
+                    } else {
                         const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
                         if(data) photoSrc = data.publicUrl;
                     }
                 }
+
                 const ageText = getKoreanAge(c.birth_date);
+
                 return `
                     <div class="cand-card" onclick="openCandidateDetail('${c.id}')">
                         <div class="cand-photo-wrapper">
-                            <img src="${photoSrc}" class="cand-img-fit" alt="${c.name}">
+                            <img src="${photoSrc}" 
+                                 class="cand-img-fit" 
+                                 alt="${c.name}"
+                                 onerror="this.src='${DEFAULT_PROFILE_IMG}'"
+                                 style="background-color: #f3f4f6;">
                         </div>
                         <div class="cand-info">
                             <div class="cand-top-row">
