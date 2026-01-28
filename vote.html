@@ -579,7 +579,7 @@ function loadNextBallot() {
                 }
                 // -----------------------------------------------------------
 
-                // [카드 HTML 구조] - onerror 및 스타일 추가
+                // [카드 HTML 구조] - 공약 보기 버튼 삭제됨
                 card.innerHTML = `
                     <img src="${photoSrc}" 
                          class="candidate-img" 
@@ -589,21 +589,22 @@ function loadNextBallot() {
                     <div class="card-content">
                         <h3>${cand.name}</h3>
                         <p>기호 ${cand.symbol || '-'}번</p>
-                        <button type="button" class="btn-manifesto">공약 보기</button>
-                    </div>
+                        </div>
                 `;
                 
-                // 공약 보기 클릭 이벤트
+                // [삭제됨] 아래 공약 보기 버튼 클릭 이벤트 연결 코드도 필요 없으므로 주석 처리하거나 삭제
+                /*
                 const manifestoBtn = card.querySelector('.btn-manifesto');
                 manifestoBtn.onclick = (e) => {
                     e.stopPropagation(); 
                     showManifesto(cand);
                 };
+                */
 
                 // 일반 투표일 때만 선택 이벤트 연결
                 if (!info.isUncontested) {
                     card.addEventListener('click', (e) => {
-                        if(e.target === manifestoBtn) return;
+                        // if(e.target === manifestoBtn) return; // [삭제] 버튼이 없으니 이 예외처리도 필요 없음
                         document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
                         card.classList.add('selected');
                         selectedValue = cand.id;
