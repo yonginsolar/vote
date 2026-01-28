@@ -588,20 +588,25 @@
 
             if (myRights && myRights.canVote) {
                 if (isVotingRequired) {
-                    // 투표할 것이 있음
+                    // 투표할 것이 있음 (기존 코드 유지)
                     mainBtn.innerText = "🗳️ 투표소 입장";
                     mainBtn.disabled = false;
-                    mainBtn.style.backgroundColor = "#2563eb"; 
+                    mainBtn.style.cursor = "pointer"; // 커서: 손가락
+                    mainBtn.style.backgroundColor = "#2563eb"; // 파란색
                     mainBtn.onclick = goToVotePage;
                 } else {
-                    // 모든 선거구가 무투표 당선 확정임
-                    mainBtn.innerText = "🎉 무투표 당선 확정 (투표 불필요)";
-                    mainBtn.disabled = false; 
-                    mainBtn.style.backgroundColor = "#10b981"; 
-                    mainBtn.onclick = () => {
-                        alert("모든 선거구가 무투표 당선이 확정되어\n별도의 투표 절차가 없습니다.");
-                    };
-                    infoBox.innerHTML = `ℹ️ <strong>안내:</strong> 모든 선거구가 무투표 당선되어 투표가 필요하지 않습니다.`;
+                    // [수정됨] 무투표 당선 확정 (버튼이 아닌 배너처럼 동작)
+                    mainBtn.innerText = "🎉 무투표 당선 확정 (투표 절차 없음)";
+                    mainBtn.disabled = false; // 색상을 유지하기 위해 활성화는 둠
+                    mainBtn.onclick = null;   // 클릭 이벤트 제거 (알럿 안 뜸)
+                    
+                    // 스타일: 버튼이 아니라 '안내판'처럼 보이게 설정
+                    mainBtn.style.backgroundColor = "#10b981"; // 초록색 (성공/확정 의미)
+                    mainBtn.style.cursor = "default";          // 커서: 기본 화살표 (클릭 불가 느낌)
+                    mainBtn.style.boxShadow = "none";          // 입체감 제거 (선택 사항)
+                    
+                    // 안내 문구도 이에 맞춰 간결하게
+                    infoBox.innerHTML = `ℹ️ <strong>안내:</strong> 모든 선거구가 무투표 당선되어 별도의 투표가 필요하지 않습니다.`;
                 }
             } else {
                 // 투표권 없음
