@@ -270,9 +270,14 @@
                     <div class="stat-item"><div class="stat-value" style="color:var(--danger-red)" id="stat-rejected">0</div><div class="stat-label">반려</div></div>
                 </div>
 
-                <div style="margin-bottom:1rem;">
+<div style="margin-bottom:1rem; display:flex; gap:10px; justify-content: space-between; align-items: center;">
                     <button onclick="confirmAction('NOMINATION', '후보 등록을 시작하시겠습니까?')" class="btn btn-primary">▶ 후보 등록 시작</button>
+                    
+                    <button onclick="openAddCandidateModal()" class="btn btn-warning" style="background-color: #7c3aed; border-color: #7c3aed; color: white;">
+                        ⚡ 후보자 직접 등록 (이사회 추천 등)
+                    </button>
                 </div>
+                
                 
                 <table class="cand-table">
                     <thead><tr><th>선거구</th><th>이름</th><th>상태</th><th>기호</th></tr></thead>
@@ -464,59 +469,60 @@
         </div>
     </div>
 </div>
-    <div id="add-candidate-modal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 600px; text-align: left;">
-        <span class="modal-title">➕ 후보자 직접 등록 (Admin Override)</span>
-        <p style="font-size:0.85rem; color:#666; margin-bottom:1rem;">
-            관리자 권한으로 파일 형식/크기 제한 없이 후보를 등록합니다.<br>
-            대상 조합원을 먼저 검색하여 선택해주세요.
-        </p>
+<div id="add-candidate-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px; text-align: left;">
+            <span class="modal-title">➕ 후보자 직접 등록 (관리자 권한)</span>
+            <p style="font-size:0.85rem; color:#666; margin-bottom:1rem;">
+                관리자 권한으로 후보를 즉시 <strong>승인(APPROVED)</strong> 상태로 등록합니다.<br>
+                대상 조합원을 먼저 검색하여 선택해주세요.
+            </p>
 
-        <div style="margin-bottom: 1.5rem; background: #f3f4f6; padding: 15px; border-radius: 8px;">
-            <label style="font-weight:bold; font-size:0.9rem;">대상 조합원 검색</label>
-            <div style="display:flex; gap:10px; margin-top:5px;">
-                <input type="text" id="cand-search-input" placeholder="이름 또는 전화번호" 
-                       style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <button onclick="searchCandidateMember()" class="btn btn-primary btn-sm">검색</button>
+            <div style="margin-bottom: 1.5rem; background: #f3f4f6; padding: 15px; border-radius: 8px;">
+                <label style="font-weight:bold; font-size:0.9rem;">대상 조합원 검색</label>
+                <div style="display:flex; gap:10px; margin-top:5px;">
+                    <input type="text" id="cand-search-input" placeholder="이름 또는 전화번호" 
+                           style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px;"
+                           onkeyup="if(window.event.keyCode==13){searchCandidateMember()}"> <button onclick="searchCandidateMember()" class="btn btn-primary btn-sm">검색</button>
+                </div>
+                <div id="cand-search-result" style="margin-top:10px; max-height:100px; overflow-y:auto; border:1px solid #e5e7eb; background:white; display:none;"></div>
+                
+                <input type="hidden" id="selected-cand-member-no">
+                <input type="hidden" id="selected-cand-uuid">
+                <div id="selected-cand-display" style="margin-top:5px; font-weight:bold; color:var(--primary-blue); display:none;"></div>
             </div>
-            <div id="cand-search-result" style="margin-top:10px; max-height:100px; overflow-y:auto; border:1px solid #e5e7eb; background:white; display:none;"></div>
-            <input type="hidden" id="selected-cand-member-no">
-            <input type="hidden" id="selected-cand-uuid">
-            <div id="selected-cand-display" style="margin-top:5px; font-weight:bold; color:var(--primary-blue); display:none;"></div>
-        </div>
 
-        <div style="margin-bottom:1rem;">
-            <label style="font-weight:600;">후보자 명 (표기용)</label>
-            <input type="text" id="new-cand-name" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;">
-        </div>
-
-        <div style="display:flex; gap:10px; margin-bottom:1rem;">
-            <div style="flex:1;">
-                <label style="font-weight:600;">프로필 사진</label>
-                <input type="file" id="new-cand-photo" accept="image/*" style="width:100%; margin-top:5px;">
+            <div style="margin-bottom:1rem;">
+                <label style="font-weight:600;">후보자 명 (표기용)</label>
+                <input type="text" id="new-cand-name" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;">
             </div>
-            <div style="flex:1;">
-                <label style="font-weight:600;">증빙 서류</label>
-                <input type="file" id="new-cand-proof" style="width:100%; margin-top:5px;">
+
+            <div style="display:flex; gap:10px; margin-bottom:1rem;">
+                <div style="flex:1;">
+                    <label style="font-weight:600;">프로필 사진</label>
+                    <input type="file" id="new-cand-photo" accept="image/*" style="width:100%; margin-top:5px;">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-weight:600;">증빙 서류</label>
+                    <input type="file" id="new-cand-proof" style="width:100%; margin-top:5px;">
+                </div>
             </div>
-        </div>
 
-        <div style="margin-bottom:1rem;">
-            <label style="font-weight:600;">대표 이력</label>
-            <textarea id="new-cand-career" rows="3" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;"></textarea>
-        </div>
+            <div style="margin-bottom:1rem;">
+                <label style="font-weight:600;">대표 이력</label>
+                <textarea id="new-cand-career" rows="3" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;"></textarea>
+            </div>
 
-        <div style="margin-bottom:1rem; display:none;">
-            <label style="font-weight:600;">공약 및 출마의 변</label>
-            <textarea id="new-cand-manifesto" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;"></textarea>
-        </div>
+            <div style="margin-bottom:1rem; display:none;">
+                <label style="font-weight:600;">공약 및 출마의 변</label>
+                <textarea id="new-cand-manifesto" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;"></textarea>
+            </div>
 
-        <div class="modal-actions">
-            <button onclick="closeAddCandidateModal()" class="btn btn-outline">취소</button>
-            <button onclick="executeCandidateRegister()" class="btn btn-primary">등록 실행</button>
+            <div class="modal-actions">
+                <button onclick="closeAddCandidateModal()" class="btn btn-outline">취소</button>
+                <button onclick="executeCandidateRegister()" class="btn btn-primary">등록 실행</button>
+            </div>
         </div>
     </div>
-</div>
 <script type="module">
     import { AdminService } from './AdminService.js';
     import { supabase } from './ElectionService.js';
