@@ -638,92 +638,88 @@ function loadNextBallot() {
         }
     }
 
-    // 버튼 클릭 이벤트
+// [수정] 투표 버튼 클릭 이벤트 리스너 (전체 교체)
 voteBtn.addEventListener('click', () => {
-        // [수정] 1. 무투표 당선인 경우: DB 제출 없이 바로 다음 단계로 이동
-        if (currentBallot && currentBallot.isUncontested) {
-            pendingBallots.shift(); // 현재 투표용지 제거
-            loadNextBallot();       // 다음 투표용지 로드
-            return;                 // 함수 종료
-        }
-
-        // [기존 로직] 2. 일반 투표인 경우
-        if (!selectedValue) return;
-
-        const isCandidateVote = currentBallot.district.vote_type === 'CANDIDATE';
-        const isLastVote = pendingBallots.length === 1;
+    
+    // 1. 무투표 당선인 경우 (확인 버튼 클릭 시)
+    if (currentBallot && currentBallot.isUncontested) {
+        // [변경 핵심] 단순히 넘어가지 않고, 서버에 '확인(CONFIRM)' 기록을 남깁니다.
+        // 무투표 확인은 별도의 '정말 투표하시겠습니까?' 팝업 없이 진행해도 무방하나, 
+        // 오클릭 방지를 위해 UI UX 일관성을 고려해 처리 상태를 보여줍니다.
         
-        const confirmMsg = isLastVote 
-            ? "정말 투표하시겠습니까? 투표 후에는 수정할 수 없습니다." 
-            : "이 투표를 제출하고 '다음 투표'로 이동하시겠습니까?";
-
+        const confirmMsg = "당선자 정보를 확인하였으며, 이에 동의하십니까?";
+        
         showConfirm(confirmMsg, async () => {
             try {
                 voteBtn.innerText = '처리중...';
                 voteBtn.disabled = true;
 
+                // 무투표 확인용 페이로드 구성
                 const payload = {
                     electionId: currentElection.id,
                     districtId: currentBallot.district_id,
                     round: currentElection.current_round || 1,
-                    candidateId: isCandidateVote ? selectedValue : null,
-                    choice: !isCandidateVote ? selectedValue : null
+                    candidateId: null,      // 후보 선택 아님
+                    choice: 'CONFIRM'       // [DB 수정 필요] 새로 추가한 상태값
                 };
 
-                await service.submitVote(payload);
-
-                pendingBallots.shift(); 
-                loadNextBallot(); 
-
-            } catch (e) {
-                showModal('오류', e.message);
-                voteBtn.disabled = false;
-                voteBtn.innerText = '투표하기';
-            }
-        });
-    }); // End of voteBtn Event Listener
-
-
-
-// [수정된 투표하기 버튼 이벤트]
-    voteBtn.addEventListener('click', () => {
-        if (!selectedValue) return;
-
-        // ballotInfo -> currentBallot 으로 변경해야 함 (여기가 오류 원인)
-        const isCandidateVote = currentBallot.district.vote_type === 'CANDIDATE';
-
-        const isLastVote = pendingBallots.length === 1;
-        const confirmMsg = isLastVote 
-            ? "정말 투표하시겠습니까? 투표 후에는 수정할 수 없습니다." 
-            : "이 투표를 제출하고 '다음 투표'로 이동하시겠습니까?";
-
-        showConfirm(confirmMsg, async () => {
-            try {
-                voteBtn.innerText = '처리중...';
-                voteBtn.disabled = true;
-
-                const payload = {
-                    electionId: currentElection.id,
-                    districtId: currentBallot.district_id, // 여기도 currentBallot 사용
-                    round: currentElection.current_round || 1,
-                    candidateId: isCandidateVote ? selectedValue : null,
-                    choice: !isCandidateVote ? selectedValue : null
-                };
-
-                // 투표 제출
+                // 서버 전송 (이 과정이 있어야 재진입 시 '투표 완료'로 인식됨)
                 await service.submitVote(payload);
 
                 // 성공 시 목록에서 제거하고 다음으로 이동
-                pendingBallots.shift(); 
-                loadNextBallot(); 
+                pendingBallots.shift();
+                loadNextBallot();
 
             } catch (e) {
-                showModal('오류', e.message);
+                showModal('오류', '처리에 실패했습니다: ' + e.message);
                 voteBtn.disabled = false;
-                voteBtn.innerText = '투표하기';
+                voteBtn.innerText = '확인 (무투표 당선)';
+                voteBtn.className = 'btn-uncontested'; // 버튼 스타일 복구
             }
         });
+        
+        return; // 일반 투표 로직 실행 방지
+    }
+
+    // 2. 일반 투표인 경우 (기존 로직 유지)
+    if (!selectedValue) return;
+
+    const isCandidateVote = currentBallot.district.vote_type === 'CANDIDATE';
+    const isLastVote = pendingBallots.length === 1;
+
+    const confirmMsg = isLastVote 
+        ? "정말 투표하시겠습니까? 투표 후에는 수정할 수 없습니다." 
+        : "이 투표를 제출하고 '다음 투표'로 이동하시겠습니까?";
+
+    showConfirm(confirmMsg, async () => {
+        try {
+            voteBtn.innerText = '처리중...';
+            voteBtn.disabled = true;
+
+            const payload = {
+                electionId: currentElection.id,
+                districtId: currentBallot.district_id,
+                round: currentElection.current_round || 1,
+                candidateId: isCandidateVote ? selectedValue : null,
+                choice: !isCandidateVote ? selectedValue : null
+            };
+
+            // 투표 제출
+            await service.submitVote(payload);
+
+            // 성공 시 목록에서 제거하고 다음으로 이동
+            pendingBallots.shift(); 
+            loadNextBallot(); 
+
+        } catch (e) {
+            showModal('오류', e.message);
+            voteBtn.disabled = false;
+            voteBtn.innerText = '투표하기';
+            voteBtn.className = 'btn-submit'; // 버튼 스타일 복구
+        }
     });
+}); // End of voteBtn Event Listener
+
 
         function showCompleteScreen() {
             loadingScreen.style.display = 'none';
