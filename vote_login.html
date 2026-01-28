@@ -339,8 +339,11 @@
                 </div>
                 <label class="modal-section-label">🎓 주요 경력</label>
                 <div class="modal-text-box">${c.career || '등록된 경력이 없습니다.'}</div>
-                <label class="modal-section-label" style="display:none;">📢 공약 및 출마의 변</label>
-                <div class="modal-text-box" style="min-height:100px;">${c.manifesto || '등록된 공약이 없습니다.'}</div>
+                
+                <div style="display:none;">
+                    <label class="modal-section-label">📢 공약 및 출마의 변</label>
+                    <div class="modal-text-box" style="min-height:100px;">${c.manifesto || '등록된 공약이 없습니다.'}</div>
+                </div>
             `;
             document.getElementById('cand-detail-content').innerHTML = html;
             document.getElementById('candidate-detail-modal').style.display = 'flex';
