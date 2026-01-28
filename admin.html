@@ -662,55 +662,57 @@
     // -----------------------------------------------------------
 /// [수정] 선거 선택 창 (데이터 검증 및 선택 로직 강화)
 // [최종 수정] 선거 선택 창 (로그 제거 / 클린 버전)
+// [최종 수정] 선거 선택 창 (상태 한글화 적용 버전)
 window.openElectionGateway = async () => {
     try {
         // 1. 모든 선거 목록 가져오기
         const elections = await service.getAllElections();
         
-        // 선거가 아예 없으면 설정 페이지로 이동
         if (!elections || elections.length === 0) {
             alert("생성된 선거가 없습니다. 설정 페이지로 이동합니다.");
             window.location.href = 'admin_setup.html'; 
             return;
         }
         
-        // 2. 선택 박스 HTML 생성
+        // 2. [핵심] 상태 한글 명칭 매핑
+        const statusMap = {
+            'DRAFT': '📝 [작성 중]',
+            'PREPARE': '⚙️ [준비 중]',
+            'NOMINATION': '✋ [후보 등록]',
+            'READY': '📢 [준비 완료]',
+            'OPEN': '🟢 [투표 진행]',
+            'PAUSED': '⏸ [일시 정지]',
+            'CLOSED': '🛑 [투표 마감]',
+            'PUBLISHED': '🏆 [결과 공포]',
+            'ENDED': '🏁 [종료됨]'
+        };
+
+        // 3. 선택 박스 HTML 생성
         let html = '<p style="margin-bottom:10px;">관리할 선거를 선택하세요.</p>';
         html += '<select id="gateway-select" style="width:100%; padding:10px; font-size:1rem; border:1px solid #ddd; border-radius:6px;">';
         html += '<option value="" selected disabled>-- 선거를 선택해주세요 --</option>';
 
         elections.forEach(el => {
-            if (!el.id) return; // 방어 코드
+            if (!el.id) return; 
 
-            let prefix = '';
-            let isDisabled = false;
-            let extraText = '';
-
-            if (el.status === 'DRAFT') {
-                prefix = '📝 [작성중] ';
-                isDisabled = true;
-                extraText = ' (설정 완료 필요)';
-            } else if (['CLOSED', 'PUBLISHED', 'ENDED'].includes(el.status)) {
-                prefix = '🏁 [종료] ';
-            } else if (el.status === 'OPEN') {
-                prefix = '🟢 [진행중] ';
-            } else {
-                prefix = `[${el.status}] `;
-            }
+            // 상태에 맞는 한글 명칭 가져오기 (없으면 영어 그대로)
+            const prefix = statusMap[el.status] || `[${el.status}]`;
             
+            // DRAFT 상태만 선택 불가 처리
+            const isDisabled = (el.status === 'DRAFT');
+            const extraText = isDisabled ? ' (설정 완료 필요)' : '';
             const startStr = el.start_at ? new Date(el.start_at).toLocaleDateString() : '미정';
             
             html += `<option value="${el.id}" ${isDisabled ? 'disabled' : ''}>
-                        ${prefix}${el.title} (${startStr}~)${extraText}
+                        ${prefix} ${el.title} (${startStr}~)${extraText}
                      </option>`;
         });
         html += '</select>';
         
-        // 3. 모달 띄우기
+        // 4. 모달 띄우기
         window.showModal('🗳️ 선거 선택', html, async () => {
             const selectEl = document.getElementById('gateway-select');
             if (!selectEl) return;
-
             const selectedId = selectEl.value;
 
             if (!selectedId) {
@@ -718,7 +720,7 @@ window.openElectionGateway = async () => {
                 return;
             }
 
-            // [중요] 페이지를 새로고침하여 확실하게 ID를 반영 (유령 데이터 방지)
+            // 페이지 새로고침으로 깔끔하게 이동
             const newUrl = `${window.location.pathname}?id=${selectedId}`;
             window.location.href = newUrl; 
             
