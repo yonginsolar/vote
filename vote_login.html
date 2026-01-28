@@ -503,6 +503,7 @@
             await setupDetailView(); // 상세 화면
         }
     }
+        
         // [신규] 상세 뷰 설정 (데이터 로드 순서 제어)
     async function setupDetailView() {
         try {
@@ -917,7 +918,57 @@
             });
             container.innerHTML = html;
         }
+// ==========================================
+    // [누락된 함수 추가] 목록 뷰 (List View) 로직
+    // ==========================================
+    async function setupListView() {
+        document.getElementById('election-list-view').style.display = 'block';
+        document.getElementById('election-title').innerText = "선거 목록";
+        document.getElementById('status-badge').style.display = 'none';
+        
+        // 투표 목록 조회
+        const { data: elections } = await supabase
+            .from('elections')
+            .select('*')
+            .neq('status', 'DRAFT')
+            .order('created_at', { ascending: false });
 
+        const container = document.getElementById('election-list-area');
+        
+        if (!elections || elections.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">진행 중인 선거가 없습니다.</div>';
+            return;
+        }
+
+        container.innerHTML = elections.map(el => {
+            let badgeColor = '#999'; 
+            let statusText = '준비중';
+            
+            if (el.status === 'OPEN') { 
+                badgeColor = '#16a34a'; statusText = '투표중'; 
+            } else if (el.status === 'PUBLISHED' || el.status === 'ENDED') { 
+                badgeColor = '#2563eb'; statusText = '결과보기'; 
+            } else if (el.status === 'CLOSED') { 
+                badgeColor = '#dc2626'; statusText = '마감됨'; 
+            }
+
+            // 날짜 포맷팅
+            const start = new Date(el.vote_start_at).toLocaleDateString();
+            const end = new Date(el.vote_end_at).toLocaleDateString();
+            const created = new Date(el.created_at).toLocaleDateString();
+
+            return `
+                <div style="background:white; padding:15px; margin-bottom:10px; border-radius:10px; border:1px solid #eee; cursor:pointer;" onclick="window.location.href='?id=${el.id}'">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem;">${statusText}</span>
+                        <span style="font-size:0.8rem; color:#666;">${created}</span>
+                    </div>
+                    <h3 style="margin:0 0 5px 0;">${el.title}</h3>
+                    <p style="margin:0; font-size:0.85rem; color:#666;">${start} ~ ${end}</p>
+                </div>
+            `;
+        }).join('');
+    } // End of setupListView
         init();
     </script>
 </body>
