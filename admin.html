@@ -506,7 +506,7 @@
             <textarea id="new-cand-career" rows="3" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;"></textarea>
         </div>
 
-        <div style="margin-bottom:1rem;">
+        <div style="margin-bottom:1rem; display:none;">
             <label style="font-weight:600;">공약 및 출마의 변</label>
             <textarea id="new-cand-manifesto" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; margin-top:5px;"></textarea>
         </div>
@@ -1691,7 +1691,7 @@ async function loadCandidates() {
                 </div>
 
                 <div style="margin-top:1rem;">
-                    <label style="font-weight:bold; display:block; margin-bottom:5px;">공약 및 출마의 변</label>
+                    <label style="font-weight:bold; display:block; margin-bottom:5px; style="display:none;">공약 및 출마의 변</label>
                     <div style="background:#f9fafb; padding:10px; border-radius:6px; border:1px solid #eee; white-space:pre-wrap;">${c.manifesto || '내용 없음'}</div>
                 </div>
 
