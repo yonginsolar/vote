@@ -156,15 +156,23 @@
 
     <div class="container active">
         
-        <div id="login-section" style="text-align:center; padding: 4rem 1rem;">
-            <h2 style="color:#333;">🔐 관리자 인증</h2>
-            <p style="color:#666; margin-bottom:2rem;">보안을 위해 관리자 이메일 인증이 필요합니다.</p>
-            <input type="email" id="admin-email" placeholder="admin@example.com" 
-                   style="padding:0.8rem; width:250px; border:1px solid #ddd; border-radius:6px;">
-            <button onclick="handleLogin()" style="padding:0.8rem 1.5rem; background:var(--color-primary); color:white; border:none; border-radius:6px; cursor:pointer;">
-                인증 메일 발송
-            </button>
-        </div>
+<div id="login-section" style="text-align:center; padding: 4rem 1rem;">
+    <h2 style="color:#333;">🔐 관리자 접속</h2>
+    <p style="color:#666; margin-bottom:2rem;">설정하신 비밀번호로 로그인하세요.</p>
+    
+    <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+        <input type="email" id="admin-email" placeholder="이메일 (admin@example.com)" 
+               style="padding:0.8rem; width:280px; border:1px solid #ddd; border-radius:6px; font-size:1rem;">
+        
+        <input type="password" id="admin-password" placeholder="비밀번호" 
+               onkeypress="if(event.key==='Enter') handleLogin()"
+               style="padding:0.8rem; width:280px; border:1px solid #ddd; border-radius:6px; font-size:1rem;">
+
+        <button onclick="handleLogin()" style="padding:0.8rem; width:300px; background:var(--color-primary); color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-size:1rem; margin-top:10px;">
+            로그인
+        </button>
+    </div>
+</div>
 
         <div id="dashboard-section" style="display:none;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -989,71 +997,7 @@ window.finishSetup = async () => {
     // [전역 변수] 중복 실행 방지용 잠금 장치 (하나만 남김)
     
 
-// [수정된 init] 매직링크 처리 타이밍 이슈 해결 버전
-async function init() {
-    console.log("🚀 앱 초기화 시작...");
-    // ▼▼▼ [임시 코드] 비밀번호 설정용 (설정 후 삭제할 것) ▼▼▼
-    // 이 코드는 현재 로그인된 관리자의 비밀번호를 강제로 변경합니다.
-    const { error: pwdError } = await supabase.auth.updateUser({ password: 'asdf1020' }); 
-    // ▲ 'password1234' 부분에 원하는 새 비밀번호를 입력하세요.
-    
-    if (!pwdError) alert("✅ 비밀번호 설정 성공! 이제 이 코드를 지우고 로그인 코드를 변경하세요.");
-    else console.log("비밀번호 설정 대기 중 (로그인 상태가 아니거나 에러):", pwdError);
-    // ▲▲▲ [임시 코드 끝] ▲▲▲
 
-    // 1. [핵심] 함수 진입 시점에 해시 여부를 '변수'로 확정 (SDK가 지우기 전에 캡처)
-    // access_token(로그인) 또는 error_description(오류)이 있는지 확인
-    const hash = window.location.hash;
-    let isMagicLinkFlow = hash && (hash.includes('access_token') || hash.includes('type=recovery'));
-    
-    // 매직링크 흐름이라면 일단 UI를 '인증 중'으로 고정
-    if (isMagicLinkFlow) {
-        document.getElementById('login-section').innerHTML = 
-            '<h3 style="color:var(--color-primary); margin-top:50px;">🔄 보안 인증 진행 중입니다...</h3><p>화면을 닫지 말고 잠시만 기다려주세요.</p>';
-        document.getElementById('dashboard-section').style.display = 'none';
-        document.getElementById('setup-section').style.display = 'none';
-    }
-
-    // 2. 이벤트 리스너 등록 (가장 먼저 등록하여 모든 상태 변화 감지)
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log(`📣 인증 상태 변경: ${event}`);
-
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            if (session) {
-                // 로그인 성공 시 플래그 해제
-                isMagicLinkFlow = false; 
-                try {
-                    await checkAdminAndRender(session);
-                    // URL에 토큰이 남아있으면 깔끔하게 제거
-                    if (window.location.hash) {
-                        window.history.replaceState(null, '', window.location.pathname);
-                    }
-                } catch (err) {
-                    console.error("인증 후 렌더링 실패:", err);
-                    window.showAlert(err.message);
-                    renderLoginScreen();
-                }
-            }
-        } else if (event === 'SIGNED_OUT') {
-            // [방어 로직] 매직링크 처리 중('isMagicLinkFlow'가 true)일 때는 
-            // 절대 로그인 화면으로 튕겨내지 않음. (토큰 교환이 끝날 때까지 대기)
-            if (!isMagicLinkFlow) {
-                renderLoginScreen();
-            } else {
-                console.log("⏳ 매직링크 토큰 교환 대기 중... (SIGNED_OUT 무시됨)");
-            }
-        }
-    });
-
-    // 3. [보완] 리스너 등록 후, 현재 세션 상태를 한번 더 능동적으로 체크
-    // (매직링크가 아닌 일반 재접속 시 빠른 로딩을 위해)
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-        // 세션이 이미 있으면 바로 렌더링 (리스너가 SIGNED_IN을 놓쳤을 경우 대비)
-        isMagicLinkFlow = false;
-        await checkAdminAndRender(session);
-    }
-}
 
     // [관리자 권한 확인 및 렌더링 함수] - 전역 함수 선언
     async function checkAdminAndRender(session) {
@@ -1425,17 +1369,63 @@ function clearDistrictInputs() {
         window.location.reload();
     };
 
+// [수정] 로그인 핸들러 (ID/PW 방식)
     window.handleLogin = async () => {
         const email = document.getElementById('admin-email').value;
-        if (!email) return window.showAlert('이메일을 입력하세요.');
+        const password = document.getElementById('admin-password').value;
 
-        const { error } = await supabase.auth.signInWithOtp({ 
-            email, options: { emailRedirectTo: window.location.href }
+        if (!email || !password) return window.showAlert('이메일과 비밀번호를 입력하세요.');
+
+        // 로딩 표시 (선택사항)
+        const btn = document.querySelector('#login-section button');
+        const originalText = btn.innerText;
+        btn.innerText = '로그인 중...';
+        btn.disabled = true;
+
+        try {
+            // [핵심] 비밀번호 로그인 시도
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
+
+            if (error) throw error;
+            
+            // 성공하면 onAuthStateChange가 자동으로 감지하므로 
+            // 여기서 별도 처리를 안 해도 되지만, 사용자 경험을 위해:
+            console.log('로그인 성공');
+
+        } catch (err) {
+            window.showAlert('로그인 실패: ' + err.message);
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    };
+
+    // [수정] 초기화 함수 (매직링크 로직 제거로 매우 단순해짐)
+    async function init() {
+        console.log("🚀 앱 초기화 시작 (ID/PW 모드)...");
+
+        // 1. 이벤트 리스너: 로그인 상태 변화 감지
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log(`📣 인증 상태: ${event}`);
+            
+            if (event === 'SIGNED_IN') {
+                // 로그인 성공 시 권한 확인 및 대시보드 진입
+                if (session) await checkAdminAndRender(session);
+            } else if (event === 'SIGNED_OUT') {
+                renderLoginScreen();
+            }
         });
 
-        if (error) window.showAlert('전송 실패: ' + error.message);
-        else window.showAlert('이메일로 로그인 링크를 보냈습니다.\n메일함을 확인하고 링크를 클릭해주세요.');
-    };
+        // 2. 새로고침 시 세션 복구
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            await checkAdminAndRender(session);
+        } else {
+            renderLoginScreen();
+        }
+    }
 
     window.showCreateForm = () => {
         document.getElementById('dashboard-section').style.display = 'none';
