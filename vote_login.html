@@ -921,12 +921,13 @@
 // ==========================================
     // [누락된 함수 추가] 목록 뷰 (List View) 로직
     // ==========================================
+// [수정됨] 목록 뷰 설정: 상태 배지 세분화 적용
     async function setupListView() {
         document.getElementById('election-list-view').style.display = 'block';
         document.getElementById('election-title').innerText = "선거 목록";
         document.getElementById('status-badge').style.display = 'none';
         
-        // 투표 목록 조회
+        // 투표 목록 조회 (DRAFT 제외)
         const { data: elections } = await supabase
             .from('elections')
             .select('*')
@@ -941,15 +942,33 @@
         }
 
         container.innerHTML = elections.map(el => {
-            let badgeColor = '#999'; 
-            let statusText = '준비중';
+            let badgeColor = '#9ca3af'; // 기본 회색
+            let statusText = '상태 미정';
             
-            if (el.status === 'OPEN') { 
-                badgeColor = '#16a34a'; statusText = '투표중'; 
-            } else if (el.status === 'PUBLISHED' || el.status === 'ENDED') { 
-                badgeColor = '#2563eb'; statusText = '결과보기'; 
-            } else if (el.status === 'CLOSED') { 
-                badgeColor = '#dc2626'; statusText = '마감됨'; 
+            // 상태별 텍스트 및 색상 분기 처리
+            switch (el.status) {
+                case 'NOMINATION':
+                    badgeColor = '#8b5cf6'; // 보라색
+                    statusText = '📝 후보 등록 중';
+                    break;
+                case 'OPEN':
+                    badgeColor = '#16a34a'; // 초록색
+                    statusText = '🗳️ 투표 진행 중';
+                    break;
+                case 'CLOSED':
+                    badgeColor = '#dc2626'; // 빨간색
+                    statusText = '🔒 집계 중 (마감)';
+                    break;
+                case 'PUBLISHED':
+                case 'ENDED':
+                    badgeColor = '#2563eb'; // 파란색
+                    statusText = '🏆 결과 보기';
+                    break;
+                default:
+                    // READY 상태이거나, 그 외의 경우 (날짜 비교로 디테일 추가 가능하지만 일단 대기 상태로 통일)
+                    badgeColor = '#d97706'; // 주황색
+                    statusText = '⏳ 투표 대기';
+                    break;
             }
 
             // 날짜 포맷팅
@@ -958,13 +977,22 @@
             const created = new Date(el.created_at).toLocaleDateString();
 
             return `
-                <div style="background:white; padding:15px; margin-bottom:10px; border-radius:10px; border:1px solid #eee; cursor:pointer;" onclick="window.location.href='?id=${el.id}'">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                        <span style="background:${badgeColor}; color:white; padding:2px 8px; border-radius:12px; font-size:0.75rem;">${statusText}</span>
-                        <span style="font-size:0.8rem; color:#666;">${created}</span>
+                <div style="background:white; padding:15px; margin-bottom:10px; border-radius:10px; border:1px solid #eee; cursor:pointer; transition: transform 0.2s;" 
+                     onclick="window.location.href='?id=${el.id}'"
+                     onmouseover="this.style.transform='scale(1.01)'" 
+                     onmouseout="this.style.transform='scale(1)'">
+                    
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="background:${badgeColor}; color:white; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${statusText}</span>
+                        <span style="font-size:0.8rem; color:#94a3b8;">등록일: ${created}</span>
                     </div>
-                    <h3 style="margin:0 0 5px 0;">${el.title}</h3>
-                    <p style="margin:0; font-size:0.85rem; color:#666;">${start} ~ ${end}</p>
+                    
+                    <h3 style="margin:0 0 6px 0; font-size:1.1rem; color:#1e293b;">${el.title}</h3>
+                    
+                    <div style="display:flex; align-items:center; gap:5px; font-size:0.85rem; color:#64748b;">
+                        <span>📅 투표 기간:</span>
+                        <span style="color:#334155; font-weight:500;">${start} ~ ${end}</span>
+                    </div>
                 </div>
             `;
         }).join('');
