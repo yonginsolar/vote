@@ -661,59 +661,7 @@ voteBtn.addEventListener('click', () => {
         });
     }); // End of voteBtn Event Listener
 
-        // [이하 renderBallot, 이벤트 리스너, 모달 함수들은 기존 코드 그대로 사용]
-        function renderBallot(info) {
-            document.getElementById('district-name').innerText = info.district.name;
-            ballotArea.innerHTML = ''; 
 
-            if (info.district.vote_type === 'CANDIDATE') {
-                const listDiv = document.createElement('div');
-                listDiv.className = 'candidate-list';
-
-                info.candidates.forEach(cand => {
-                    const card = document.createElement('div');
-                    card.className = 'candidate-card';
-                    const imgUrl = cand.photo_url || 'https://via.placeholder.com/150?text=No+Image';
-                    
-                    card.innerHTML = `
-                        <img src="${imgUrl}" class="candidate-img" alt="${cand.name}">
-                        <h3>${cand.name}</h3>
-                        <p style="font-size:0.9rem; color:#666;">기호 ${cand.id.substring(0,4)}...</p>
-                        <button type="button" onclick="window.open('${cand.manifesto || '#'}')" style="margin-top:0.5rem; padding:0.2rem 0.5rem;">공약 보기</button>
-                    `;
-                    
-                    card.addEventListener('click', (e) => {
-                        if(e.target.tagName === 'BUTTON') return;
-                        document.querySelectorAll('.candidate-card').forEach(c => c.classList.remove('selected'));
-                        card.classList.add('selected');
-                        selectedValue = cand.id;
-                        voteBtn.disabled = false;
-                        voteBtn.innerText = `'${cand.name}' 후보 선택완료`;
-                    });
-
-                    listDiv.appendChild(card);
-                });
-                ballotArea.appendChild(listDiv);
-
-            } else {
-                ballotArea.innerHTML = `
-                    <div class="binary-options">
-                        <button type="button" class="btn-binary btn-yes" data-val="AGREE">찬성 (O)</button>
-                        <button type="button" class="btn-binary btn-no" data-val="DISAGREE">반대 (X)</button>
-                    </div>
-                    <p style="text-align:center; margin-top:1rem; color:#666;">안건에 대한 찬성/반대를 선택해주세요.</p>
-                `;
-                ballotArea.querySelectorAll('.btn-binary').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        ballotArea.querySelectorAll('.btn-binary').forEach(b => b.classList.remove('selected'));
-                        btn.classList.add('selected');
-                        selectedValue = btn.dataset.val;
-                        voteBtn.disabled = false;
-                        voteBtn.innerText = (selectedValue === 'AGREE' ? '찬성' : '반대') + ' 선택완료';
-                    });
-                });
-            }
-        }
 
 // [수정된 투표하기 버튼 이벤트]
     voteBtn.addEventListener('click', () => {
