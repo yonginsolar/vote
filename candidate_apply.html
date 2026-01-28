@@ -360,20 +360,22 @@
             </div>
 
             <h3 style="border-bottom:2px solid #333; padding-bottom:10px; margin-top:30px;">2. 후보자 상세 정보</h3>
-            
-            <div style="margin-bottom:1rem;">
-                <label><strong>후보자 명 (투표 화면 표기용)</strong></label>
-                <input type="text" id="cand-name" required placeholder="예: 홍길동">
-            </div>
+
+<div style="margin-bottom:1rem;">
+    <label><strong>후보자 명 (투표 화면 표기용)</strong></label>
+    <input type="text" id="cand-name" required placeholder="예: 홍길동">
+</div>
 
 <div style="margin-bottom:1.5rem;">
     <label>
-        <strong>프로필 사진 (공개)</strong>
+        <strong>프로필 사진 (공개) [필수]</strong>
         <span class="file-info-text">* 최대 10MB</span>
     </label>
+    
     <div id="current-photo-area" style="display:none; margin-bottom:10px;">
         <img id="preview-photo" src="" style="width:80px; height:80px; object-fit:cover; border-radius:50%; border:2px solid #ddd;">
     </div>
+
     <div class="file-upload-wrapper">
         <input type="file" id="cand-photo" accept="image/*" class="file-upload-input">
         <label for="cand-photo" class="file-custom-label">
@@ -384,18 +386,20 @@
 </div>
 
 <div style="margin-bottom:1rem;">
-    <label><strong>대표 이력</strong></label>
+    <label><strong>대표 이력 [필수]</strong></label>
     <textarea id="cand-career" rows="3" required placeholder="주요 경력을 입력하세요"></textarea>
 </div>
 
 <div style="margin-bottom:1.5rem;">
     <label>
-        <strong>이력 증빙 서류 (비공개)</strong>
-        <span class="file-info-text">(선택 사항 / 최대 10MB)</span>
+        <strong>이력 증빙 서류 (비공개) [필수]</strong>
+        <span class="file-info-text">* 최대 10MB</span>
     </label>
+
     <div id="current-proof-area" style="display:none; margin-bottom:5px; color:green; font-size:0.9rem;">
         ✅ 저장된 증빙서류가 있습니다.
     </div>
+
     <div class="file-upload-wrapper">
         <input type="file" id="cand-proof" accept=".pdf,image/*" class="file-upload-input">
         <label for="cand-proof" class="file-custom-label" style="border-color:#64748b; color:#64748b;">
@@ -405,10 +409,9 @@
     </div>
 </div>
 
-            <div style="margin-bottom:1rem; display:none;">
-                <label><strong>공약 및 출마의 변</strong></label>
-                <textarea id="cand-manifesto" rows="5" required placeholder="조합원들에게 전할 메시지"></textarea>
-            </div>
+<div style="margin-bottom:1rem; display:none;"> <label><strong>공약 및 출마의 변</strong></label>
+    <textarea id="cand-manifesto" rows="5" placeholder="조합원들에게 전할 메시지"></textarea>
+</div>
 
             <h3 style="border-bottom:2px solid #333; padding-bottom:10px; margin-top:30px;">3. 필수 동의</h3>
             
@@ -566,28 +569,54 @@
         modalOverlay.style.display = 'flex';
     }
 
-    // --- [3] 초기화 ---
+// [수정] 초기화 함수 (세션 브리지 추가)
     async function init() {
         try {
+            // ▼▼▼ [1] 세션 연결 (Bridge) ▼▼▼
+            const params = new URLSearchParams(window.location.search);
+            const at = params.get('at');
+            const rt = params.get('rt');
+
+            if (at && rt) {
+                // 토큰이 있으면 강제 로그인 처리
+                const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+                if (!error) {
+                    // 주소창 깔끔하게 정리
+                    const cleanUrl = window.location.pathname; 
+                    window.history.replaceState({}, document.title, cleanUrl);
+                }
+            }
+            // ▲▲▲ [끝] ▲▲▲
+
+            // [2] 로그인 확인
             currentUser = await service.initialize();
+            
             if (!currentUser) { 
-                showModal('알림', '로그인이 필요합니다.', () => location.href = '/login.html');
+                showModal('알림', '로그인이 필요합니다.\n선거 포털에서 다시 접속해주세요.', () => {
+                    // 로그인 페이지가 아닌 선거 포털로 이동 (흐름상 더 자연스러움)
+                    window.location.href = 'vote_login.html'; 
+                });
                 return; 
             }
 
-            // coop_members 테이블에서 추가 정보 조회
+            // [3] 사용자 추가 정보 조회 (coop_members)
             const { data: memberInfo } = await supabase.from('coop_members').select('*').eq('id', currentUser.id).maybeSingle();
             if (memberInfo) currentUser = { ...currentUser, ...memberInfo };
 
-            // 선거 목록 로드
-            const { data: elections } = await supabase.from('elections').select('*').eq('status', 'NOMINATION').order('created_at', { ascending: false });
+            // [4] 선거 목록 로드 (후보 등록 기간인 선거만)
+            const { data: elections } = await supabase.from('elections')
+                .select('*')
+                .eq('status', 'NOMINATION')
+                .order('created_at', { ascending: false });
 
             document.getElementById('loading-msg').style.display = 'none';
+            
             if (!elections || elections.length === 0) {
                 document.getElementById('no-election-msg').style.display = 'block';
                 return;
             }
 
+            // Select Box 구성
             const selectEl = document.getElementById('election-select');
             elections.forEach(el => {
                 const option = document.createElement('option');
@@ -599,7 +628,10 @@
             });
             document.getElementById('select-area').style.display = 'block';
 
-        } catch (e) { console.error(e); showModal('오류', '초기화 실패: ' + e.message); }
+        } catch (e) { 
+            console.error(e); 
+            showModal('오류', '초기화 실패: ' + e.message); 
+        }
     }
 
     // --- [4] 이벤트: 내 선거구 확인 ---
@@ -746,7 +778,7 @@
 
     window.closeConfirmModal = () => document.getElementById('confirm-modal').style.display = 'none';
 
-// --- [8] 최종 제출 ---
+// --- [8] 최종 제출 (수정된 버전) ---
     document.getElementById('btn-final-submit').addEventListener('click', async () => {
         closeConfirmModal();
         const btn = document.getElementById('btn-pre-check');
@@ -755,35 +787,29 @@
 
         try {
             const userId = currentUser.id;
-            const candId = document.getElementById('candidate-id').value;
+            const candId = document.getElementById('candidate-id').value; // 수정 모드일 때 ID
             const photoFile = document.getElementById('cand-photo').files[0];
             const proofFile = document.getElementById('cand-proof').files[0];
 
-            // [신규] 파일 용량 제한 설정 (10MB)
-            const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+            // [설정] 파일 용량 제한 (10MB)
+            const MAX_SIZE = 10 * 1024 * 1024; 
 
-            // 1. 필수값 검증 (사진은 필수)
+            // 1. 필수값 검증
+            // (신규 등록일 때만 파일 필수, 수정일 땐 기존 파일 있으면 통과)
             if (!candId) {
                 if (!photoFile) throw new Error('프로필 사진을 선택해주세요.');
-                // [수정] 증빙 서류 필수 체크 로직 제거됨 (이제 선택 사항임)
+                if (!proofFile) throw new Error('증빙 서류를 선택해주세요.');
             }
 
             // 2. 용량 검증
-            if (photoFile && photoFile.size > MAX_SIZE) {
-                throw new Error('프로필 사진은 10MB를 초과할 수 없습니다.');
-            }
-            if (proofFile && proofFile.size > MAX_SIZE) {
-                throw new Error('증빙 서류는 10MB를 초과할 수 없습니다.');
-            }
+            if (photoFile && photoFile.size > MAX_SIZE) throw new Error('프로필 사진은 10MB를 초과할 수 없습니다.');
+            if (proofFile && proofFile.size > MAX_SIZE) throw new Error('증빙 서류는 10MB를 초과할 수 없습니다.');
 
-            // 3. 파일 업로드
+            // 3. 파일 업로드 (Service 위임)
             let photoUrl = null;
             let proofUrl = null;
             
-            // 사진은 필수이므로 파일이 있거나 기존 URL이 있어야 함 (서비스 로직에 위임)
             if (photoFile) photoUrl = await service.uploadCandidatePhoto(photoFile, userId);
-            
-            // 증빙서류는 선택이므로 파일이 있을 때만 업로드
             if (proofFile) proofUrl = await service.uploadProofDoc(proofFile, userId);
 
             // 4. DB 저장 데이터 구성
@@ -796,10 +822,10 @@
                 contact: document.getElementById('user-contact').value,
                 address: document.getElementById('user-address').value,
                 career: document.getElementById('cand-career').value,
-                manifesto: document.getElementById('cand-manifesto').value,
+                manifesto: document.getElementById('cand-manifesto').value, // 숨겨진 값이지만 저장
                 agreed: true,
                 status: 'PENDING',
-                created_at: new Date().toISOString() // Update 시에는 Supabase가 처리하거나 무시됨
+                created_at: new Date().toISOString()
             };
 
             // 파일이 새로 업로드된 경우에만 URL 업데이트
@@ -809,8 +835,10 @@
             // 5. Insert 또는 Update 실행
             let result;
             if (candId) {
+                // 수정: ID로 업데이트
                 result = await supabase.from('candidates').update(candidateObj).eq('id', candId);
             } else {
+                // 신규: 삽입
                 result = await supabase.from('candidates').insert(candidateObj);
             }
             
