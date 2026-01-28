@@ -210,31 +210,7 @@
     </style>
 </head>
 <body>
-<div id="login-overlay" class="login-wrapper">
-    <div class="login-box">
-        <div class="login-title">Admin Console</div>
-        <div class="login-subtitle">선거 관리 시스템 접속 (매직링크)</div>
-        
-        <div style="text-align:left; margin-bottom:5px; font-size:0.9rem; color:#4b5563; font-weight:600;">이메일 주소</div>
-        <input type="email" id="login-email" class="login-input" 
-               placeholder="등록된 이메일을 입력하세요" 
-               onkeyup="if(window.event.keyCode==13){tryLogin();}">
-        
-        <button onclick="tryLogin()" class="login-btn" id="btn-login-action">
-            📧 인증 메일 보내기
-        </button>
-        
-        <p id="login-msg" style="color:#dc2626; font-size:0.9rem; margin-top:15px; display:none;"></p>
-        <p id="login-info" style="color:#2563eb; font-size:0.9rem; margin-top:15px; display:none; line-height:1.4;">
-            📩 입력하신 메일로 <strong>로그인 링크</strong>가 발송되었습니다.<br>
-            메일함을 확인해주세요.
-        </p>
-    </div>
-    <div class="login-footer">
-        Unauthorized access is strictly prohibited.<br>
-        &copy; Yongin Modu Solar Coop.
-    </div>
-</div>
+
 
 <header>
     <div class="header-left">
@@ -243,12 +219,17 @@
     <div class="header-center">
         <h2 id="header-election-title">선거 관리 시스템</h2>
     </div>
-    <div class="header-right">
-        <span id="admin-email" style="font-weight:600; color:#374151; margin-right:15px; font-size:0.9rem;"></span>
-        <button class="btn btn-outline btn-sm" onclick="openElectionGateway()">
-            🔄 다른 선거 선택
-        </button>
-    </div>
+<div class="header-right">
+    <span id="admin-email" style="font-weight:600; color:#374151; margin-right:15px; font-size:0.9rem;"></span>
+    
+    <button class="btn btn-outline btn-sm" onclick="openElectionGateway()" style="margin-right: 5px;">
+        🔄 다른 선거
+    </button>
+
+    <button class="btn btn-outline btn-sm" onclick="handleLogout()" style="border-color: #fca5a5; color: #dc2626;">
+        🚪 로그아웃
+    </button>
+</div>
 </header>
 
 <div class="admin-container">
@@ -577,87 +558,82 @@
 
     window.closeModal = () => { document.getElementById('common-modal').style.display = 'none'; };
 
-// [수정] 초기화 및 권한 검사 함수 (coop_admins 포함)
+// [수정] 초기화 및 3단 권한 검증 (Gatekeeper)
     async function init() {
-        const loginOverlay = document.getElementById('login-overlay');
+        console.log("🚀 선거 운영 페이지 진입...");
+
+        // 화면 요소 초기화
         const header = document.querySelector('header');
         const container = document.querySelector('.admin-container');
-        const emailDisplay = document.getElementById('admin-email');
-
-        document.body.style.display = 'block';
-        if (header) header.style.display = 'none';
-        if (container) container.style.display = 'none';
-        if (loginOverlay) loginOverlay.style.display = 'none';
+        
+        // 일단 숨김 (권한 확인 전)
+        if(header) header.style.display = 'none';
+        if(container) container.style.display = 'none';
 
         try {
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            // 1. 세션 확인 (vote_login.html에서 넘어온 세션)
+            const { data: { session }, error } = await supabase.auth.getSession();
 
-            if (authError || !user) {
-                console.log("🔒 미로그인 상태");
-                if (loginOverlay) loginOverlay.style.display = 'flex';
+            if (error || !session) {
+                alert("로그인 정보가 없습니다.\n선거 포털로 이동합니다.");
+                window.location.href = 'vote_login.html';
                 return;
             }
 
-            const userEmail = user.email;
-            currentUserEmail = userEmail;
-            
-            if (emailDisplay) emailDisplay.innerText = userEmail;
+            // 전역 변수에 이메일 저장 (로그 남길 때 사용)
+            currentUserEmail = session.user.email;
+            if (document.getElementById('admin-email')) {
+                document.getElementById('admin-email').innerText = currentUserEmail;
+            }
 
-            // --- 권한 검증 로직 시작 ---
-            let isAuthorized = false;
-            let roleName = '';
-
-            // coop_members 조회 (UUID 포함)
-            const { data: memberData } = await supabase
+            // 2. 내 정보 조회 (UUID -> Text ID 획득)
+            const { data: member, error: memError } = await supabase
                 .from('coop_members')
-                .select('role, member_id, id')
-                .eq('email', userEmail)
-                .maybeSingle();
+                .select('id, member_id, name, role') // UUID, TextID, 이름, 역할
+                .eq('id', session.user.id) // 내 UUID로 검색
+                .single();
 
-            if (memberData) {
-                // 1. Admin Role
-                if (memberData.role === 'admin') {
+            if (memError || !member) throw new Error("회원 정보를 찾을 수 없습니다.");
+
+            console.log(`🔎 사용자 식별: ${member.name} (ID: ${member.member_id})`);
+
+            let isAuthorized = false;
+            let authType = '';
+
+            // 3. 권한 정밀 체크 (3단 논법)
+            
+            // [Check A] 관리자 Role 확인
+            if (member.role === 'admin' || member.role === 'super_admin') {
+                isAuthorized = true;
+                authType = '관리자(Admin)';
+            } 
+            
+            // [Check B] 선관위 확인 (Text ID 사용)
+            // 관리자가 아니라면, coop_officials 테이블에서 내 Text ID를 찾음
+            else if (member.member_id) {
+                const { data: official } = await supabase
+                    .from('coop_officials')
+                    .select('id')
+                    .eq('member_id', member.member_id) // ★ UUID가 아닌 Text ID로 비교
+                    .eq('category', 'election_comm')
+                    .eq('status', 'active') // 현직 선관위만
+                    .maybeSingle();
+
+                if (official) {
                     isAuthorized = true;
-                    roleName = '관리자(Role)';
-                } 
-                // 2. Election Comm
-                else if (memberData.member_id) {
-                    const { data: officialData } = await supabase
-                        .from('coop_officials')
-                        .select('id')
-                        .eq('member_id', memberData.member_id)
-                        .eq('category', 'election_comm')
-                        .eq('status', 'active')
-                        .maybeSingle();
-                    
-                    if (officialData) {
-                        isAuthorized = true;
-                        roleName = '선관위원';
-                    }
-                }
-
-                // 3. [신규] coop_admins Table Check
-                if (!isAuthorized && memberData.id) {
-                    const { data: adminTbl } = await supabase
-                        .from('coop_admins')
-                        .select('id')
-                        .eq('id', memberData.id)
-                        .maybeSingle();
-                    
-                    if (adminTbl) {
-                        isAuthorized = true;
-                        roleName = '시스템 관리자';
-                    }
+                    authType = '선거관리위원';
                 }
             }
 
-            // --- 접속 허용 여부 ---
+            // 4. 결과 처리
             if (isAuthorized) {
-                console.log(`✅ 접속 허용: ${roleName} (${userEmail})`);
-                if (loginOverlay) loginOverlay.style.display = 'none';
-                if (header) header.style.display = 'flex';
-                if (container) container.style.display = 'grid';
+                console.log(`✅ 접속 승인: ${authType}`);
+                
+                // UI 표시
+                if(header) header.style.display = 'flex';
+                if(container) container.style.display = 'grid'; // grid 레이아웃 복구
 
+                // URL 파라미터 확인 및 대시보드 로드
                 const urlParams = new URLSearchParams(window.location.search);
                 const targetId = urlParams.get('id');
 
@@ -669,17 +645,17 @@
                 }
 
             } else {
-                alert("🚫 접근 권한이 없습니다.\n(관리자, 선관위원 또는 시스템 관리자만 접속 가능합니다.)");
-                await supabase.auth.signOut();
-                window.location.reload();
+                // 권한 없음
+                alert(`⛔ 접근 권한이 없습니다.\n관리자 또는 선관위원만 접속 가능합니다.\n(현재 계정: ${member.name})`);
+                window.location.href = 'vote_login.html';
             }
 
         } catch (e) {
-            console.error("Critical Init Error:", e);
-            alert("시스템 초기화 오류. 관리자 문의 요망.");
-            if (loginOverlay) loginOverlay.style.display = 'flex';
+            console.error("Critical Auth Error:", e);
+            alert("권한 검증 중 오류가 발생했습니다.\n" + e.message);
+            window.location.href = 'vote_login.html';
         }
-    } // End of init
+    }
 
     // -----------------------------------------------------------
     // [3] 선거 선택 (수정: 말머리 로직 복구)
@@ -758,80 +734,12 @@ window.openElectionGateway = async () => {
         alert("목록을 불러오지 못했습니다.");
     }
 };
-    // -----------------------------------------------------------
-    // [수정됨] 로그인 처리: DB 권한 조회 -> 매직링크 발송
-    // -----------------------------------------------------------
-// [수정] 로그인 처리: DB 권한 조회 (coop_admins 포함) -> 매직링크 발송
-    window.tryLogin = async () => {
-        const emailInput = document.getElementById('login-email');
-        const email = emailInput.value.trim();
-        const msgBox = document.getElementById('login-msg');
-        const infoBox = document.getElementById('login-info');
-        const btn = document.getElementById('btn-login-action');
+    // [수정] 로그아웃 (선거 포털로 이동)
+    window.handleLogout = async () => {
+        await supabase.auth.signOut();
+        window.location.href = 'vote_login.html';
+    };
 
-        // 초기화
-        msgBox.style.display = 'none';
-        infoBox.style.display = 'none';
-
-        if (!email) {
-            msgBox.style.display = 'block';
-            msgBox.innerText = "이메일을 입력해주세요.";
-            return;
-        }
-
-        if (!email.includes('@')) {
-             msgBox.style.display = 'block';
-             msgBox.innerText = "올바른 이메일 형식이 아닙니다.";
-             return;
-        }
-
-        try {
-            btn.innerText = "권한 확인 중...";
-            btn.disabled = true;
-
-            // -------------------------------------------------------
-            // 1단계: 권한 확인 (Pre-check) - coop_admins 로직 추가
-            // -------------------------------------------------------
-            let isAuthorized = false;
-            
-            // ✅ 1단계: DB 테이블 직접 조회 대신 RPC로 권한만 확인
-const { data: ok, error: okError } = await supabase.rpc('can_request_magiclink', {
-  p_email: email.trim().toLowerCase()
-});
-
-if (okError) throw okError;
-isAuthorized = !!ok;
-
-// 2단계: 결과 처리
-if (!isAuthorized) {
-  throw new Error("등록된 관리자, 선관위원 또는 시스템 관리자가 아닙니다.");
-}
-
-            // 권한 있음: 매직링크 발송 시작
-            btn.innerText = "메일 발송 중...";
-
-            const { error: authError } = await supabase.auth.signInWithOtp({
-                email: email,
-                options: {
-                    emailRedirectTo: window.location.href
-                }
-            });
-
-            if (authError) throw authError;
-
-            btn.style.display = 'none';
-            emailInput.disabled = true;
-            infoBox.style.display = 'block';
-
-        } catch (e) {
-            console.error(e);
-            msgBox.style.display = 'block';
-            msgBox.innerText = "오류: " + e.message;
-            
-            btn.innerText = "📧 인증 메일 보내기";
-            btn.disabled = false;
-        }
-    }; // End of tryLogin
 
     // -----------------------------------------------------------
     // [4] 대시보드 로드
