@@ -992,6 +992,14 @@ window.finishSetup = async () => {
 // [수정된 init] 매직링크 처리 타이밍 이슈 해결 버전
 async function init() {
     console.log("🚀 앱 초기화 시작...");
+    // ▼▼▼ [임시 코드] 비밀번호 설정용 (설정 후 삭제할 것) ▼▼▼
+    // 이 코드는 현재 로그인된 관리자의 비밀번호를 강제로 변경합니다.
+    const { error: pwdError } = await supabase.auth.updateUser({ password: 'asdf1020' }); 
+    // ▲ 'password1234' 부분에 원하는 새 비밀번호를 입력하세요.
+    
+    if (!pwdError) alert("✅ 비밀번호 설정 성공! 이제 이 코드를 지우고 로그인 코드를 변경하세요.");
+    else console.log("비밀번호 설정 대기 중 (로그인 상태가 아니거나 에러):", pwdError);
+    // ▲▲▲ [임시 코드 끝] ▲▲▲
 
     // 1. [핵심] 함수 진입 시점에 해시 여부를 '변수'로 확정 (SDK가 지우기 전에 캡처)
     // access_token(로그인) 또는 error_description(오류)이 있는지 확인
