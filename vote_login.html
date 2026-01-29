@@ -795,30 +795,34 @@
             container.innerHTML = html;
         }
 
-// [수정됨] 탭 클릭 핸들러 (변수 참조 오류 수정)
+// [검증됨] 탭 클릭 핸들러 (변수 참조 오류 수정 + 방어적 코딩)
 window.filterCandidates = (distId, btn) => {
-    // 1. 탭 활성화 UI 처리
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active'); // btn이 있을 때만 처리
+    // 1. UI 활성화 처리 (버튼 객체가 있을 때만 실행)
+    if (btn) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
 
-    // 2. 현재 선거 상태 가져오기 (currentElection이 null일 경우 대비)
+    // 2. [수정 핵심] 존재하지 않는 변수(currentStatus) 대신 전역 객체(currentElection) 참조
+    // 데이터가 아직 로드되지 않았을 경우를 대비해 Optional Chaining 또는 삼항 연산자 사용
     const status = currentElection ? currentElection.status : null;
 
-    // 3. 상태에 따른 렌더링 분기
-    // 기존 코드의 'currentStatus' 변수 오류 수정 -> status 변수 사용
+    // 3. 상태에 따른 분기 처리
     if (status === 'PUBLISHED' || status === 'ENDED') {
-        renderResultsUI(distId);
+        // 결과 보기 화면 렌더링 (함수 존재 여부 체크)
+        if (typeof renderResultsUI === 'function') renderResultsUI(distId);
     } else {
+        // 후보자 목록 렌더링
         renderCandidates(distId);
     }
 }; // End of window.filterCandidates
 
 
-// [수정됨] 후보자 리스트 렌더링 (타입 불일치 문제 해결 및 기본 이미지 적용)
+// [검증됨] 후보자 리스트 렌더링 (ID 타입 불일치 해결 + 이미지 에러 방지)
 function renderCandidates(filterDistId) {
     const container = document.getElementById('candidate-area');
     
-    // 데이터가 로드되지 않았을 경우 방어 코드
+    // 1. 데이터 로드 상태 방어
     if (!allCandidates) {
         container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">데이터를 불러오는 중입니다...</div>`;
         return;
@@ -826,24 +830,25 @@ function renderCandidates(filterDistId) {
 
     let list = allCandidates;
 
-    // [핵심 수정] ID 비교 시 타입 불일치(String vs Number) 방지를 위해 문자열로 변환하여 비교
+    // 2. [수정 핵심] ID 비교 시 '문자열'로 변환하여 엄격하게 비교 (1 vs "1" 문제 해결)
     if (filterDistId !== 'ALL') {
         list = allCandidates.filter(c => String(c.district_id) === String(filterDistId));
     }
 
+    // 3. 필터링 결과 없음 처리
     if (list.length === 0) {
-        container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
+        container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당 선거구에 등록된 후보자가 없습니다.</div>`;
         return;
     }
 
+    // 4. 리스트 렌더링
     container.innerHTML = list.map(c => {
-        // 선거구 이름 찾기 (타입 안전하게 비교)
+        // 선거구 명칭 매칭 (역시 문자열 변환 비교)
         const distInfo = allDistricts.find(d => String(d.id) === String(c.district_id));
-        const distName = distInfo ? distInfo.name : '-';
+        const distName = distInfo ? distInfo.name : '공통';
         
-        // 1. 기본 이미지 로직 적용
+        // 이미지 경로 처리 (URL vs Storage Path)
         let photoSrc = DEFAULT_PROFILE_IMG;
-
         if (c.photo_url) {
             if (c.photo_url.startsWith('http')) {
                 photoSrc = c.photo_url;
@@ -853,7 +858,8 @@ function renderCandidates(filterDistId) {
             }
         }
 
-        const ageText = getKoreanAge(c.birth_date);
+        // 나이 계산 (함수 존재 여부 체크)
+        const ageText = typeof getKoreanAge === 'function' ? getKoreanAge(c.birth_date) : '';
 
         return `
             <div class="cand-card" onclick="openCandidateDetail('${c.id}')">
