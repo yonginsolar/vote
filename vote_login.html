@@ -795,63 +795,87 @@
             container.innerHTML = html;
         }
 
-        window.filterCandidates = (distId, btn) => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            if (currentStatus === 'PUBLISHED' || currentStatus === 'ENDED') renderResultsUI(distId);
-            else renderCandidates(distId);
-        };
+// [수정됨] 탭 클릭 핸들러 (변수 참조 오류 수정)
+window.filterCandidates = (distId, btn) => {
+    // 1. 탭 활성화 UI 처리
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active'); // btn이 있을 때만 처리
 
-// [수정됨] 후보자 리스트 렌더링 (기본 이미지 적용)
-        function renderCandidates(filterDistId) {
-            const container = document.getElementById('candidate-area');
-            let list = allCandidates;
-            if (filterDistId !== 'ALL') list = allCandidates.filter(c => c.district_id === filterDistId);
+    // 2. 현재 선거 상태 가져오기 (currentElection이 null일 경우 대비)
+    const status = currentElection ? currentElection.status : null;
 
-            if (list.length === 0) {
-                container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
-                return;
+    // 3. 상태에 따른 렌더링 분기
+    // 기존 코드의 'currentStatus' 변수 오류 수정 -> status 변수 사용
+    if (status === 'PUBLISHED' || status === 'ENDED') {
+        renderResultsUI(distId);
+    } else {
+        renderCandidates(distId);
+    }
+}; // End of window.filterCandidates
+
+
+// [수정됨] 후보자 리스트 렌더링 (타입 불일치 문제 해결 및 기본 이미지 적용)
+function renderCandidates(filterDistId) {
+    const container = document.getElementById('candidate-area');
+    
+    // 데이터가 로드되지 않았을 경우 방어 코드
+    if (!allCandidates) {
+        container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">데이터를 불러오는 중입니다...</div>`;
+        return;
+    }
+
+    let list = allCandidates;
+
+    // [핵심 수정] ID 비교 시 타입 불일치(String vs Number) 방지를 위해 문자열로 변환하여 비교
+    if (filterDistId !== 'ALL') {
+        list = allCandidates.filter(c => String(c.district_id) === String(filterDistId));
+    }
+
+    if (list.length === 0) {
+        container.innerHTML = `<div style="padding:40px; text-align:center; color:#999;">해당하는 후보자가 없습니다.</div>`;
+        return;
+    }
+
+    container.innerHTML = list.map(c => {
+        // 선거구 이름 찾기 (타입 안전하게 비교)
+        const distInfo = allDistricts.find(d => String(d.id) === String(c.district_id));
+        const distName = distInfo ? distInfo.name : '-';
+        
+        // 1. 기본 이미지 로직 적용
+        let photoSrc = DEFAULT_PROFILE_IMG;
+
+        if (c.photo_url) {
+            if (c.photo_url.startsWith('http')) {
+                photoSrc = c.photo_url;
+            } else {
+                const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
+                if(data) photoSrc = data.publicUrl;
             }
-
-            container.innerHTML = list.map(c => {
-                const distInfo = allDistricts.find(d => d.id === c.district_id);
-                const distName = distInfo ? distInfo.name : '-';
-                
-                // 1. 기본 이미지 로직 적용
-                let photoSrc = DEFAULT_PROFILE_IMG;
-
-                if (c.photo_url) {
-                    if (c.photo_url.startsWith('http')) {
-                        photoSrc = c.photo_url;
-                    } else {
-                        const { data } = supabase.storage.from('candidate_proofs').getPublicUrl(c.photo_url);
-                        if(data) photoSrc = data.publicUrl;
-                    }
-                }
-
-                const ageText = getKoreanAge(c.birth_date);
-
-                return `
-                    <div class="cand-card" onclick="openCandidateDetail('${c.id}')">
-                        <div class="cand-photo-wrapper">
-                            <img src="${photoSrc}" 
-                                 class="cand-img-fit" 
-                                 alt="${c.name}"
-                                 onerror="this.src='${DEFAULT_PROFILE_IMG}'"
-                                 style="background-color: #f3f4f6;">
-                        </div>
-                        <div class="cand-info">
-                            <div class="cand-top-row">
-                                <span class="cand-symbol">${c.symbol || '-'}</span>
-                                <span class="cand-dist-badge">${distName}</span>
-                            </div>
-                            <h3 class="cand-name">${c.name} <span class="cand-age">(${ageText})</span></h3>
-                            <div class="cand-cta">👉 상세 정보 보기</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
         }
+
+        const ageText = getKoreanAge(c.birth_date);
+
+        return `
+            <div class="cand-card" onclick="openCandidateDetail('${c.id}')">
+                <div class="cand-photo-wrapper">
+                    <img src="${photoSrc}" 
+                            class="cand-img-fit" 
+                            alt="${c.name}"
+                            onerror="this.src='${DEFAULT_PROFILE_IMG}'"
+                            style="background-color: #f3f4f6;">
+                </div>
+                <div class="cand-info">
+                    <div class="cand-top-row">
+                        <span class="cand-symbol">${c.symbol || '-'}</span>
+                        <span class="cand-dist-badge">${distName}</span>
+                    </div>
+                    <h3 class="cand-name">${c.name} <span class="cand-age">(${ageText})</span></h3>
+                    <div class="cand-cta">👉 상세 정보 보기</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+} // End of renderCandidates
 
         // 결과 로직은 기존 코드 유지 (생략 없이 동작하도록 포함됨)
         async function loadResults() {
